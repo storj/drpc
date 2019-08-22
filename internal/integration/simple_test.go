@@ -1,0 +1,134 @@
+// Copyright (C) 2019 Storj Labs, Inc.
+// See LICENSE for copying information.
+
+package integration
+
+//go:generate bash -c "go install storj.io/drpc/cmd/protoc-gen-drpc && protoc --drpc_out=plugins=drpc:. service.proto"
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"testing"
+
+	"github.com/zeebo/assert"
+	"storj.io/drpc/drpcconn"
+	"storj.io/drpc/drpcserver"
+)
+
+func TestSimple(t *testing.T) {
+	type rw struct {
+		io.Reader
+		io.Writer
+		io.Closer
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	pr1, pw1 := io.Pipe()
+	pr2, pw2 := io.Pipe()
+	defer pr1.Close()
+	defer pr2.Close()
+
+	srv := drpcserver.New()
+	srv.Register(new(impl), new(DRPCServiceDescription))
+	go srv.Manage(ctx, rw{pr2, pw1, pr2})
+
+	conn := drpcconn.New(rw{pr1, pw2, pr1})
+	defer conn.Close()
+	cli := NewDRPCServiceClient(conn)
+
+	{
+		out, err := cli.Method1(ctx, &In{In: 1})
+		assert.NoError(t, err)
+		assert.DeepEqual(t, out, &Out{Out: 1})
+	}
+
+	{
+		stream, err := cli.Method2(ctx)
+		assert.NoError(t, err)
+		assert.NoError(t, stream.Send(&In{In: 2}))
+		assert.NoError(t, stream.Send(&In{In: 2}))
+		out, err := stream.CloseAndRecv()
+		assert.NoError(t, err)
+		assert.DeepEqual(t, out, &Out{Out: 2})
+		assert.NoError(t, stream.Close())
+	}
+
+	{
+		stream, err := cli.Method3(ctx, &In{In: 3})
+		assert.NoError(t, err)
+		for {
+			out, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			assert.NoError(t, err)
+			assert.DeepEqual(t, out, &Out{Out: 3})
+		}
+		assert.NoError(t, stream.Close())
+	}
+
+	{
+		stream, err := cli.Method4(ctx)
+		assert.NoError(t, err)
+		assert.NoError(t, stream.Send(&In{In: 4}))
+		assert.NoError(t, stream.Send(&In{In: 4}))
+		assert.NoError(t, stream.Send(&In{In: 4}))
+		assert.NoError(t, stream.Send(&In{In: 4}))
+		assert.NoError(t, stream.CloseSend())
+		for {
+			out, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			assert.NoError(t, err)
+			assert.DeepEqual(t, out, &Out{Out: 4})
+		}
+		assert.NoError(t, stream.Close())
+	}
+}
+
+type impl struct{}
+
+func (impl) DRPCMethod1(ctx context.Context, in *In) (*Out, error) {
+	fmt.Println("SRV 0 <=", in)
+	return &Out{Out: 1}, nil
+}
+
+func (impl) DRPCMethod2(stream DRPCService_Method2Stream) error {
+	for {
+		in, err := stream.Recv()
+		fmt.Println("SRV 0 <=", err, in)
+		if err != nil {
+			break
+		}
+	}
+	err := stream.SendAndClose(&Out{Out: 2})
+	fmt.Println("SRV 1 <=", err)
+	return err
+}
+
+func (impl) DRPCMethod3(in *In, stream DRPCService_Method3Stream) error {
+	fmt.Println("SRV 0 <=", in)
+	fmt.Println("SRV 1 <=", stream.Send(&Out{Out: 3}))
+	fmt.Println("SRV 2 <=", stream.Send(&Out{Out: 3}))
+	fmt.Println("SRV 3 <=", stream.Send(&Out{Out: 3}))
+	return nil
+}
+
+func (impl) DRPCMethod4(stream DRPCService_Method4Stream) error {
+	for {
+		in, err := stream.Recv()
+		fmt.Println("SRV 0 <=", err, in)
+		if err != nil {
+			break
+		}
+	}
+	fmt.Println("SRV 1 <=", stream.Send(&Out{Out: 4}))
+	fmt.Println("SRV 2 <=", stream.Send(&Out{Out: 4}))
+	fmt.Println("SRV 3 <=", stream.Send(&Out{Out: 4}))
+	fmt.Println("SRV 4 <=", stream.Send(&Out{Out: 4}))
+	return nil
+}

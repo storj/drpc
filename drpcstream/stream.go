@@ -7,9 +7,9 @@ import (
 	"context"
 	"io"
 	"sync"
-	"sync/atomic"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcutil"
@@ -17,156 +17,122 @@ import (
 )
 
 type Stream struct {
-	messageID uint64
-	ctx       context.Context
-	cancel    func()
-	streamID  uint64
-	buf       *drpcutil.Buffer
-	bufWrite  func(drpcwire.Frame) error
-	sig       *drpcutil.Signal
-	sendSig   *drpcutil.Signal
-	recvSig   *drpcutil.Signal
-	termSig   *drpcutil.Signal
-	queue     chan *drpcwire.Packet
-	sendMu    sync.Mutex
-}
+	ctx context.Context
+	wr  *drpcwire.Writer
 
-// TODO(jeff): consider exporting a channel of frames to send rather than receiving
-// a buffer. it also has to signal flushes (maybe a nil frame? allocation heavy.)
+	mu    sync.Mutex
+	done  *drpcutil.Signal
+	send  *drpcutil.Signal
+	queue chan drpcwire.Packet
 
-func New(ctx context.Context, streamID uint64, buf *drpcutil.Buffer) *Stream {
-	ctx, cancel := context.WithCancel(ctx)
-	s := &Stream{
-		ctx:      ctx,
-		cancel:   cancel,
-		streamID: streamID,
-		buf:      buf,
-		bufWrite: buf.Write,
-		sig:      drpcutil.NewSignal(),
-		sendSig:  drpcutil.NewSignal(),
-		recvSig:  drpcutil.NewSignal(),
-		termSig:  drpcutil.NewSignal(),
-		queue:    make(chan *drpcwire.Packet, 100),
-	}
-	go s.monitor()
-	return s
+	// avoids allocations of closures
+	pollWriteFn func(drpcwire.Frame) error
 }
 
 var _ drpc.Stream = (*Stream)(nil)
 
+func New(ctx context.Context, wr *drpcwire.Writer) *Stream {
+	s := &Stream{
+		ctx: ctx,
+		wr:  wr,
+
+		done:  drpcutil.NewSignal(),
+		send:  drpcutil.NewSignal(),
+		queue: make(chan drpcwire.Packet),
+	}
+	s.pollWriteFn = s.pollWrite
+	return s
+}
+
 //
-// exported accessors
+// accessors
 //
 
-func (s *Stream) Cancel()                  { s.cancel() }
 func (s *Stream) Context() context.Context { return s.ctx }
 
-func (s *Stream) StreamID() uint64 { return s.streamID }
-
-func (s *Stream) Sig() *drpcutil.Signal     { return s.sig }
-func (s *Stream) SendSig() *drpcutil.Signal { return s.sendSig }
-func (s *Stream) RecvSig() *drpcutil.Signal { return s.recvSig }
-func (s *Stream) TermSig() *drpcutil.Signal { return s.termSig }
-
-func (s *Stream) Queue() chan *drpcwire.Packet { return s.queue }
+func (s *Stream) DoneSig() *drpcutil.Signal   { return s.done }
+func (s *Stream) SendSig() *drpcutil.Signal   { return s.send }
+func (s *Stream) Queue() chan drpcwire.Packet { return s.queue }
 
 //
-// basic helpers
+// helpers
 //
 
-func (s *Stream) nextPid() drpcwire.PacketID {
-	return drpcwire.PacketID{
-		StreamID:  s.streamID,
-		MessageID: atomic.AddUint64(&s.messageID, 1),
+func combineTwoErrors(err1, err2 error) error {
+	if err1 == nil {
+		return err2
 	}
+	if err2 == nil {
+		return err1
+	}
+	return errs.Combine(err1, err2)
 }
 
-func (s *Stream) newPacket(kind drpcwire.PayloadKind, data []byte) drpcwire.Packet {
+func (s *Stream) newPacket(kind drpcwire.PacketKind, data []byte) drpcwire.Packet {
 	return drpcwire.Packet{
-		PacketID:    s.nextPid(),
-		PayloadKind: kind,
-		Data:        data,
+		Kind: kind,
+		Data: data,
 	}
 }
 
-func (s *Stream) monitor() {
+func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
+	s.mu.Lock()
 	select {
-	case <-s.termSig.Signal():
-	case <-s.ctx.Done():
-		s.SendCancel()
+	case <-s.done.Signal():
+		err = s.done.Err()
+	case <-s.send.Signal():
+		err = s.send.Err()
+	default:
+		err = s.wr.WriteFrame(fr)
 	}
+	s.mu.Unlock()
+	return err
 }
 
-func (s *Stream) pollSend() (error, bool) {
-	if err, ok := s.sig.Get(); ok {
-		return err, false
-	}
-	if err, ok := s.termSig.Get(); ok {
-		return err, false
-	}
-	if err, ok := s.sendSig.Get(); ok {
-		return err, true
-	}
-	return nil, false
-}
-
-func (s *Stream) sendAndFlush(kind drpcwire.PayloadKind, data []byte) error {
-	if err := drpcwire.Split(s.newPacket(kind, data), s.bufWrite); err != nil {
-		return err
-	}
-	return s.buf.Flush()
+func (s *Stream) sendPacket(kind drpcwire.PacketKind, data []byte) error {
+	err1 := s.wr.WritePacket(s.newPacket(kind, data))
+	err2 := s.wr.Flush()
+	return combineTwoErrors(err1, err2)
 }
 
 //
-// Raw send/recv primitives
+// raw read/write
 //
 
-func (s *Stream) RawSend(kind drpcwire.PayloadKind, data []byte) error {
-	err := drpcwire.Split(s.newPacket(kind, data), func(fr drpcwire.Frame) error {
-		s.sendMu.Lock()
-		defer s.sendMu.Unlock()
-		if err, _ := s.pollSend(); err != nil {
-			return err
-		}
-		return s.bufWrite(fr)
-	})
+func (s *Stream) RawWrite(kind drpcwire.PacketKind, data []byte) error {
+	err := drpcwire.SplitN(s.newPacket(kind, data), 0, s.pollWriteFn)
 	if err != nil {
-		s.SendError(err)
-		return err
+		return combineTwoErrors(err, s.SendError(err))
 	}
 	return nil
 }
 
-func (s *Stream) RawRecv() (*drpcwire.Packet, error) {
-	if err, ok := s.sig.Get(); ok {
-		return nil, err
-	}
+func (s *Stream) RawFlush() (err error) {
+	s.mu.Lock()
 	select {
-	case <-s.sig.Signal():
-		return nil, s.sig.Err()
-	case p, ok := <-s.queue:
-		if !ok {
-			return nil, io.EOF
-		}
-		return p, nil
+	case <-s.done.Signal():
+		err = s.done.Err()
+	default:
+		err = s.wr.Flush()
 	}
-}
+	s.mu.Unlock()
 
-func (s *Stream) RawFlush() error {
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	if err, _ := s.pollSend(); err != nil {
-		return err
-	}
-	if err := s.buf.Flush(); err != nil {
-		s.SendError(err)
-		return err
+	if err != nil {
+		return combineTwoErrors(err, s.SendError(err))
 	}
 	return nil
+}
+
+func (s *Stream) RawRecv() ([]byte, error) {
+	pkt, ok := <-s.queue
+	if !ok {
+		return nil, io.EOF
+	}
+	return pkt.Data, nil
 }
 
 //
-// High level send/recv primitives
+// msg read/write
 //
 
 func (s *Stream) MsgSend(msg drpc.Message) error {
@@ -174,7 +140,7 @@ func (s *Stream) MsgSend(msg drpc.Message) error {
 	if err != nil {
 		return err
 	}
-	if err := s.RawSend(drpcwire.PayloadKind_Message, data); err != nil {
+	if err := s.RawWrite(drpcwire.PacketKind_Message, data); err != nil {
 		return err
 	}
 	if err := s.RawFlush(); err != nil {
@@ -184,61 +150,75 @@ func (s *Stream) MsgSend(msg drpc.Message) error {
 }
 
 func (s *Stream) MsgRecv(msg drpc.Message) error {
-	p, err := s.RawRecv()
+	data, err := s.RawRecv()
 	if err != nil {
 		return err
 	}
-	return proto.Unmarshal(p.Data, msg)
+	return proto.Unmarshal(data, msg)
 }
 
 //
-// Shutdown primitives
+// terminal messages
 //
 
-func (s *Stream) SendError(err error) {
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	defer s.termSig.Set(drpc.Error.New("stream terminated"))
-	defer s.sig.Set(err)
-
-	if _, ok := s.termSig.Get(); !ok {
-		_ = s.sendAndFlush(drpcwire.PayloadKind_Error, []byte(err.Error()))
+func (s *Stream) SendError(err error) error {
+	s.mu.Lock()
+	select {
+	case <-s.done.Signal():
+		err = s.done.Err()
+	default:
+		err = s.sendPacket(drpcwire.PacketKind_Error, []byte(err.Error()))
+		s.done.Set(drpc.Error.New("stream terminated by sending error"))
 	}
-}
+	s.mu.Unlock()
 
-func (s *Stream) SendCancel() {
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	defer s.termSig.Set(drpc.Error.New("stream terminated"))
-	defer s.sig.Set(context.Canceled)
-
-	if _, ok := s.termSig.Get(); !ok {
-		_ = s.sendAndFlush(drpcwire.PayloadKind_Cancel, nil)
-	}
+	return err
 }
 
 func (s *Stream) Close() error {
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	defer s.sendSig.Set(drpc.Error.New("send after CloseSend"))
-	defer s.termSig.Set(drpc.Error.New("stream terminated"))
-	defer s.sig.Set(drpc.Error.New("stream closed"))
+	var err error
 
-	if _, ok := s.termSig.Get(); !ok {
-		return s.sendAndFlush(drpcwire.PayloadKind_Close, nil)
+	s.mu.Lock()
+	select {
+	case <-s.done.Signal():
+	default:
+		err = s.sendPacket(drpcwire.PacketKind_Close, nil)
+		s.done.Set(drpc.Error.New("stream terminated by sending close"))
 	}
-	return nil
+	s.mu.Unlock()
+
+	return err
+}
+
+func (s *Stream) SendCancel() error {
+	var err error
+
+	s.mu.Lock()
+	select {
+	case <-s.done.Signal():
+		err = s.done.Err()
+	default:
+		err = s.sendPacket(drpcwire.PacketKind_Cancel, nil)
+		s.done.Set(context.Canceled)
+	}
+	s.mu.Unlock()
+
+	return err
 }
 
 func (s *Stream) CloseSend() error {
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	defer s.sendSig.Set(drpc.Error.New("send after CloseSend"))
+	var err error
 
-	if err, sendClosed := s.pollSend(); sendClosed {
-		return nil
-	} else if err != nil {
-		return err
+	s.mu.Lock()
+	select {
+	case <-s.send.Signal():
+	case <-s.done.Signal():
+		err = s.done.Err()
+	default:
+		err = s.sendPacket(drpcwire.PacketKind_CloseSend, nil)
+		s.send.Set(drpc.Error.New("send closed"))
 	}
-	return s.sendAndFlush(drpcwire.PayloadKind_CloseSend, nil)
+	s.mu.Unlock()
+
+	return err
 }

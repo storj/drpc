@@ -23,8 +23,10 @@ const (
 )
 
 type Packet struct {
-	Data []byte
-	Kind PacketKind
+	Data      []byte
+	StreamID  uint64
+	MessageID uint64
+	Kind      PacketKind
 }
 
 func (p Packet) String() string {
@@ -32,21 +34,31 @@ func (p Packet) String() string {
 }
 
 type Frame struct {
-	Data []byte
-	Kind PacketKind
-	Done bool
+	Data      []byte
+	StreamID  uint64
+	MessageID uint64
+	Kind      PacketKind
+	Done      bool
 }
 
 func ParseFrame(buf []byte) (rem []byte, fr Frame, ok bool, err error) {
 	var length uint64
 	var control byte
-	if len(buf) < 2 {
+	if len(buf) < 3 {
 		goto bad
 	}
 
 	rem, control = buf[1:], buf[0]
 	fr.Done = control&1 > 0
 	fr.Kind = PacketKind(control >> 1)
+	rem, fr.StreamID, ok, err = ReadVarint(rem)
+	if !ok || err != nil {
+		goto bad
+	}
+	rem, fr.MessageID, ok, err = ReadVarint(rem)
+	if !ok || err != nil {
+		goto bad
+	}
 	rem, length, ok, err = ReadVarint(rem)
 	if !ok || err != nil || length > uint64(len(rem)) {
 		goto bad
@@ -63,5 +75,13 @@ func AppendFrame(buf []byte, fr Frame) []byte {
 	if fr.Done {
 		control |= 1
 	}
-	return append(AppendVarint(append(buf, control), uint64(len(fr.Data))), fr.Data...)
+
+	out := buf
+	out = append(out, control)
+	out = AppendVarint(out, fr.StreamID)
+	out = AppendVarint(out, fr.MessageID)
+	out = AppendVarint(out, uint64(len(fr.Data)))
+	out = append(out, fr.Data...)
+	return out
+
 }

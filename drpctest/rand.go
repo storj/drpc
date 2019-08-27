@@ -6,9 +6,29 @@ package drpctest
 import (
 	"math"
 	"math/rand"
+	"sync"
 
 	"storj.io/drpc/drpcwire"
 )
+
+var (
+	mu        sync.Mutex
+	streamID  uint64 = 1
+	messageID uint64 = 1
+)
+
+func RandPacketID() (sid, mid uint64) {
+	mu.Lock()
+	if rand.Intn(100) == 0 {
+		streamID++
+		messageID = 1
+	} else {
+		messageID++
+	}
+	sid, mid = streamID, messageID
+	mu.Unlock()
+	return sid, mid
+}
 
 func RandBytes(n int) []byte {
 	out := make([]byte, n)
@@ -40,18 +60,24 @@ var payloadSize = map[drpcwire.PacketKind]func() int{
 }
 
 func RandFrame() drpcwire.Frame {
+	sid, mid := RandPacketID()
 	kind := RandPacketKind()
 	return drpcwire.Frame{
-		Done: RandBool(),
-		Kind: kind,
-		Data: RandBytes(payloadSize[kind]()),
+		StreamID:  sid,
+		MessageID: mid,
+		Done:      RandBool(),
+		Kind:      kind,
+		Data:      RandBytes(payloadSize[kind]()),
 	}
 }
 
 func RandPacket() drpcwire.Packet {
+	sid, mid := RandPacketID()
 	kind := RandPacketKind()
 	return drpcwire.Packet{
-		Kind: kind,
-		Data: RandBytes(10 * payloadSize[kind]()),
+		StreamID:  sid,
+		MessageID: mid,
+		Kind:      kind,
+		Data:      RandBytes(10 * payloadSize[kind]()),
 	}
 }

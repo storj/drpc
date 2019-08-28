@@ -1,14 +1,12 @@
 // Copyright (C) 2019 Storj Labs, Inc.
 // See LICENSE for copying information.
 
-package drpctest
+package drpcwire
 
 import (
 	"math"
 	"math/rand"
 	"sync"
-
-	"storj.io/drpc/drpcwire"
 )
 
 var (
@@ -17,7 +15,7 @@ var (
 	messageID uint64 = 1
 )
 
-func RandID() drpcwire.ID {
+func RandID() ID {
 	mu.Lock()
 	if rand.Intn(100) == 0 {
 		streamID++
@@ -25,7 +23,7 @@ func RandID() drpcwire.ID {
 	} else {
 		messageID++
 	}
-	id := drpcwire.ID{
+	id := ID{
 		Stream:  streamID,
 		Message: messageID,
 	}
@@ -49,22 +47,22 @@ func RandUint64() uint64 {
 	return uint64(rand.Int63n(math.MaxInt64))<<1 + uint64(rand.Intn(2))
 }
 
-func RandKind() drpcwire.Kind {
-	return drpcwire.Kind(rand.Intn(int(drpcwire.Kind_Largest)-1) + 1)
+func RandKind() Kind {
+	return Kind(rand.Intn(int(Kind_Largest)-1) + 1)
 }
 
-var payloadSize = map[drpcwire.Kind]func() int{
-	drpcwire.Kind_Invoke:    func() int { return rand.Intn(1023) + 1 },
-	drpcwire.Kind_Message:   func() int { return rand.Intn(1023) + 1 },
-	drpcwire.Kind_Error:     func() int { return rand.Intn(1023) + 1 },
-	drpcwire.Kind_Cancel:    func() int { return 0 },
-	drpcwire.Kind_Close:     func() int { return 0 },
-	drpcwire.Kind_CloseSend: func() int { return 0 },
+var payloadSize = map[Kind]func() int{
+	Kind_Invoke:    func() int { return rand.Intn(1023) + 1 },
+	Kind_Message:   func() int { return rand.Intn(1023) + 1 },
+	Kind_Error:     func() int { return rand.Intn(1023) + 1 },
+	Kind_Cancel:    func() int { return 0 },
+	Kind_Close:     func() int { return 0 },
+	Kind_CloseSend: func() int { return 0 },
 }
 
-func RandFrame() drpcwire.Frame {
+func RandFrame() Frame {
 	kind := RandKind()
-	return drpcwire.Frame{
+	return Frame{
 		Data: RandBytes(payloadSize[kind]()),
 		ID:   RandID(),
 		Kind: kind,
@@ -72,9 +70,9 @@ func RandFrame() drpcwire.Frame {
 	}
 }
 
-func RandPacket() drpcwire.Packet {
+func RandPacket() Packet {
 	kind := RandKind()
-	return drpcwire.Packet{
+	return Packet{
 		Data: RandBytes(10 * payloadSize[kind]()),
 		ID:   RandID(),
 		Kind: kind,

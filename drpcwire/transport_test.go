@@ -1,7 +1,7 @@
 // Copyright (C) 2019 Storj Labs, Inc.
 // See LICENSE for copying information.
 
-package drpcwire_test
+package drpcwire
 
 import (
 	"bytes"
@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-	"storj.io/drpc/drpctest"
-	"storj.io/drpc/drpcwire"
 )
 
 func TestWriter(t *testing.T) {
@@ -19,10 +17,10 @@ func TestWriter(t *testing.T) {
 			var exp []byte
 			var got bytes.Buffer
 
-			wr := drpcwire.NewWriter(&got, size)
+			wr := NewWriter(&got, size)
 			for i := 0; i < 1000; i++ {
-				fr := drpctest.RandFrame()
-				exp = drpcwire.AppendFrame(exp, fr)
+				fr := RandFrame()
+				exp = AppendFrame(exp, fr)
 				assert.NoError(t, wr.WriteFrame(fr))
 			}
 			assert.NoError(t, wr.Flush())
@@ -36,28 +34,28 @@ func TestWriter(t *testing.T) {
 
 func TestReader(t *testing.T) {
 	type testCase struct {
-		Packet drpcwire.Packet
-		Frames []drpcwire.Frame
+		Packet Packet
+		Frames []Frame
 	}
 
-	p := func(kind drpcwire.Kind, id uint64, data string) drpcwire.Packet {
-		return drpcwire.Packet{
+	p := func(kind Kind, id uint64, data string) Packet {
+		return Packet{
 			Data: []byte(data),
-			ID:   drpcwire.ID{Stream: 1, Message: id},
+			ID:   ID{Stream: 1, Message: id},
 			Kind: kind,
 		}
 	}
 
-	f := func(kind drpcwire.Kind, id uint64, data string, done bool) drpcwire.Frame {
-		return drpcwire.Frame{
+	f := func(kind Kind, id uint64, data string, done bool) Frame {
+		return Frame{
 			Data: []byte(data),
-			ID:   drpcwire.ID{Stream: 1, Message: id},
+			ID:   ID{Stream: 1, Message: id},
 			Kind: kind,
 			Done: done,
 		}
 	}
 
-	m := func(pkt drpcwire.Packet, frames ...drpcwire.Frame) testCase {
+	m := func(pkt Packet, frames ...Frame) testCase {
 		return testCase{
 			Packet: pkt,
 			Frames: frames,
@@ -65,24 +63,24 @@ func TestReader(t *testing.T) {
 	}
 
 	cases := []testCase{
-		m(p(drpcwire.Kind_Message, 1, "hello world"),
-			f(drpcwire.Kind_Message, 1, "hello", false),
-			f(drpcwire.Kind_Message, 1, " ", false),
-			f(drpcwire.Kind_Message, 1, "world", true)),
+		m(p(Kind_Message, 1, "hello world"),
+			f(Kind_Message, 1, "hello", false),
+			f(Kind_Message, 1, " ", false),
+			f(Kind_Message, 1, "world", true)),
 
-		m(p(drpcwire.Kind_Cancel, 2, ""),
-			f(drpcwire.Kind_Message, 1, "hello", false),
-			f(drpcwire.Kind_Message, 1, " ", false),
-			f(drpcwire.Kind_Cancel, 2, "", true)),
+		m(p(Kind_Cancel, 2, ""),
+			f(Kind_Message, 1, "hello", false),
+			f(Kind_Message, 1, " ", false),
+			f(Kind_Cancel, 2, "", true)),
 	}
 
 	for _, tc := range cases {
 		var buf []byte
 		for _, fr := range tc.Frames {
-			buf = drpcwire.AppendFrame(buf, fr)
+			buf = AppendFrame(buf, fr)
 		}
 
-		rd := drpcwire.NewReader(bytes.NewReader(buf))
+		rd := NewReader(bytes.NewReader(buf))
 		pkt, err := rd.ReadPacket()
 		assert.NoError(t, err)
 		assert.DeepEqual(t, tc.Packet, pkt)

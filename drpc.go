@@ -1,6 +1,7 @@
 // Copyright (C) 2019 Storj Labs, Inc.
 // See LICENSE for copying information.
 
+// drpc is a light replacement for gprc.
 package drpc
 
 import (
@@ -51,15 +52,4 @@ type Handler = func(srv interface{}, ctx context.Context, in1, in2 interface{}) 
 type Description interface {
 	NumMethods() int
 	Method(n int) (rpc string, handler Handler, method interface{}, ok bool)
-}
-
-type transportKey struct{}
-
-func WithTransport(ctx context.Context, tr Transport) context.Context {
-	return context.WithValue(ctx, transportKey{}, tr)
-}
-
-func TransportFromContext(ctx context.Context) (Transport, bool) {
-	tr, ok := ctx.Value(transportKey{}).(Transport)
-	return tr, ok
 }

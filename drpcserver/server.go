@@ -4,12 +4,12 @@
 package drpcserver
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"reflect"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcmanager"
@@ -88,42 +88,35 @@ func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, 
 	s.rpcs[rpc] = data
 }
 
-func (s *Server) Manage(ctx context.Context, tr drpc.Transport) error {
-	return drpcmanager.New(tr, s).Run(ctx)
+func (s *Server) ServeOne(tr drpc.Transport) (err error) {
+	man := drpcmanager.New(tr, s)
+	<-man.DoneSig().Signal()
+	err = errs.Combine(err, man.Close())
+	err = errs.Combine(err, man.DoneSig().Err())
+	return err
 }
 
-func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
-	// TODO(jeff): is this necessary?
-	go func() {
-		<-ctx.Done()
-		_ = lis.Close()
-	}()
-
+func (s *Server) Serve(lis net.Listener) error {
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			// TODO(jeff): temporary errors?
-			return err
+			return err // TODO(jeff): temporary errors?
 		}
-
-		// TODO(jeff): connection limits?
-		go s.Manage(ctx, conn)
+		go s.ServeOne(conn) // TODO(jeff): connection limits?
 	}
 }
 
-func (s *Server) Handle(stream *drpcstream.Stream, rpc string) error {
-	ctx, cancel := context.WithCancel(stream.Context())
-	defer cancel()
-
-	err := s.doHandle(ctx, stream, rpc)
+func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error {
+	defer stream.CancelContext()
+	err := s.doHandle(stream, rpc)
 	if err != nil {
 		stream.SendError(err)
 		return err
 	}
-	return stream.Close()
+	return stream.CloseSend()
 }
 
-func (s *Server) doHandle(ctx context.Context, stream *drpcstream.Stream, rpc string) error {
+func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
 	data, ok := s.rpcs[rpc]
 	if !ok {
 		return drpc.ProtocolError.New("unknown rpc: %q", rpc)
@@ -138,7 +131,7 @@ func (s *Server) doHandle(ctx context.Context, stream *drpcstream.Stream, rpc st
 		in = msg
 	}
 
-	out, err := data.handler(data.srv, ctx, in, stream)
+	out, err := data.handler(data.srv, stream.Context(), in, stream)
 	switch {
 	case err != nil:
 		return err
@@ -147,7 +140,7 @@ func (s *Server) doHandle(ctx context.Context, stream *drpcstream.Stream, rpc st
 		if err != nil {
 			return err
 		}
-		return stream.RawSend(drpcwire.PayloadKind_Message, data)
+		return stream.RawWrite(drpcwire.Kind_Message, data)
 	default:
 		return nil
 	}

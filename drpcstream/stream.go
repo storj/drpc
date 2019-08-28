@@ -12,18 +12,22 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
-	"storj.io/drpc/drpcutil"
+	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcwire"
 )
 
 type Stream struct {
-	ctx context.Context
-	wr  *drpcwire.Writer
+	ctx    context.Context
+	cancel func()
 
-	mu    sync.Mutex
-	done  *drpcutil.Signal
-	send  *drpcutil.Signal
-	queue chan drpcwire.Packet
+	id drpcwire.ID
+	wr *drpcwire.Writer
+
+	mu     sync.Mutex
+	done   drpcsignal.Signal
+	send   drpcsignal.Signal
+	closed bool
+	queue  chan drpcwire.Packet
 
 	// avoids allocations of closures
 	pollWriteFn func(drpcwire.Frame) error
@@ -31,16 +35,22 @@ type Stream struct {
 
 var _ drpc.Stream = (*Stream)(nil)
 
-func New(ctx context.Context, wr *drpcwire.Writer) *Stream {
+func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
+	ctx, cancel := context.WithCancel(ctx)
 	s := &Stream{
-		ctx: ctx,
-		wr:  wr,
+		ctx:    ctx,
+		cancel: cancel,
 
-		done:  drpcutil.NewSignal(),
-		send:  drpcutil.NewSignal(),
+		id: drpcwire.ID{Stream: sid},
+		wr: wr,
+
+		done:  drpcsignal.New(),
+		send:  drpcsignal.New(),
 		queue: make(chan drpcwire.Packet),
 	}
+
 	s.pollWriteFn = s.pollWrite
+
 	return s
 }
 
@@ -49,10 +59,32 @@ func New(ctx context.Context, wr *drpcwire.Writer) *Stream {
 //
 
 func (s *Stream) Context() context.Context { return s.ctx }
+func (s *Stream) CancelContext()           { s.cancel() }
 
-func (s *Stream) DoneSig() *drpcutil.Signal   { return s.done }
-func (s *Stream) SendSig() *drpcutil.Signal   { return s.send }
+func (s *Stream) ID() uint64                  { return s.id.Stream }
+func (s *Stream) DoneSig() *drpcsignal.Signal { return &s.done }
+func (s *Stream) SendSig() *drpcsignal.Signal { return &s.send }
+
 func (s *Stream) Queue() chan drpcwire.Packet { return s.queue }
+
+func (s *Stream) QueueClosed() bool {
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	return closed
+}
+
+func (s *Stream) CloseQueue() {
+	s.mu.Lock()
+	if !s.closed {
+		close(s.queue)
+		s.closed = true
+	}
+	if s.send.IsSet() {
+		s.done.Set(drpc.Error.New("both sides closed sends"))
+	}
+	s.mu.Unlock()
+}
 
 //
 // helpers
@@ -68,28 +100,31 @@ func combineTwoErrors(err1, err2 error) error {
 	return errs.Combine(err1, err2)
 }
 
-func (s *Stream) newPacket(kind drpcwire.PacketKind, data []byte) drpcwire.Packet {
+func (s *Stream) newPacket(kind drpcwire.Kind, data []byte) drpcwire.Packet {
+	s.id.Message++
 	return drpcwire.Packet{
-		Kind: kind,
 		Data: data,
+		ID:   s.id,
+		Kind: kind,
 	}
 }
 
 func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
 	s.mu.Lock()
-	select {
-	case <-s.done.Signal():
+	switch {
+	case s.done.IsSet():
 		err = s.done.Err()
-	case <-s.send.Signal():
+	case s.send.IsSet():
 		err = s.send.Err()
 	default:
 		err = s.wr.WriteFrame(fr)
 	}
 	s.mu.Unlock()
+
 	return err
 }
 
-func (s *Stream) sendPacket(kind drpcwire.PacketKind, data []byte) error {
+func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) error {
 	err1 := s.wr.WritePacket(s.newPacket(kind, data))
 	err2 := s.wr.Flush()
 	return combineTwoErrors(err1, err2)
@@ -99,8 +134,12 @@ func (s *Stream) sendPacket(kind drpcwire.PacketKind, data []byte) error {
 // raw read/write
 //
 
-func (s *Stream) RawWrite(kind drpcwire.PacketKind, data []byte) error {
-	err := drpcwire.SplitN(s.newPacket(kind, data), 0, s.pollWriteFn)
+func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error {
+	s.mu.Lock()
+	pkt := s.newPacket(kind, data)
+	s.mu.Unlock()
+
+	err := drpcwire.SplitN(pkt, 0, s.pollWriteFn)
 	if err != nil {
 		return combineTwoErrors(err, s.SendError(err))
 	}
@@ -109,8 +148,8 @@ func (s *Stream) RawWrite(kind drpcwire.PacketKind, data []byte) error {
 
 func (s *Stream) RawFlush() (err error) {
 	s.mu.Lock()
-	select {
-	case <-s.done.Signal():
+	switch {
+	case s.done.IsSet():
 		err = s.done.Err()
 	default:
 		err = s.wr.Flush()
@@ -140,7 +179,7 @@ func (s *Stream) MsgSend(msg drpc.Message) error {
 	if err != nil {
 		return err
 	}
-	if err := s.RawWrite(drpcwire.PacketKind_Message, data); err != nil {
+	if err := s.RawWrite(drpcwire.Kind_Message, data); err != nil {
 		return err
 	}
 	if err := s.RawFlush(); err != nil {
@@ -163,11 +202,11 @@ func (s *Stream) MsgRecv(msg drpc.Message) error {
 
 func (s *Stream) SendError(err error) error {
 	s.mu.Lock()
-	select {
-	case <-s.done.Signal():
+	switch {
+	case s.done.IsSet():
 		err = s.done.Err()
 	default:
-		err = s.sendPacket(drpcwire.PacketKind_Error, []byte(err.Error()))
+		err = s.sendPacket(drpcwire.Kind_Error, []byte(err.Error()))
 		s.done.Set(drpc.Error.New("stream terminated by sending error"))
 	}
 	s.mu.Unlock()
@@ -179,10 +218,10 @@ func (s *Stream) Close() error {
 	var err error
 
 	s.mu.Lock()
-	select {
-	case <-s.done.Signal():
+	switch {
+	case s.done.IsSet():
 	default:
-		err = s.sendPacket(drpcwire.PacketKind_Close, nil)
+		err = s.sendPacket(drpcwire.Kind_Close, nil)
 		s.done.Set(drpc.Error.New("stream terminated by sending close"))
 	}
 	s.mu.Unlock()
@@ -194,11 +233,11 @@ func (s *Stream) SendCancel() error {
 	var err error
 
 	s.mu.Lock()
-	select {
-	case <-s.done.Signal():
+	switch {
+	case s.done.IsSet():
 		err = s.done.Err()
 	default:
-		err = s.sendPacket(drpcwire.PacketKind_Cancel, nil)
+		err = s.sendPacket(drpcwire.Kind_Cancel, nil)
 		s.done.Set(context.Canceled)
 	}
 	s.mu.Unlock()
@@ -210,13 +249,16 @@ func (s *Stream) CloseSend() error {
 	var err error
 
 	s.mu.Lock()
-	select {
-	case <-s.send.Signal():
-	case <-s.done.Signal():
+	switch {
+	case s.done.IsSet():
 		err = s.done.Err()
+	case s.send.IsSet():
 	default:
-		err = s.sendPacket(drpcwire.PacketKind_CloseSend, nil)
+		err = s.sendPacket(drpcwire.Kind_CloseSend, nil)
 		s.send.Set(drpc.Error.New("send closed"))
+	}
+	if s.closed {
+		s.done.Set(drpc.Error.New("both sides closed sends"))
 	}
 	s.mu.Unlock()
 

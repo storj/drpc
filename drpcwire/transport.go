@@ -33,6 +33,7 @@ func NewWriter(w io.Writer, size int) *Writer {
 func (b *Writer) WritePacket(pkt Packet) (err error) {
 	return b.WriteFrame(Frame{
 		Data: pkt.Data,
+		ID:   pkt.ID,
 		Kind: pkt.Kind,
 		Done: true,
 	})
@@ -98,11 +99,16 @@ func (s *Reader) ReadPacket() (pkt Packet, err error) {
 			return pkt, err
 		case !ok, len(rem) > 0:
 			return pkt, drpc.InternalError.New("problem with scanner")
-		case fr.Kind != pkt.Kind:
+		case fr.ID.Less(pkt.ID):
+			return pkt, drpc.ProtocolError.New("id monotonicity violation")
+		case pkt.ID.Less(fr.ID):
 			pkt = Packet{
-				Kind: fr.Kind,
 				Data: pkt.Data[:0],
+				ID:   fr.ID,
+				Kind: fr.Kind,
 			}
+		case fr.Kind != pkt.Kind:
+			return pkt, drpc.ProtocolError.New("packet kind change")
 		}
 
 		pkt.Data = append(pkt.Data, fr.Data...)
@@ -114,22 +120,4 @@ func (s *Reader) ReadPacket() (pkt Packet, err error) {
 		return pkt, err
 	}
 	return pkt, io.EOF
-}
-
-//
-// Transport
-//
-
-type Transport struct {
-	drpc.Transport
-	*Writer
-	*Reader
-}
-
-func NewTransport(tr drpc.Transport) *Transport {
-	return &Transport{
-		Transport: tr,
-		Writer:    NewWriter(tr, 1024),
-		Reader:    NewReader(tr),
-	}
 }

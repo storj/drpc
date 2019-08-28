@@ -17,10 +17,14 @@ import (
 )
 
 func TestSimple(t *testing.T) {
-	type rw struct {
-		io.Reader
-		io.Writer
-		io.Closer
+	rwc := func(r io.Reader, w io.Writer, c io.Closer) io.ReadWriteCloser {
+		// w = hex.Dumper(os.Stderr)
+
+		return struct {
+			io.Reader
+			io.Writer
+			io.Closer
+		}{r, w, c}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -33,9 +37,9 @@ func TestSimple(t *testing.T) {
 
 	srv := drpcserver.New()
 	srv.Register(new(impl), new(DRPCServiceDescription))
-	go srv.Manage(ctx, rw{pr2, pw1, pr2})
+	go srv.ServeOne(rwc(pr2, pw1, pr2))
 
-	conn := drpcconn.New(rw{pr1, pw2, pr1})
+	conn := drpcconn.New(rwc(pr1, pw2, pr1))
 	defer conn.Close()
 	cli := NewDRPCServiceClient(conn)
 
@@ -53,7 +57,6 @@ func TestSimple(t *testing.T) {
 		out, err := stream.CloseAndRecv()
 		assert.NoError(t, err)
 		assert.DeepEqual(t, out, &Out{Out: 2})
-		assert.NoError(t, stream.Close())
 	}
 
 	{
@@ -67,7 +70,6 @@ func TestSimple(t *testing.T) {
 			assert.NoError(t, err)
 			assert.DeepEqual(t, out, &Out{Out: 3})
 		}
-		assert.NoError(t, stream.Close())
 	}
 
 	{
@@ -86,49 +88,48 @@ func TestSimple(t *testing.T) {
 			assert.NoError(t, err)
 			assert.DeepEqual(t, out, &Out{Out: 4})
 		}
-		assert.NoError(t, stream.Close())
 	}
 }
 
 type impl struct{}
 
 func (impl) DRPCMethod1(ctx context.Context, in *In) (*Out, error) {
-	fmt.Println("SRV 0 <=", in)
+	fmt.Println("SRV1 0 <=", in)
 	return &Out{Out: 1}, nil
 }
 
 func (impl) DRPCMethod2(stream DRPCService_Method2Stream) error {
 	for {
 		in, err := stream.Recv()
-		fmt.Println("SRV 0 <=", err, in)
+		fmt.Println("SRV2 0 <=", err, in)
 		if err != nil {
 			break
 		}
 	}
 	err := stream.SendAndClose(&Out{Out: 2})
-	fmt.Println("SRV 1 <=", err)
+	fmt.Println("SRV2 1 <=", err)
 	return err
 }
 
 func (impl) DRPCMethod3(in *In, stream DRPCService_Method3Stream) error {
-	fmt.Println("SRV 0 <=", in)
-	fmt.Println("SRV 1 <=", stream.Send(&Out{Out: 3}))
-	fmt.Println("SRV 2 <=", stream.Send(&Out{Out: 3}))
-	fmt.Println("SRV 3 <=", stream.Send(&Out{Out: 3}))
+	fmt.Println("SRV3 0 <=", in)
+	fmt.Println("SRV3 1 <=", stream.Send(&Out{Out: 3}))
+	fmt.Println("SRV3 2 <=", stream.Send(&Out{Out: 3}))
+	fmt.Println("SRV3 3 <=", stream.Send(&Out{Out: 3}))
 	return nil
 }
 
 func (impl) DRPCMethod4(stream DRPCService_Method4Stream) error {
 	for {
 		in, err := stream.Recv()
-		fmt.Println("SRV 0 <=", err, in)
+		fmt.Println("SRV4 0 <=", err, in)
 		if err != nil {
 			break
 		}
 	}
-	fmt.Println("SRV 1 <=", stream.Send(&Out{Out: 4}))
-	fmt.Println("SRV 2 <=", stream.Send(&Out{Out: 4}))
-	fmt.Println("SRV 3 <=", stream.Send(&Out{Out: 4}))
-	fmt.Println("SRV 4 <=", stream.Send(&Out{Out: 4}))
+	fmt.Println("SRV4 1 <=", stream.Send(&Out{Out: 4}))
+	fmt.Println("SRV4 2 <=", stream.Send(&Out{Out: 4}))
+	fmt.Println("SRV4 3 <=", stream.Send(&Out{Out: 4}))
+	fmt.Println("SRV4 4 <=", stream.Send(&Out{Out: 4}))
 	return nil
 }

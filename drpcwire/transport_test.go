@@ -40,17 +40,19 @@ func TestReader(t *testing.T) {
 		Frames []drpcwire.Frame
 	}
 
-	p := func(kind drpcwire.PacketKind, data string) drpcwire.Packet {
+	p := func(kind drpcwire.Kind, id uint64, data string) drpcwire.Packet {
 		return drpcwire.Packet{
-			Kind: kind,
 			Data: []byte(data),
+			ID:   drpcwire.ID{Stream: 1, Message: id},
+			Kind: kind,
 		}
 	}
 
-	f := func(kind drpcwire.PacketKind, data string, done bool) drpcwire.Frame {
+	f := func(kind drpcwire.Kind, id uint64, data string, done bool) drpcwire.Frame {
 		return drpcwire.Frame{
-			Kind: kind,
 			Data: []byte(data),
+			ID:   drpcwire.ID{Stream: 1, Message: id},
+			Kind: kind,
 			Done: done,
 		}
 	}
@@ -63,15 +65,15 @@ func TestReader(t *testing.T) {
 	}
 
 	cases := []testCase{
-		m(p(drpcwire.PacketKind_Message, "hello world"),
-			f(drpcwire.PacketKind_Message, "hello", false),
-			f(drpcwire.PacketKind_Message, " ", false),
-			f(drpcwire.PacketKind_Message, "world", true)),
+		m(p(drpcwire.Kind_Message, 1, "hello world"),
+			f(drpcwire.Kind_Message, 1, "hello", false),
+			f(drpcwire.Kind_Message, 1, " ", false),
+			f(drpcwire.Kind_Message, 1, "world", true)),
 
-		m(p(drpcwire.PacketKind_Cancel, ""),
-			f(drpcwire.PacketKind_Message, "hello", false),
-			f(drpcwire.PacketKind_Message, " ", false),
-			f(drpcwire.PacketKind_Cancel, "", true)),
+		m(p(drpcwire.Kind_Cancel, 2, ""),
+			f(drpcwire.Kind_Message, 1, "hello", false),
+			f(drpcwire.Kind_Message, 1, " ", false),
+			f(drpcwire.Kind_Cancel, 2, "", true)),
 	}
 
 	for _, tc := range cases {

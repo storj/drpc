@@ -5,57 +5,62 @@ package drpcwire
 
 import "fmt"
 
-//go:generate stringer -type=PacketKind -trimprefix=PacketKind_ -output=packet_string.go
+//go:generate stringer -type=Kind -trimprefix=Kind_ -output=packet_string.go
 
-type PacketKind uint8
+type Kind uint8
 
 const (
-	PacketKind_Reserved PacketKind = iota
+	Kind_Reserved Kind = iota
 
-	PacketKind_Invoke    // body is rpc name
-	PacketKind_Message   // body is message data
-	PacketKind_Error     // body is error data
-	PacketKind_Cancel    // body must be empty
-	PacketKind_Close     // body must be empty
-	PacketKind_CloseSend // body must be empty
+	Kind_Invoke    // body is rpc name
+	Kind_Message   // body is message data
+	Kind_Error     // body is error data
+	Kind_Cancel    // body must be empty
+	Kind_Close     // body must be empty
+	Kind_CloseSend // body must be empty
 
-	PacketKind_Largest
+	Kind_Largest
 )
 
-type Packet struct {
-	Data      []byte
-	StreamID  uint64
-	MessageID uint64
-	Kind      PacketKind
+//
+// packet id
+//
+
+type ID struct {
+	Stream  uint64
+	Message uint64
 }
 
-func (p Packet) String() string {
-	return fmt.Sprintf("<kind:%s data:%d>", p.Kind, len(p.Data))
+func (i ID) Less(j ID) bool {
+	return i.Stream < j.Stream || (i.Stream == j.Stream && i.Message < j.Message)
 }
+
+//
+// data frame
+//
 
 type Frame struct {
-	Data      []byte
-	StreamID  uint64
-	MessageID uint64
-	Kind      PacketKind
-	Done      bool
+	Data []byte
+	ID   ID
+	Kind Kind
+	Done bool
 }
 
 func ParseFrame(buf []byte) (rem []byte, fr Frame, ok bool, err error) {
 	var length uint64
 	var control byte
-	if len(buf) < 3 {
+	if len(buf) < 4 {
 		goto bad
 	}
 
 	rem, control = buf[1:], buf[0]
 	fr.Done = control&1 > 0
-	fr.Kind = PacketKind(control >> 1)
-	rem, fr.StreamID, ok, err = ReadVarint(rem)
+	fr.Kind = Kind(control >> 1)
+	rem, fr.ID.Stream, ok, err = ReadVarint(rem)
 	if !ok || err != nil {
 		goto bad
 	}
-	rem, fr.MessageID, ok, err = ReadVarint(rem)
+	rem, fr.ID.Message, ok, err = ReadVarint(rem)
 	if !ok || err != nil {
 		goto bad
 	}
@@ -78,10 +83,24 @@ func AppendFrame(buf []byte, fr Frame) []byte {
 
 	out := buf
 	out = append(out, control)
-	out = AppendVarint(out, fr.StreamID)
-	out = AppendVarint(out, fr.MessageID)
+	out = AppendVarint(out, fr.ID.Stream)
+	out = AppendVarint(out, fr.ID.Message)
 	out = AppendVarint(out, uint64(len(fr.Data)))
 	out = append(out, fr.Data...)
 	return out
+}
 
+//
+// packet
+//
+
+type Packet struct {
+	Data []byte
+	ID   ID
+	Kind Kind
+}
+
+func (p Packet) String() string {
+	return fmt.Sprintf("<s:%d m:%d kind:%s data:%d>",
+		p.ID.Stream, p.ID.Message, p.Kind, len(p.Data))
 }

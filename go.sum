@@ -6,6 +6,4 @@ github.com/zeebo/assert v1.0.0 h1:qw3LXzO7lbptWIQ6DsemJIUOoaqyKbgY3M8b8yvlaaY=
 github.com/zeebo/assert v1.0.0/go.mod h1:yssERNPivllc1yU3BvpjYI5BUW+zglcz6QWqeVRL5t0=
 github.com/zeebo/errs v1.2.0 h1:Tk8UszIOLEjtx6DWnvfmMJe6N8q7vu03Bj95HMWDUkc=
 github.com/zeebo/errs v1.2.0/go.mod h1:sgbWHsvVuTPHcqJJGQ1WhI5KbWlHYz+2+2C/LSEtCw4=
-golang.org/x/sync v0.0.0-20190423024810-112230192c58 h1:8gQV6CLnAEikrhgkHFbMAEhagSSnXWGV915qUMm9mrU=
-golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/tools v0.0.0-20180221164845-07fd8470d635/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=

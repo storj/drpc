@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
+
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcserver"
 )

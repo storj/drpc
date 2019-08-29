@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/zeebo/errs"
+
 	"storj.io/drpc"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"

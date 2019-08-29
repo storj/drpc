@@ -206,7 +206,7 @@ func (s *Stream) SendError(err error) error {
 	case s.done.IsSet():
 		err = s.done.Err()
 	default:
-		err = s.sendPacket(drpcwire.Kind_Error, []byte(err.Error()))
+		err = s.sendPacket(drpcwire.Kind_Error, drpcwire.MarshalError(err))
 		s.done.Set(drpc.Error.New("stream terminated by sending error"))
 	}
 	s.mu.Unlock()

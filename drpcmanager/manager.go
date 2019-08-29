@@ -7,8 +7,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/zeebo/errs"
-
 	"storj.io/drpc"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"
@@ -187,7 +185,7 @@ func (m *Manager) handlePacket(ctx context.Context, stream *drpcstream.Stream, p
 
 	switch pkt.Kind {
 	case drpcwire.Kind_Error:
-		return errs.New("%s", pkt.Data)
+		return drpcwire.UnmarshalError(pkt.Data)
 
 	case drpcwire.Kind_Cancel:
 		_ = stream.SendCancel()

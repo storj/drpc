@@ -12,15 +12,15 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
+	"github.com/zeebo/errs"
 
 	"storj.io/drpc/drpcconn"
+	"storj.io/drpc/drpcerr"
 	"storj.io/drpc/drpcserver"
 )
 
 func TestSimple(t *testing.T) {
 	rwc := func(r io.Reader, w io.Writer, c io.Closer) io.ReadWriteCloser {
-		// w = hex.Dumper(os.Stderr)
-
 		return struct {
 			io.Reader
 			io.Writer
@@ -90,12 +90,21 @@ func TestSimple(t *testing.T) {
 			assert.DeepEqual(t, out, &Out{Out: 4})
 		}
 	}
+
+	{
+		_, err := cli.Method1(ctx, &In{In: 5})
+		assert.Error(t, err)
+		assert.Equal(t, drpcerr.Code(err), 5)
+	}
 }
 
 type impl struct{}
 
 func (impl) DRPCMethod1(ctx context.Context, in *In) (*Out, error) {
 	fmt.Println("SRV1 0 <=", in)
+	if in.In != 1 {
+		return nil, drpcerr.WithCode(errs.New("test"), uint64(in.In))
+	}
 	return &Out{Out: 1}, nil
 }
 

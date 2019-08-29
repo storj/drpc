@@ -26,8 +26,9 @@ type Stream struct {
 	mu     sync.Mutex
 	done   drpcsignal.Signal
 	send   drpcsignal.Signal
-	closed bool
+	rerr   drpcsignal.Signal
 	queue  chan drpcwire.Packet
+	closed bool
 
 	// avoids allocations of closures
 	pollWriteFn func(drpcwire.Frame) error
@@ -46,6 +47,7 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 
 		done:  drpcsignal.New(),
 		send:  drpcsignal.New(),
+		rerr:  drpcsignal.New(),
 		queue: make(chan drpcwire.Packet),
 	}
 
@@ -61,9 +63,10 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 func (s *Stream) Context() context.Context { return s.ctx }
 func (s *Stream) CancelContext()           { s.cancel() }
 
-func (s *Stream) ID() uint64                  { return s.id.Stream }
-func (s *Stream) DoneSig() *drpcsignal.Signal { return &s.done }
-func (s *Stream) SendSig() *drpcsignal.Signal { return &s.send }
+func (s *Stream) ID() uint64                       { return s.id.Stream }
+func (s *Stream) DoneSig() *drpcsignal.Signal      { return &s.done }
+func (s *Stream) SendSig() *drpcsignal.Signal      { return &s.send }
+func (s *Stream) RemoteErrSig() *drpcsignal.Signal { return &s.rerr }
 
 func (s *Stream) Queue() chan drpcwire.Packet { return s.queue }
 
@@ -116,6 +119,8 @@ func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
 		err = s.done.Err()
 	case s.send.IsSet():
 		err = s.send.Err()
+	case s.rerr.IsSet():
+		err = s.rerr.Err()
 	default:
 		err = s.wr.WriteFrame(fr)
 	}
@@ -165,6 +170,9 @@ func (s *Stream) RawFlush() (err error) {
 func (s *Stream) RawRecv() ([]byte, error) {
 	pkt, ok := <-s.queue
 	if !ok {
+		if err := s.rerr.Err(); err != nil {
+			return nil, err
+		}
 		return nil, io.EOF
 	}
 	return pkt.Data, nil

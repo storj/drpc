@@ -147,23 +147,24 @@ func (m *Manager) doManageReader() error {
 func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	for {
 		var err error
+		var ok bool
 
 		select {
 		case <-stream.DoneSig().Signal():
-			err = stream.DoneSig().Err()
+			err, ok = stream.DoneSig().Err(), false
 
 		case <-ctx.Done():
-			err = ctx.Err()
+			err, ok = ctx.Err(), false
 
 		case <-m.done.Signal():
-			err = m.done.Err()
+			err, ok = m.done.Err(), false
 
 		case pkt := <-m.queue:
-			err = m.handlePacket(ctx, stream, pkt)
+			err, ok = m.handlePacket(ctx, stream, pkt)
 		}
 
 		switch {
-		case err == nil:
+		case ok:
 			continue
 		case err == context.Canceled:
 			_ = stream.SendCancel()
@@ -178,58 +179,57 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	}
 }
 
-func (m *Manager) handlePacket(ctx context.Context, stream *drpcstream.Stream, pkt drpcwire.Packet) error {
+func (m *Manager) handlePacket(ctx context.Context, stream *drpcstream.Stream, pkt drpcwire.Packet) (error, bool) {
 	if pkt.ID.Stream != stream.ID() {
-		return drpc.ProtocolError.New("invalid stream id")
+		return drpc.ProtocolError.New("invalid stream id"), false
 	}
 
 	switch pkt.Kind {
 	case drpcwire.Kind_Error:
-		return drpcwire.UnmarshalError(pkt.Data)
+		stream.RemoteErrSig().Set(drpcwire.UnmarshalError(pkt.Data))
+		return nil, false
 
 	case drpcwire.Kind_Cancel:
 		_ = stream.SendCancel()
-		return context.Canceled
+		return context.Canceled, false
 
 	case drpcwire.Kind_Invoke:
-		return drpc.ProtocolError.New("invalid invoke sent")
+		return drpc.ProtocolError.New("invalid invoke sent"), false
 
 	case drpcwire.Kind_Close:
-		return drpc.Error.New("remote closed stream")
+		return drpc.Error.New("remote closed stream"), false
 
 	case drpcwire.Kind_CloseSend:
 		stream.CloseQueue()
-		return nil
+		return nil, true
 
 	case drpcwire.Kind_Message:
 		if stream.QueueClosed() {
-			return drpc.ProtocolError.New("message send after SendClose")
+			return drpc.ProtocolError.New("message send after SendClose"), false
 		}
 
 		select {
 		case <-m.done.Signal():
-			return m.done.Err()
+			return m.done.Err(), false
 
 		case <-ctx.Done():
-			_ = stream.SendCancel()
-			return context.Canceled
+			return context.Canceled, false
 
 		default:
 		}
 
 		select {
 		case <-m.done.Signal():
-			return m.done.Err()
+			return m.done.Err(), false
 
 		case <-ctx.Done():
-			_ = stream.SendCancel()
-			return context.Canceled
+			return context.Canceled, false
 
 		case stream.Queue() <- pkt:
-			return nil
+			return nil, true
 		}
 
 	default:
-		return drpc.ProtocolError.New("unknown packet kind")
+		return drpc.ProtocolError.New("unknown packet kind"), false
 	}
 }

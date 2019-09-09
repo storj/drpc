@@ -35,11 +35,11 @@ func (s *Server) Register(srv interface{}, desc drpc.Description)
 #### func (*Server) Serve
 
 ```go
-func (s *Server) Serve(lis net.Listener) error
+func (s *Server) Serve(ctx context.Context, lis net.Listener) error
 ```
 
 #### func (*Server) ServeOne
 
 ```go
-func (s *Server) ServeOne(tr drpc.Transport) (err error)
+func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error)
 ```

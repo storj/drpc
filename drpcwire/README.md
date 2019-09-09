@@ -19,6 +19,13 @@ func AppendVarint(buf []byte, x uint64) []byte
 ```
 AppendVarint appends the varint encoding of x to the buffer and returns it.
 
+#### func  MarshalError
+
+```go
+func MarshalError(err error) []byte
+```
+MarshalError returns a byte form of the error with any error code incorporated.
+
 #### func  ReadVarint
 
 ```go
@@ -39,6 +46,13 @@ func SplitFrame(data []byte, atEOF bool) (int, []byte, error)
 ```go
 func SplitN(pkt Packet, n int, cb func(fr Frame) error) error
 ```
+
+#### func  UnmarshalError
+
+```go
+func UnmarshalError(data []byte) error
+```
+UnmarshalError unmarshals the marshaled error to one with a code.
 
 #### type Frame
 

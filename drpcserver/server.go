@@ -4,6 +4,7 @@
 package drpcserver
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
@@ -88,21 +90,56 @@ func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, 
 	s.rpcs[rpc] = data
 }
 
-func (s *Server) ServeOne(tr drpc.Transport) (err error) {
+func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
+	tracker := drpcctx.NewTracker(ctx)
+	defer tracker.Cancel()
+
 	man := drpcmanager.New(tr, s)
+
+	errc := make(chan error, 1)
+	tracker.Run(func(ctx context.Context) {
+		<-ctx.Done()
+		errc <- man.Close()
+	})
+
 	<-man.DoneSig().Signal()
-	err = errs.Combine(err, man.Close())
+	tracker.Cancel()
+	tracker.Wait()
+
+	err = errs.Combine(err, <-errc)
 	err = errs.Combine(err, man.DoneSig().Err())
 	return err
 }
 
-func (s *Server) Serve(lis net.Listener) error {
+func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
+	tracker := drpcctx.NewTracker(ctx)
+	defer tracker.Cancel()
+
+	tracker.Run(func(ctx context.Context) {
+		<-ctx.Done()
+		_ = lis.Close()
+	})
+
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			return err // TODO(jeff): temporary errors?
+			// TODO(jeff): temporary errors?
+			select {
+			case <-ctx.Done():
+				tracker.Wait()
+				return nil
+			default:
+				tracker.Cancel()
+				tracker.Wait()
+				return err
+			}
 		}
-		go s.ServeOne(conn) // TODO(jeff): connection limits?
+
+		// TODO(jeff): connection limits?
+		tracker.Run(func(ctx context.Context) {
+			// TODO(jeff): handle this error?
+			_ = s.ServeOne(ctx, conn)
+		})
 	}
 }
 
@@ -110,7 +147,7 @@ func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error {
 	defer stream.CancelContext()
 	err := s.doHandle(stream, rpc)
 	if err != nil {
-		stream.SendError(err)
+		_ = stream.SendError(err)
 		return err
 	}
 	return stream.CloseSend()

@@ -15,6 +15,7 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc/drpcconn"
+	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
 	"storj.io/drpc/drpcserver"
 )
@@ -28,8 +29,9 @@ func TestSimple(t *testing.T) {
 		}{r, w, c}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
 
 	pr1, pw1 := io.Pipe()
 	pr2, pw2 := io.Pipe()
@@ -38,7 +40,7 @@ func TestSimple(t *testing.T) {
 
 	srv := drpcserver.New()
 	srv.Register(new(impl), new(DRPCServiceDescription))
-	go srv.ServeOne(rwc(pr2, pw1, pr2))
+	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, rwc(pr2, pw1, pr2)) })
 
 	conn := drpcconn.New(rwc(pr1, pw2, pr1))
 	defer conn.Close()

@@ -245,10 +245,10 @@ func (x *drpcServiceMethod4Client) Recv() (*Out, error) {
 }
 
 type DRPCServiceServer interface {
-	DRPCMethod1(context.Context, *In) (*Out, error)
-	DRPCMethod2(DRPCService_Method2Stream) error
-	DRPCMethod3(*In, DRPCService_Method3Stream) error
-	DRPCMethod4(DRPCService_Method4Stream) error
+	Method1(context.Context, *In) (*Out, error)
+	Method2(DRPCService_Method2Stream) error
+	Method3(*In, DRPCService_Method3Stream) error
+	Method4(DRPCService_Method4Stream) error
 }
 
 type DRPCServiceDescription struct{}
@@ -261,39 +261,43 @@ func (DRPCServiceDescription) Method(n int) (string, drpc.Handler, interface{}, 
 		return "/service.Service/Method1",
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return srv.(DRPCServiceServer).
-					DRPCMethod1(
+					Method1(
 						ctx,
 						in1.(*In),
 					)
-			}, DRPCServiceServer.DRPCMethod1, true
+			}, DRPCServiceServer.Method1, true
 	case 1:
 		return "/service.Service/Method2",
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return nil, srv.(DRPCServiceServer).
-					DRPCMethod2(
+					Method2(
 						&drpcServiceMethod2Stream{in1.(drpc.Stream)},
 					)
-			}, DRPCServiceServer.DRPCMethod2, true
+			}, DRPCServiceServer.Method2, true
 	case 2:
 		return "/service.Service/Method3",
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return nil, srv.(DRPCServiceServer).
-					DRPCMethod3(
+					Method3(
 						in1.(*In),
 						&drpcServiceMethod3Stream{in2.(drpc.Stream)},
 					)
-			}, DRPCServiceServer.DRPCMethod3, true
+			}, DRPCServiceServer.Method3, true
 	case 3:
 		return "/service.Service/Method4",
 			func(srv interface{}, ctx context.Context, in1, in2 interface{}) (drpc.Message, error) {
 				return nil, srv.(DRPCServiceServer).
-					DRPCMethod4(
+					Method4(
 						&drpcServiceMethod4Stream{in1.(drpc.Stream)},
 					)
-			}, DRPCServiceServer.DRPCMethod4, true
+			}, DRPCServiceServer.Method4, true
 	default:
 		return "", nil, nil, false
 	}
+}
+
+func DRPCRegisterService(srv drpc.Server, impl DRPCServiceServer) {
+	srv.Register(impl, DRPCServiceDescription{})
 }
 
 type DRPCService_Method1Stream interface {

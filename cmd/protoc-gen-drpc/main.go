@@ -27,6 +27,7 @@ type drpc struct {
 	drpcStream  string
 	drpcHandler string
 	drpcMessage string
+	drpcServer  string
 }
 
 //
@@ -55,6 +56,7 @@ func (d *drpc) Generate(file *generator.FileDescriptor) {
 	d.drpcStream = d.drpcPkg + ".Stream"
 	d.drpcHandler = d.drpcPkg + ".Handler"
 	d.drpcMessage = d.drpcPkg + ".Message"
+	d.drpcServer = d.drpcPkg + ".Server"
 	d.contextPkg = string(d.AddImport("context"))
 
 	for i, service := range file.FileDescriptorProto.Service {
@@ -86,7 +88,8 @@ func (d *drpc) generateService(file *generator.FileDescriptor, service *pb.Servi
 	if pkg := file.GetPackage(); pkg != "" {
 		fullServName = pkg + "." + fullServName
 	}
-	servName := "DRPC" + generator.CamelCase(service.GetName())
+	cleanServName := generator.CamelCase(service.GetName())
+	servName := "DRPC" + cleanServName
 
 	// Client interface
 	d.P("type ", servName, "Client interface {")
@@ -139,13 +142,18 @@ func (d *drpc) generateService(file *generator.FileDescriptor, service *pb.Servi
 		d.P("case ", i, ":")
 		d.P("return ", strconv.Quote("/"+fullServName+"/"+method.GetName()), ",")
 		d.generateServerHandler(servName, method)
-		d.P("}, ", servName, "Server.DRPC", methName, ", true")
+		d.P("}, ", servName, "Server.", methName, ", true")
 	}
 	d.P("default:")
 	d.P(`return "", nil, nil, false`)
 	d.P("}")
 	d.P("}")
 	d.P()
+
+	// Server registration helper
+	d.P("func DRPCRegister", cleanServName, "(srv ", d.drpcServer, ", impl ", servName, "Server) {")
+	d.P("srv.Register(impl, ", servName, "Description{})")
+	d.P("}")
 
 	// Server methods
 	for _, method := range service.Method {
@@ -268,7 +276,7 @@ func (d *drpc) generateServerSignature(servName string, method *pb.MethodDescrip
 		reqArgs = append(reqArgs, servName+"_"+methName+"Stream")
 	}
 
-	return "DRPC" + methName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
+	return methName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
 }
 
 func (d *drpc) generateServerHandler(servName string, method *pb.MethodDescriptorProto) {
@@ -281,7 +289,7 @@ func (d *drpc) generateServerHandler(servName string, method *pb.MethodDescripto
 	} else {
 		d.P("return nil, srv.(", servName, "Server).")
 	}
-	d.P("DRPC", methName, "(")
+	d.P(methName, "(")
 
 	n := 1
 	if !method.GetServerStreaming() && !method.GetClientStreaming() {

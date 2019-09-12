@@ -39,7 +39,7 @@ func TestSimple(t *testing.T) {
 	defer pr2.Close()
 
 	srv := drpcserver.New()
-	srv.Register(new(impl), new(DRPCServiceDescription))
+	DRPCRegisterService(srv, new(impl))
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, rwc(pr2, pw1, pr2)) })
 
 	conn := drpcconn.New(rwc(pr1, pw2, pr1))
@@ -102,7 +102,7 @@ func TestSimple(t *testing.T) {
 
 type impl struct{}
 
-func (impl) DRPCMethod1(ctx context.Context, in *In) (*Out, error) {
+func (impl) Method1(ctx context.Context, in *In) (*Out, error) {
 	fmt.Println("SRV1 0 <=", in)
 	if in.In != 1 {
 		return nil, drpcerr.WithCode(errs.New("test"), uint64(in.In))
@@ -110,7 +110,7 @@ func (impl) DRPCMethod1(ctx context.Context, in *In) (*Out, error) {
 	return &Out{Out: 1}, nil
 }
 
-func (impl) DRPCMethod2(stream DRPCService_Method2Stream) error {
+func (impl) Method2(stream DRPCService_Method2Stream) error {
 	for {
 		in, err := stream.Recv()
 		fmt.Println("SRV2 0 <=", err, in)
@@ -123,7 +123,7 @@ func (impl) DRPCMethod2(stream DRPCService_Method2Stream) error {
 	return err
 }
 
-func (impl) DRPCMethod3(in *In, stream DRPCService_Method3Stream) error {
+func (impl) Method3(in *In, stream DRPCService_Method3Stream) error {
 	fmt.Println("SRV3 0 <=", in)
 	fmt.Println("SRV3 1 <=", stream.Send(&Out{Out: 3}))
 	fmt.Println("SRV3 2 <=", stream.Send(&Out{Out: 3}))
@@ -131,7 +131,7 @@ func (impl) DRPCMethod3(in *In, stream DRPCService_Method3Stream) error {
 	return nil
 }
 
-func (impl) DRPCMethod4(stream DRPCService_Method4Stream) error {
+func (impl) Method4(stream DRPCService_Method4Stream) error {
 	for {
 		in, err := stream.Recv()
 		fmt.Println("SRV4 0 <=", err, in)

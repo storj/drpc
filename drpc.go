@@ -52,3 +52,7 @@ type Description interface {
 	NumMethods() int
 	Method(n int) (rpc string, handler Handler, method interface{}, ok bool)
 }
+
+type Server interface {
+	Register(srv interface{}, desc Description)
+}

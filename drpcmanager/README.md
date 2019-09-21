@@ -42,6 +42,6 @@ func (m *Manager) NewStream(ctx context.Context, sid uint64) (*drpcstream.Stream
 
 ```go
 type Server interface {
-	HandleRPC(stream *drpcstream.Stream, rpc string) error
+	HandleRPC(stream *drpcstream.Stream, rpc string)
 }
 ```

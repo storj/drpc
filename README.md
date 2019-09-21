@@ -55,6 +55,15 @@ type Message interface {
 ```
 
 
+#### type Server
+
+```go
+type Server interface {
+	Register(srv interface{}, desc Description)
+}
+```
+
+
 #### type Stream
 
 ```go

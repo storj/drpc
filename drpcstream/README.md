@@ -104,16 +104,16 @@ func (s *Stream) RawRecv() ([]byte, error)
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error
 ```
 
-#### func (*Stream) RemoteErrSig
+#### func (*Stream) ReadErrSig
 
 ```go
-func (s *Stream) RemoteErrSig() *drpcsignal.Signal
+func (s *Stream) ReadErrSig() *drpcsignal.Signal
 ```
 
 #### func (*Stream) SendCancel
 
 ```go
-func (s *Stream) SendCancel() error
+func (s *Stream) SendCancel(err error) error
 ```
 
 #### func (*Stream) SendError

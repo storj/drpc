@@ -106,9 +106,10 @@ func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
 	tracker.Cancel()
 	tracker.Wait()
 
-	err = errs.Combine(err, <-errc)
-	err = errs.Combine(err, man.DoneSig().Err())
-	return err
+	var eg errs.Group
+	eg.Add(<-errc)
+	eg.Add(man.DoneSig().Err())
+	return errs.Wrap(eg.Err())
 }
 
 func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
@@ -131,7 +132,7 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
 			default:
 				tracker.Cancel()
 				tracker.Wait()
-				return err
+				return errs.Wrap(err)
 			}
 		}
 
@@ -143,14 +144,14 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
 	}
 }
 
-func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error {
+func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) {
 	defer stream.CancelContext()
+
 	err := s.doHandle(stream, rpc)
 	if err != nil {
 		_ = stream.SendError(err)
-		return err
 	}
-	return stream.CloseSend()
+	_ = stream.CloseSend()
 }
 
 func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
@@ -163,7 +164,7 @@ func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
 	if data.in1 != streamType {
 		msg := reflect.New(data.in1.Elem()).Interface().(drpc.Message)
 		if err := stream.MsgRecv(msg); err != nil {
-			return err
+			return errs.Wrap(err)
 		}
 		in = msg
 	}
@@ -171,11 +172,11 @@ func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
 	out, err := data.handler(data.srv, stream.Context(), in, stream)
 	switch {
 	case err != nil:
-		return err
+		return errs.Wrap(err)
 	case out != nil:
 		data, err := proto.Marshal(out)
 		if err != nil {
-			return err
+			return errs.Wrap(err)
 		}
 		return stream.RawWrite(drpcwire.Kind_Message, data)
 	default:

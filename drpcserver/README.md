@@ -23,7 +23,7 @@ func New() *Server
 #### func (*Server) HandleRPC
 
 ```go
-func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error
+func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string)
 ```
 
 #### func (*Server) Register

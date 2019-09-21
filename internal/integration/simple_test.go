@@ -3,48 +3,25 @@
 
 package integration
 
-//go:generate bash -c "go install storj.io/drpc/cmd/protoc-gen-drpc && protoc --drpc_out=plugins=drpc:. service.proto"
-
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"testing"
 
 	"github.com/zeebo/assert"
-	"github.com/zeebo/errs"
 
-	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
-	"storj.io/drpc/drpcserver"
 )
 
 func TestSimple(t *testing.T) {
-	rwc := func(r io.Reader, w io.Writer, c io.Closer) io.ReadWriteCloser {
-		return struct {
-			io.Reader
-			io.Writer
-			io.Closer
-		}{r, w, c}
-	}
-
 	ctx := drpcctx.NewTracker(context.Background())
 	defer ctx.Wait()
 	defer ctx.Cancel()
 
-	pr1, pw1 := io.Pipe()
-	pr2, pw2 := io.Pipe()
-	defer pr1.Close()
-	defer pr2.Close()
-
-	srv := drpcserver.New()
-	DRPCRegisterService(srv, new(impl))
-	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, rwc(pr2, pw1, pr2)) })
-
-	conn := drpcconn.New(rwc(pr1, pw2, pr1))
-	defer conn.Close()
-	cli := NewDRPCServiceClient(conn)
+	cli, close := createConnection(ctx)
+	defer close()
 
 	{
 		out, err := cli.Method1(ctx, &In{In: 1})
@@ -67,7 +44,7 @@ func TestSimple(t *testing.T) {
 		assert.NoError(t, err)
 		for {
 			out, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			assert.NoError(t, err)
@@ -85,7 +62,7 @@ func TestSimple(t *testing.T) {
 		assert.NoError(t, stream.CloseSend())
 		for {
 			out, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			assert.NoError(t, err)
@@ -98,50 +75,4 @@ func TestSimple(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, drpcerr.Code(err), 5)
 	}
-}
-
-type impl struct{}
-
-func (impl) Method1(ctx context.Context, in *In) (*Out, error) {
-	fmt.Println("SRV1 0 <=", in)
-	if in.In != 1 {
-		return nil, drpcerr.WithCode(errs.New("test"), uint64(in.In))
-	}
-	return &Out{Out: 1}, nil
-}
-
-func (impl) Method2(stream DRPCService_Method2Stream) error {
-	for {
-		in, err := stream.Recv()
-		fmt.Println("SRV2 0 <=", err, in)
-		if err != nil {
-			break
-		}
-	}
-	err := stream.SendAndClose(&Out{Out: 2})
-	fmt.Println("SRV2 1 <=", err)
-	return err
-}
-
-func (impl) Method3(in *In, stream DRPCService_Method3Stream) error {
-	fmt.Println("SRV3 0 <=", in)
-	fmt.Println("SRV3 1 <=", stream.Send(&Out{Out: 3}))
-	fmt.Println("SRV3 2 <=", stream.Send(&Out{Out: 3}))
-	fmt.Println("SRV3 3 <=", stream.Send(&Out{Out: 3}))
-	return nil
-}
-
-func (impl) Method4(stream DRPCService_Method4Stream) error {
-	for {
-		in, err := stream.Recv()
-		fmt.Println("SRV4 0 <=", err, in)
-		if err != nil {
-			break
-		}
-	}
-	fmt.Println("SRV4 1 <=", stream.Send(&Out{Out: 4}))
-	fmt.Println("SRV4 2 <=", stream.Send(&Out{Out: 4}))
-	fmt.Println("SRV4 3 <=", stream.Send(&Out{Out: 4}))
-	fmt.Println("SRV4 4 <=", stream.Send(&Out{Out: 4}))
-	return nil
 }

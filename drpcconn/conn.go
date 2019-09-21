@@ -42,34 +42,30 @@ func (c *Conn) Close() (err error) {
 func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (err error) {
 	data, err := proto.Marshal(in)
 	if err != nil {
-		return err
+		return errs.Wrap(err)
 	}
-
 	stream, err := c.man.NewStream(ctx, 0)
 	if err != nil {
-		return err
+		return errs.Wrap(err)
 	}
-
-	err = c.doInvoke(ctx, stream, []byte(rpc), data, out)
-	if err != nil {
-		err = errs.Combine(err, stream.Close())
-		return err
-	}
-	return nil
+	var eg errs.Group
+	eg.Add(c.doInvoke(ctx, stream, []byte(rpc), data, out))
+	eg.Add(stream.Close())
+	return errs.Wrap(eg.Err())
 }
 
 func (c *Conn) doInvoke(ctx context.Context, stream *drpcstream.Stream, rpc, data []byte, out drpc.Message) (err error) {
 	if err := stream.RawWrite(drpcwire.Kind_Invoke, []byte(rpc)); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	if err := stream.RawWrite(drpcwire.Kind_Message, data); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	if err := stream.CloseSend(); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	if err := stream.MsgRecv(out); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	return nil
 }
@@ -77,23 +73,22 @@ func (c *Conn) doInvoke(ctx context.Context, stream *drpcstream.Stream, rpc, dat
 func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err error) {
 	stream, err := c.man.NewStream(ctx, 0)
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err)
 	}
-
 	err = c.doNewStream(ctx, stream, []byte(rpc))
 	if err != nil {
 		err = errs.Combine(err, stream.Close())
-		return nil, err
+		return nil, errs.Wrap(err)
 	}
 	return stream, nil
 }
 
 func (c *Conn) doNewStream(ctx context.Context, stream *drpcstream.Stream, rpc []byte) error {
 	if err := stream.RawWrite(drpcwire.Kind_Invoke, []byte(rpc)); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	if err := stream.RawFlush(); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	return nil
 }

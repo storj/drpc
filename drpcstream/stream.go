@@ -5,13 +5,14 @@ package drpcstream
 
 import (
 	"context"
-	"io"
+	"fmt"
 	"sync"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpcdebug"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcwire"
 )
@@ -63,10 +64,10 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 func (s *Stream) Context() context.Context { return s.ctx }
 func (s *Stream) CancelContext()           { s.cancel() }
 
-func (s *Stream) ID() uint64                       { return s.id.Stream }
-func (s *Stream) DoneSig() *drpcsignal.Signal      { return &s.done }
-func (s *Stream) SendSig() *drpcsignal.Signal      { return &s.send }
-func (s *Stream) RemoteErrSig() *drpcsignal.Signal { return &s.rerr }
+func (s *Stream) ID() uint64                     { return s.id.Stream }
+func (s *Stream) DoneSig() *drpcsignal.Signal    { return &s.done }
+func (s *Stream) SendSig() *drpcsignal.Signal    { return &s.send }
+func (s *Stream) ReadErrSig() *drpcsignal.Signal { return &s.rerr }
 
 func (s *Stream) Queue() chan drpcwire.Packet { return s.queue }
 
@@ -119,20 +120,18 @@ func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
 		err = s.done.Err()
 	case s.send.IsSet():
 		err = s.send.Err()
-	case s.rerr.IsSet():
-		err = s.rerr.Err()
 	default:
 		err = s.wr.WriteFrame(fr)
 	}
 	s.mu.Unlock()
 
-	return err
+	return errs.Wrap(err)
 }
 
 func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) error {
 	err1 := s.wr.WritePacket(s.newPacket(kind, data))
 	err2 := s.wr.Flush()
-	return combineTwoErrors(err1, err2)
+	return errs.Wrap(combineTwoErrors(err1, err2))
 }
 
 //
@@ -140,18 +139,22 @@ func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) error {
 //
 
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error {
+	drpcdebug.Log(func() string { return fmt.Sprintf("RPC[STREAM][%p][%d]: raw write %d\n", s, s.ID(), len(data)) })
+
 	s.mu.Lock()
 	pkt := s.newPacket(kind, data)
 	s.mu.Unlock()
 
 	err := drpcwire.SplitN(pkt, 0, s.pollWriteFn)
 	if err != nil {
-		return combineTwoErrors(err, s.SendError(err))
+		return errs.Wrap(combineTwoErrors(err, s.SendError(err)))
 	}
 	return nil
 }
 
 func (s *Stream) RawFlush() (err error) {
+	drpcdebug.Log(func() string { return fmt.Sprintf("RPC[STREAM][%p][%d]: raw flush\n", s, s.ID()) })
+
 	s.mu.Lock()
 	switch {
 	case s.done.IsSet():
@@ -162,18 +165,17 @@ func (s *Stream) RawFlush() (err error) {
 	s.mu.Unlock()
 
 	if err != nil {
-		return combineTwoErrors(err, s.SendError(err))
+		return errs.Wrap(combineTwoErrors(err, s.SendError(err)))
 	}
 	return nil
 }
 
 func (s *Stream) RawRecv() ([]byte, error) {
+	drpcdebug.Log(func() string { return fmt.Sprintf("RPC[STREAM][%p][%d]: raw recv\n", s, s.ID()) })
+
 	pkt, ok := <-s.queue
 	if !ok {
-		if err := s.rerr.Err(); err != nil {
-			return nil, err
-		}
-		return nil, io.EOF
+		return nil, s.rerr.Err()
 	}
 	return pkt.Data, nil
 }
@@ -185,13 +187,13 @@ func (s *Stream) RawRecv() ([]byte, error) {
 func (s *Stream) MsgSend(msg drpc.Message) error {
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	if err := s.RawWrite(drpcwire.Kind_Message, data); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	if err := s.RawFlush(); err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	return nil
 }
@@ -199,7 +201,7 @@ func (s *Stream) MsgSend(msg drpc.Message) error {
 func (s *Stream) MsgRecv(msg drpc.Message) error {
 	data, err := s.RawRecv()
 	if err != nil {
-		return err
+		return errs.Wrap(err)
 	}
 	return proto.Unmarshal(data, msg)
 }
@@ -219,7 +221,7 @@ func (s *Stream) SendError(err error) error {
 	}
 	s.mu.Unlock()
 
-	return err
+	return errs.Wrap(err)
 }
 
 func (s *Stream) Close() error {
@@ -234,23 +236,22 @@ func (s *Stream) Close() error {
 	}
 	s.mu.Unlock()
 
-	return err
+	return errs.Wrap(err)
 }
 
-func (s *Stream) SendCancel() error {
-	var err error
-
+func (s *Stream) SendCancel(err error) error {
 	s.mu.Lock()
 	switch {
 	case s.done.IsSet():
 		err = s.done.Err()
 	default:
-		err = s.sendPacket(drpcwire.Kind_Cancel, nil)
-		s.done.Set(context.Canceled)
+		sendErr := s.sendPacket(drpcwire.Kind_Cancel, nil)
+		s.done.Set(err)
+		err = sendErr
 	}
 	s.mu.Unlock()
 
-	return err
+	return errs.Wrap(err)
 }
 
 func (s *Stream) CloseSend() error {
@@ -270,5 +271,5 @@ func (s *Stream) CloseSend() error {
 	}
 	s.mu.Unlock()
 
-	return err
+	return errs.Wrap(err)
 }

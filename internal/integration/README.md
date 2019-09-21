@@ -2,9 +2,15 @@
 
 `import "storj.io/drpc/internal/integration"`
 
-
+package integration holds integration tests for drpc.
 
 ## Usage
+
+#### func  DRPCRegisterService
+
+```go
+func DRPCRegisterService(srv drpc.Server, impl DRPCServiceServer)
+```
 
 #### type DRPCServiceClient
 
@@ -49,10 +55,10 @@ func (DRPCServiceDescription) NumMethods() int
 
 ```go
 type DRPCServiceServer interface {
-	DRPCMethod1(context.Context, *In) (*Out, error)
-	DRPCMethod2(DRPCService_Method2Stream) error
-	DRPCMethod3(*In, DRPCService_Method3Stream) error
-	DRPCMethod4(DRPCService_Method4Stream) error
+	Method1(context.Context, *In) (*Out, error)
+	Method2(DRPCService_Method2Stream) error
+	Method3(*In, DRPCService_Method3Stream) error
+	Method4(DRPCService_Method4Stream) error
 }
 ```
 

@@ -11,11 +11,13 @@ pipeline {
             steps {
                 checkout scm
                 sh 'go mod download'
+                sh 'cd ./internal/grpccompat; go mod download'
             }
         }
         stage('Test') {
             steps {
-                sh 'go test ./...'
+                sh 'go test storj.io/drpc/...'
+                sh 'cd ./internal/grpccompat; go test storj.io/drpc/internal/grpccompat/...'
             }
         }
     }

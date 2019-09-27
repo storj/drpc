@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-var logger = log.New(os.Stderr, "", log.Ltime|log.Lshortfile)
+var logger = log.New(os.Stderr, "", 0)
 
 // Log executes the callback for a string to log if built with the debug tag.
 func Log(cb func() string) {

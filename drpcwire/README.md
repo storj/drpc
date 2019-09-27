@@ -88,6 +88,12 @@ type ID struct {
 func (i ID) Less(j ID) bool
 ```
 
+#### func (ID) String
+
+```go
+func (i ID) String() string
+```
+
 #### type Kind
 
 ```go

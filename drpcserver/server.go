@@ -91,25 +91,18 @@ func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, 
 }
 
 func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
-	tracker := drpcctx.NewTracker(ctx)
-	defer tracker.Cancel()
+	man := drpcmanager.New(tr)
+	defer func() { err = errs.Combine(err, man.Close()) }()
 
-	man := drpcmanager.New(tr, s)
-
-	errc := make(chan error, 1)
-	tracker.Run(func(ctx context.Context) {
-		<-ctx.Done()
-		errc <- man.Close()
-	})
-
-	<-man.DoneSig().Signal()
-	tracker.Cancel()
-	tracker.Wait()
-
-	var eg errs.Group
-	eg.Add(<-errc)
-	eg.Add(man.DoneSig().Err())
-	return errs.Wrap(eg.Err())
+	for {
+		stream, rpc, err := man.NewServerStream(ctx)
+		if err != nil {
+			return errs.Wrap(err)
+		}
+		if err := s.HandleRPC(stream, rpc); err != nil {
+			return errs.Wrap(err)
+		}
+	}
 }
 
 func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
@@ -144,14 +137,12 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
 	}
 }
 
-func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) {
-	defer stream.CancelContext()
-
+func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error {
 	err := s.doHandle(stream, rpc)
 	if err != nil {
-		_ = stream.SendError(err)
+		return errs.Wrap(stream.SendError(err))
 	}
-	_ = stream.CloseSend()
+	return errs.Wrap(stream.CloseSend())
 }
 
 func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {

@@ -6,7 +6,7 @@ package integration
 import (
 	"context"
 	"fmt"
-	"io"
+	"net"
 
 	"github.com/zeebo/errs"
 	"storj.io/drpc/drpcconn"
@@ -29,28 +29,15 @@ var ballast = make([]byte, 20*1024*1024) //nolint
 
 func in(n int64) *In { return &In{In: n} }
 
-func rwc(r io.Reader, w io.Writer, c io.Closer) io.ReadWriteCloser {
-	return struct {
-		io.Reader
-		io.Writer
-		io.Closer
-	}{r, w, c}
-}
-
 func createConnection(ctx *drpcctx.Tracker) (DRPCServiceClient, func()) {
-	pr1, pw1 := io.Pipe()
-	pr2, pw2 := io.Pipe()
+	c1, c2 := net.Pipe()
 
 	srv := drpcserver.New()
 	DRPCRegisterService(srv, new(impl))
-	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, rwc(pr2, pw1, pr2)) })
-	conn := drpcconn.New(rwc(pr1, pw2, pr1))
+	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
+	conn := drpcconn.New(c2)
 
-	return NewDRPCServiceClient(conn), func() {
-		conn.Close()
-		pr2.Close()
-		pr1.Close()
-	}
+	return NewDRPCServiceClient(conn), func() { _ = conn.Close() }
 }
 
 //

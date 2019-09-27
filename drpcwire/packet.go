@@ -35,6 +35,8 @@ func (i ID) Less(j ID) bool {
 	return i.Stream < j.Stream || (i.Stream == j.Stream && i.Message < j.Message)
 }
 
+func (i ID) String() string { return fmt.Sprintf("<%d,%d>", i.Stream, i.Message) }
+
 //
 // data frame
 //

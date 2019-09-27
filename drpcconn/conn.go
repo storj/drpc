@@ -27,7 +27,7 @@ var _ drpc.Conn = (*Conn)(nil)
 func New(tr drpc.Transport) *Conn {
 	return &Conn{
 		tr:  tr,
-		man: drpcmanager.New(tr, nil),
+		man: drpcmanager.New(tr),
 	}
 }
 
@@ -44,14 +44,17 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	if err != nil {
 		return errs.Wrap(err)
 	}
-	stream, err := c.man.NewStream(ctx, 0)
+
+	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
 		return errs.Wrap(err)
 	}
-	var eg errs.Group
-	eg.Add(c.doInvoke(ctx, stream, []byte(rpc), data, out))
-	eg.Add(stream.Close())
-	return errs.Wrap(eg.Err())
+	defer func() { err = errs.Combine(err, stream.Close()) }()
+
+	if err := c.doInvoke(ctx, stream, []byte(rpc), data, out); err != nil {
+		return errs.Wrap(err)
+	}
+	return nil
 }
 
 func (c *Conn) doInvoke(ctx context.Context, stream *drpcstream.Stream, rpc, data []byte, out drpc.Message) (err error) {
@@ -71,14 +74,13 @@ func (c *Conn) doInvoke(ctx context.Context, stream *drpcstream.Stream, rpc, dat
 }
 
 func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err error) {
-	stream, err := c.man.NewStream(ctx, 0)
+	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
 		return nil, errs.Wrap(err)
 	}
-	err = c.doNewStream(ctx, stream, []byte(rpc))
-	if err != nil {
-		err = errs.Combine(err, stream.Close())
-		return nil, errs.Wrap(err)
+
+	if err := c.doNewStream(ctx, stream, []byte(rpc)); err != nil {
+		return nil, errs.Combine(errs.Wrap(err), stream.Close())
 	}
 	return stream, nil
 }

@@ -20,22 +20,10 @@ type Stream struct {
 func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream
 ```
 
-#### func (*Stream) CancelContext
-
-```go
-func (s *Stream) CancelContext()
-```
-
 #### func (*Stream) Close
 
 ```go
 func (s *Stream) Close() error
-```
-
-#### func (*Stream) CloseQueue
-
-```go
-func (s *Stream) CloseQueue()
 ```
 
 #### func (*Stream) CloseSend
@@ -50,17 +38,14 @@ func (s *Stream) CloseSend() error
 func (s *Stream) Context() context.Context
 ```
 
-#### func (*Stream) DoneSig
+#### func (*Stream) HandlePacket
 
 ```go
-func (s *Stream) DoneSig() *drpcsignal.Signal
+func (s *Stream) HandlePacket(pkt drpcwire.Packet) (error, bool)
 ```
-
-#### func (*Stream) ID
-
-```go
-func (s *Stream) ID() uint64
-```
+HandlePacket advances the stream state machine by inspecting the packet. It
+returns any major errors that should terminate the transport the stream is
+operating on as well as a boolean indicating if the stream expects more packets.
 
 #### func (*Stream) MsgRecv
 
@@ -72,18 +57,6 @@ func (s *Stream) MsgRecv(msg drpc.Message) error
 
 ```go
 func (s *Stream) MsgSend(msg drpc.Message) error
-```
-
-#### func (*Stream) Queue
-
-```go
-func (s *Stream) Queue() chan drpcwire.Packet
-```
-
-#### func (*Stream) QueueClosed
-
-```go
-func (s *Stream) QueueClosed() bool
 ```
 
 #### func (*Stream) RawFlush
@@ -104,12 +77,6 @@ func (s *Stream) RawRecv() ([]byte, error)
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error
 ```
 
-#### func (*Stream) ReadErrSig
-
-```go
-func (s *Stream) ReadErrSig() *drpcsignal.Signal
-```
-
 #### func (*Stream) SendCancel
 
 ```go
@@ -122,8 +89,8 @@ func (s *Stream) SendCancel(err error) error
 func (s *Stream) SendError(err error) error
 ```
 
-#### func (*Stream) SendSig
+#### func (*Stream) Terminated
 
 ```go
-func (s *Stream) SendSig() *drpcsignal.Signal
+func (s *Stream) Terminated() <-chan struct{}
 ```

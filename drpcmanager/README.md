@@ -17,31 +17,23 @@ type Manager struct {
 #### func  New
 
 ```go
-func New(tr drpc.Transport, srv Server) *Manager
+func New(tr drpc.Transport) *Manager
 ```
 
 #### func (*Manager) Close
 
 ```go
-func (m *Manager) Close() (err error)
+func (m *Manager) Close() error
 ```
 
-#### func (*Manager) DoneSig
+#### func (*Manager) NewClientStream
 
 ```go
-func (m *Manager) DoneSig() *drpcsignal.Signal
+func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Stream, err error)
 ```
 
-#### func (*Manager) NewStream
+#### func (*Manager) NewServerStream
 
 ```go
-func (m *Manager) NewStream(ctx context.Context, sid uint64) (*drpcstream.Stream, error)
-```
-
-#### type Server
-
-```go
-type Server interface {
-	HandleRPC(stream *drpcstream.Stream, rpc string)
-}
+func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Stream, rpc string, err error)
 ```

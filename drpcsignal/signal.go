@@ -36,8 +36,8 @@ func (s *Signal) setSlow(err error) (ok bool) {
 	s.mu.Lock()
 	if s.set == 0 {
 		s.err = err
-		close(s.sig)
 		atomic.StoreUint32(&s.set, 1)
+		close(s.sig)
 		ok = true
 	}
 	s.mu.Unlock()

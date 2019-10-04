@@ -6,6 +6,7 @@ package drpcwire
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -34,8 +35,9 @@ func TestWriter(t *testing.T) {
 
 func TestReader(t *testing.T) {
 	type testCase struct {
-		Packet Packet
-		Frames []Frame
+		Packets []Packet
+		Frames  []Frame
+		Error   string
 	}
 
 	p := func(kind Kind, id uint64, data string) Packet {
@@ -57,8 +59,8 @@ func TestReader(t *testing.T) {
 
 	m := func(pkt Packet, frames ...Frame) testCase {
 		return testCase{
-			Packet: pkt,
-			Frames: frames,
+			Packets: []Packet{pkt},
+			Frames:  frames,
 		}
 	}
 
@@ -72,6 +74,18 @@ func TestReader(t *testing.T) {
 			f(Kind_Message, 1, "hello", false),
 			f(Kind_Message, 1, " ", false),
 			f(Kind_Cancel, 2, "", true)),
+
+		{
+			Packets: []Packet{
+				p(Kind_Cancel, 2, ""),
+			},
+			Frames: []Frame{
+				f(Kind_Message, 1, "1", false),
+				f(Kind_Cancel, 2, "", true),
+				f(Kind_Message, 1, "1", true),
+			},
+			Error: "id monotonicity violation",
+		},
 	}
 
 	for _, tc := range cases {
@@ -81,10 +95,18 @@ func TestReader(t *testing.T) {
 		}
 
 		rd := NewReader(bytes.NewReader(buf))
-		pkt, err := rd.ReadPacket()
-		assert.NoError(t, err)
-		assert.DeepEqual(t, tc.Packet, pkt)
-		_, err = rd.ReadPacket()
-		assert.Equal(t, err, io.EOF)
+		for _, expPkt := range tc.Packets {
+			pkt, err := rd.ReadPacket()
+			assert.NoError(t, err)
+			assert.DeepEqual(t, expPkt, pkt)
+		}
+
+		_, err := rd.ReadPacket()
+		assert.Error(t, err)
+		if tc.Error != "" {
+			assert.That(t, strings.Contains(err.Error(), tc.Error))
+		} else {
+			assert.Equal(t, err, io.EOF)
+		}
 	}
 }

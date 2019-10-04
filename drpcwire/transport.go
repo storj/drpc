@@ -82,6 +82,7 @@ func SplitFrame(data []byte, atEOF bool) (int, []byte, error) {
 
 type Reader struct {
 	buf *bufio.Scanner
+	id  ID
 }
 
 func NewReader(r io.Reader) *Reader {
@@ -99,9 +100,10 @@ func (s *Reader) ReadPacket() (pkt Packet, err error) {
 			return pkt, err
 		case !ok, len(rem) > 0:
 			return pkt, drpc.InternalError.New("problem with scanner")
-		case fr.ID.Less(pkt.ID):
+		case fr.ID.Less(s.id):
 			return pkt, drpc.ProtocolError.New("id monotonicity violation")
-		case pkt.ID.Less(fr.ID):
+		case s.id.Less(fr.ID):
+			s.id = fr.ID
 			pkt = Packet{
 				Data: pkt.Data[:0],
 				ID:   fr.ID,

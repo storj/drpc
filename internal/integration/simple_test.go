@@ -20,7 +20,7 @@ func TestSimple(t *testing.T) {
 	defer ctx.Wait()
 	defer ctx.Cancel()
 
-	cli, close := createConnection(ctx)
+	cli, close := createConnection(standardImpl)
 	defer close()
 
 	{

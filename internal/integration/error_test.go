@@ -18,7 +18,7 @@ func TestError(t *testing.T) {
 	defer ctx.Wait()
 	defer ctx.Cancel()
 
-	cli, close := createConnection(ctx)
+	cli, close := createConnection(standardImpl)
 	defer close()
 
 	for i := int64(2); i < 20; i++ {

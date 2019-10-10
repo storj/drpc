@@ -18,7 +18,10 @@ import (
 	"storj.io/drpc/drpcwire"
 )
 
-var managerClosed = errs.New("manager closed")
+var (
+	managerClosed      = errs.New("manager closed")
+	manageStreamExited = errs.New("manage stream exited")
+)
 
 type Manager struct {
 	tr drpc.Transport
@@ -207,11 +210,19 @@ func (m *Manager) manageReader() {
 //
 
 func (m *Manager) manageStream(stream *drpcstream.Stream) {
+	// create a wait group, launch the workers, and wait for them
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 	go m.manageStreamPackets(wg, stream)
 	go m.manageStreamContext(wg, stream)
 	wg.Wait()
+
+	// always ensure the stream is terminated if we're done managing it
+	if err := stream.SendError(manageStreamExited); err != nil {
+		m.term.Set(errs.Wrap(err))
+	}
+
+	// release semaphore
 	<-m.sem
 }
 

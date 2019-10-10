@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
-
 	"storj.io/drpc/drpcctx"
 )
 
@@ -18,7 +17,7 @@ func TestCancel(t *testing.T) {
 	defer ctx.Wait()
 	defer ctx.Cancel()
 
-	cli, close := createConnection(ctx)
+	cli, close := createConnection(standardImpl)
 	defer close()
 
 	{

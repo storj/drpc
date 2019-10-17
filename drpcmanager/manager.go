@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/zeebo/errs"
 
@@ -28,13 +29,12 @@ type Manager struct {
 	wr *drpcwire.Writer
 	rd *drpcwire.Reader
 
-	once sync.Once
+	closed bool
 
 	sid   uint64
 	sem   chan struct{}
 	term  drpcsignal.Signal // set when the manager should start terminating
 	read  drpcsignal.Signal // set after the goroutine reading from the transport is done
-	tport drpcsignal.Signal // set after the transport has been closed
 	queue chan drpcwire.Packet
 }
 
@@ -48,11 +48,9 @@ func New(tr drpc.Transport) *Manager {
 		sem:   make(chan struct{}, 1),
 		term:  drpcsignal.New(),
 		read:  drpcsignal.New(),
-		tport: drpcsignal.New(),
 		queue: make(chan drpcwire.Packet),
 	}
 
-	go m.manageTransport()
 	go m.manageReader()
 
 	return m
@@ -109,19 +107,26 @@ func (m *Manager) acquireSemaphore(ctx context.Context) error {
 //
 
 func (m *Manager) Close() error {
+	if m.closed {
+		return errs.New("double close")
+	}
+	m.closed = true
+
+	// TODO: manage read/write interruptions better
+	_ = m.tr.SetReadDeadline(time.Now())
+	_ = m.tr.SetWriteDeadline(time.Now())
+
 	// when closing, we set the manager terminated signal, wait for the goroutine
 	// managing the transport to notice and close it, acquire the semaphore to ensure
 	// there are streams running, then wait for the goroutine reading packets to be done.
 	// we protect it with a once to ensure both that we only do this once, and that
 	// concurrent calls are sure that it has fully executed.
 
-	m.once.Do(func() {
-		m.term.Set(managerClosed)
-		<-m.tport.Signal()
-		m.sem <- struct{}{}
-		<-m.read.Signal()
-	})
-	return m.tport.Err()
+	m.term.Set(managerClosed)
+	m.sem <- struct{}{}
+	<-m.read.Signal()
+
+	return m.tr.Close()
 }
 
 func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Stream, err error) {
@@ -163,17 +168,6 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 			return stream, string(pkt.Data), nil
 		}
 	}
-}
-
-//
-// manage transport
-//
-
-// manageTransport ensures that if the manager's done signal is ever set, then
-// the underlying transport is closed and the error is recorded.
-func (m *Manager) manageTransport() {
-	<-m.term.Signal()
-	m.tport.Set(m.tr.Close())
 }
 
 //

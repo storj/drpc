@@ -26,7 +26,7 @@ var ballast = make([]byte, 20*1024*1024) //nolint
 //
 
 func in(n int64) *In   { return &In{In: n} }
-func out(n int64) *Out { return &Out{Out: n} }
+func out(n int64) *Out { return &Out{Out: n} } //nolint
 
 func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
 	ctx := drpcctx.NewTracker(context.Background())
@@ -94,9 +94,9 @@ var standardImpl = impl{
 	},
 
 	Method3Fn: func(in *In, stream DRPCService_Method3Stream) error {
-		stream.Send(&Out{Out: 3})
-		stream.Send(&Out{Out: 3})
-		stream.Send(&Out{Out: 3})
+		_ = stream.Send(&Out{Out: 3})
+		_ = stream.Send(&Out{Out: 3})
+		_ = stream.Send(&Out{Out: 3})
 		return nil
 	},
 
@@ -107,10 +107,10 @@ var standardImpl = impl{
 				break
 			}
 		}
-		stream.Send(&Out{Out: 4})
-		stream.Send(&Out{Out: 4})
-		stream.Send(&Out{Out: 4})
-		stream.Send(&Out{Out: 4})
+		_ = stream.Send(&Out{Out: 4})
+		_ = stream.Send(&Out{Out: 4})
+		_ = stream.Send(&Out{Out: 4})
+		_ = stream.Send(&Out{Out: 4})
 		return nil
 	},
 }

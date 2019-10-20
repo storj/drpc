@@ -195,7 +195,7 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error {
 	pkt := s.newPacket(kind, data)
 	s.mu.Unlock()
 
-	return errs.Wrap(drpcwire.SplitN(pkt, 0, s.pollWriteFn))
+	return drpcwire.SplitN(pkt, 0, s.pollWriteFn)
 }
 
 func (s *Stream) RawFlush() (err error) {
@@ -228,10 +228,10 @@ func (s *Stream) MsgSend(msg drpc.Message) error {
 		return errs.Wrap(err)
 	}
 	if err := s.RawWrite(drpcwire.Kind_Message, data); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	if err := s.RawFlush(); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	return nil
 }
@@ -239,7 +239,7 @@ func (s *Stream) MsgSend(msg drpc.Message) error {
 func (s *Stream) MsgRecv(msg drpc.Message) error {
 	data, err := s.RawRecv()
 	if err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	return proto.Unmarshal(data, msg)
 }

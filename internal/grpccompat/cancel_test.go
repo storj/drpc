@@ -56,7 +56,7 @@ func TestCancel_CancelAfterError(t *testing.T) {
 func TestCancel_CancelAfterSuccess(t *testing.T) {
 	impl := &serviceImpl{
 		Method4Fn: func(stream Server_Method4Stream) error {
-			stream.Send(out(2))
+			_ = stream.Send(out(2))
 			_, _ = stream.Recv()
 			<-stream.Context().Done()
 			return nil

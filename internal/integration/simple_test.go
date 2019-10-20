@@ -5,7 +5,6 @@ package integration
 
 import (
 	"context"
-	"errors"
 	"io"
 	"testing"
 
@@ -44,7 +43,7 @@ func TestSimple(t *testing.T) {
 		assert.NoError(t, err)
 		for {
 			out, err := stream.Recv()
-			if errors.Is(err, io.EOF) {
+			if err == io.EOF {
 				break
 			}
 			assert.NoError(t, err)
@@ -62,7 +61,7 @@ func TestSimple(t *testing.T) {
 		assert.NoError(t, stream.CloseSend())
 		for {
 			out, err := stream.Recv()
-			if errors.Is(err, io.EOF) {
+			if err == io.EOF {
 				break
 			}
 			assert.NoError(t, err)

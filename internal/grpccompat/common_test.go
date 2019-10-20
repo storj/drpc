@@ -5,7 +5,6 @@ package grpccompat
 
 import (
 	"context"
-	"errors"
 	"flag"
 	fmt "fmt"
 	"io"
@@ -34,7 +33,7 @@ var fullErrors = flag.Bool("full-errors", false, "if true, display full errors i
 type errResult int
 
 const (
-	errResult_Invalid errResult = iota
+	_ errResult = iota
 	errResult_None
 	errResult_Canceled
 	errResult_DeadlineExceeded
@@ -84,11 +83,11 @@ func getErrResult(err error) errResult {
 	switch code := status.Code(err); {
 	case err == nil:
 		return errResult_None
-	case code == codes.Canceled, errors.Is(err, context.Canceled):
+	case code == codes.Canceled, err == context.Canceled:
 		return errResult_Canceled
-	case code == codes.DeadlineExceeded, errors.Is(err, context.DeadlineExceeded):
+	case code == codes.DeadlineExceeded, err == context.DeadlineExceeded:
 		return errResult_DeadlineExceeded
-	case errors.Is(err, io.EOF):
+	case err == io.EOF:
 		return errResult_EOF
 	case strings.Contains(err.Error(), "marker"):
 		return errResult_Marker

@@ -39,6 +39,7 @@ var _ drpc.Stream = (*Stream)(nil)
 
 func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 	ctx, cancel := context.WithCancel(ctx)
+
 	s := &Stream{
 		ctx:    ctx,
 		cancel: cancel,

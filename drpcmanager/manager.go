@@ -36,6 +36,7 @@ type Manager struct {
 	read  drpcsignal.Signal // set after the goroutine reading from the transport is done
 	tport drpcsignal.Signal // set after the transport has been closed
 	queue chan drpcwire.Packet
+	ctx   context.Context
 }
 
 func New(tr drpc.Transport) *Manager {
@@ -50,6 +51,7 @@ func New(tr drpc.Transport) *Manager {
 		read:  drpcsignal.New(),
 		tport: drpcsignal.New(),
 		queue: make(chan drpcwire.Packet),
+		ctx:   drpcctx.WithTransport(context.Background(), tr),
 	}
 
 	go m.manageTransport()
@@ -61,10 +63,6 @@ func New(tr drpc.Transport) *Manager {
 //
 // helpers
 //
-
-func (m *Manager) newContext(ctx context.Context) context.Context {
-	return drpcctx.WithTransport(ctx, m.tr)
-}
 
 func poll(ch <-chan struct{}) bool {
 	select {
@@ -108,6 +106,10 @@ func (m *Manager) acquireSemaphore(ctx context.Context) error {
 // exported interface
 //
 
+func (m *Manager) Closed() bool {
+	return m.term.IsSet()
+}
+
 func (m *Manager) Close() error {
 	// when closing, we set the manager terminated signal, wait for the goroutine
 	// managing the transport to notice and close it, acquire the semaphore to ensure
@@ -121,6 +123,7 @@ func (m *Manager) Close() error {
 		m.sem <- struct{}{}
 		<-m.read.Signal()
 	})
+
 	return m.tport.Err()
 }
 
@@ -130,8 +133,8 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 	}
 
 	m.sid++
-	stream = drpcstream.New(m.newContext(ctx), m.sid, m.wr)
-	go m.manageStream(stream)
+	stream = drpcstream.New(m.ctx, m.sid, m.wr)
+	go m.manageStream(ctx, stream)
 	return stream, nil
 }
 
@@ -158,8 +161,8 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 				continue
 			}
 
-			stream = drpcstream.New(m.newContext(ctx), pkt.ID.Stream, m.wr)
-			go m.manageStream(stream)
+			stream = drpcstream.New(m.ctx, pkt.ID.Stream, m.wr)
+			go m.manageStream(ctx, stream)
 			return stream, string(pkt.Data), nil
 		}
 	}
@@ -209,12 +212,12 @@ func (m *Manager) manageReader() {
 // manage stream
 //
 
-func (m *Manager) manageStream(stream *drpcstream.Stream) {
+func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	// create a wait group, launch the workers, and wait for them
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
-	go m.manageStreamPackets(wg, stream)
-	go m.manageStreamContext(wg, stream)
+	go m.manageStreamPackets(wg, ctx, stream)
+	go m.manageStreamContext(wg, ctx, stream)
 	wg.Wait()
 
 	// always ensure the stream is terminated if we're done managing it
@@ -231,7 +234,7 @@ func (m *Manager) manageStream(stream *drpcstream.Stream) {
 // be fatal to the manager, so we set done. HandlePacket also returns a bool to
 // indicate that the stream requires no more packets, and so manageStream can
 // just exit. It releases the semaphore whenever it exits.
-func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Stream) {
+func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, ctx context.Context, stream *drpcstream.Stream) {
 	defer wg.Done()
 
 	for {
@@ -258,15 +261,18 @@ func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Str
 
 // manageStreamContext ensures that if the stream context is canceled, we attempt
 // to inform
-func (m *Manager) manageStreamContext(wg *sync.WaitGroup, stream *drpcstream.Stream) {
+func (m *Manager) manageStreamContext(wg *sync.WaitGroup, ctx context.Context, stream *drpcstream.Stream) {
 	defer wg.Done()
 
 	select {
 	case <-m.term.Signal():
 		return
 
-	case <-stream.Context().Done():
-		if err := stream.SendCancel(stream.Context().Err()); err != nil {
+	case <-stream.Terminated():
+		return
+
+	case <-ctx.Done():
+		if err := stream.SendCancel(ctx.Err()); err != nil {
 			m.term.Set(errs.Wrap(err))
 		}
 		return

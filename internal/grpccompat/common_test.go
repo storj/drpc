@@ -6,7 +6,7 @@ package grpccompat
 import (
 	"context"
 	"flag"
-	fmt "fmt"
+	"fmt"
 	"io"
 	"net"
 	"reflect"
@@ -240,15 +240,21 @@ type Client interface {
 }
 
 type Client_Method2Stream interface {
+	Context() context.Context
+
 	Send(*In) error
 	CloseAndRecv() (*Out, error)
 }
 
 type Client_Method3Stream interface {
+	Context() context.Context
+
 	Recv() (*Out, error)
 }
 
 type Client_Method4Stream interface {
+	Context() context.Context
+
 	Send(*In) error
 	Recv() (*Out, error)
 }

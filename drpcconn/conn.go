@@ -15,8 +15,6 @@ import (
 	"storj.io/drpc/drpcwire"
 )
 
-var connClosed = drpc.Error.New("conn closed")
-
 type Conn struct {
 	tr  drpc.Transport
 	man *drpcmanager.Manager
@@ -33,6 +31,10 @@ func New(tr drpc.Transport) *Conn {
 
 func (c *Conn) Transport() drpc.Transport {
 	return c.tr
+}
+
+func (c *Conn) Closed() bool {
+	return c.man.Closed()
 }
 
 func (c *Conn) Close() (err error) {

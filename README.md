@@ -2,7 +2,7 @@
 
 `import "storj.io/drpc"`
 
-drpc is a light replacement for gprc.
+drpc is a light replacement for [gRPC](https://grpc.io "An open-source universal RPC framework").
 
 ## Usage
 

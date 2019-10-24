@@ -26,6 +26,12 @@ func New(tr drpc.Transport) *Manager
 func (m *Manager) Close() error
 ```
 
+#### func (*Manager) Closed
+
+```go
+func (m *Manager) Closed() bool
+```
+
 #### func (*Manager) NewClientStream
 
 ```go

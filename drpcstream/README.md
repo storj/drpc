@@ -20,6 +20,12 @@ type Stream struct {
 func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream
 ```
 
+#### func (*Stream) Cancel
+
+```go
+func (s *Stream) Cancel(err error)
+```
+
 #### func (*Stream) Close
 
 ```go
@@ -36,6 +42,12 @@ func (s *Stream) CloseSend() error
 
 ```go
 func (s *Stream) Context() context.Context
+```
+
+#### func (*Stream) Finished
+
+```go
+func (s *Stream) Finished() bool
 ```
 
 #### func (*Stream) HandlePacket
@@ -77,16 +89,10 @@ func (s *Stream) RawRecv() ([]byte, error)
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error
 ```
 
-#### func (*Stream) SendCancel
-
-```go
-func (s *Stream) SendCancel(err error) error
-```
-
 #### func (*Stream) SendError
 
 ```go
-func (s *Stream) SendError(err error) error
+func (s *Stream) SendError(serr error) error
 ```
 
 #### func (*Stream) Terminated

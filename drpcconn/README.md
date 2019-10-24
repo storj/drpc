@@ -26,6 +26,12 @@ func New(tr drpc.Transport) *Conn
 func (c *Conn) Close() (err error)
 ```
 
+#### func (*Conn) Closed
+
+```go
+func (c *Conn) Closed() bool
+```
+
 #### func (*Conn) Invoke
 
 ```go

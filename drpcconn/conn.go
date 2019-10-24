@@ -49,28 +49,28 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 
 	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
 	if err := c.doInvoke(ctx, stream, []byte(rpc), data, out); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	return nil
 }
 
 func (c *Conn) doInvoke(ctx context.Context, stream *drpcstream.Stream, rpc, data []byte, out drpc.Message) (err error) {
 	if err := stream.RawWrite(drpcwire.Kind_Invoke, []byte(rpc)); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	if err := stream.RawWrite(drpcwire.Kind_Message, data); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	if err := stream.CloseSend(); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	if err := stream.MsgRecv(out); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	return nil
 }
@@ -78,21 +78,21 @@ func (c *Conn) doInvoke(ctx context.Context, stream *drpcstream.Stream, rpc, dat
 func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err error) {
 	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
-		return nil, errs.Wrap(err)
+		return nil, err
 	}
 
 	if err := c.doNewStream(ctx, stream, []byte(rpc)); err != nil {
-		return nil, errs.Combine(errs.Wrap(err), stream.Close())
+		return nil, errs.Combine(err, stream.Close())
 	}
 	return stream, nil
 }
 
 func (c *Conn) doNewStream(ctx context.Context, stream *drpcstream.Stream, rpc []byte) error {
 	if err := stream.RawWrite(drpcwire.Kind_Invoke, []byte(rpc)); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	if err := stream.RawFlush(); err != nil {
-		return errs.Wrap(err)
+		return err
 	}
 	return nil
 }

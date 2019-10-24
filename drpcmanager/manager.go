@@ -47,9 +47,6 @@ func New(tr drpc.Transport) *Manager {
 
 		// this semaphore controls the number of concurrent streams. it MUST be 1.
 		sem:   make(chan struct{}, 1),
-		term:  drpcsignal.New(),
-		read:  drpcsignal.New(),
-		tport: drpcsignal.New(),
 		queue: make(chan drpcwire.Packet),
 		ctx:   drpcctx.WithTransport(context.Background(), tr),
 	}
@@ -129,7 +126,7 @@ func (m *Manager) Close() error {
 
 func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Stream, err error) {
 	if err := m.acquireSemaphore(ctx); err != nil {
-		return nil, errs.Wrap(err)
+		return nil, err
 	}
 
 	m.sid++
@@ -140,7 +137,7 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 
 func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Stream, rpc string, err error) {
 	if err := m.acquireSemaphore(ctx); err != nil {
-		return nil, "", errs.Wrap(err)
+		return nil, "", err
 	}
 
 	for {
@@ -272,9 +269,9 @@ func (m *Manager) manageStreamContext(wg *sync.WaitGroup, ctx context.Context, s
 		return
 
 	case <-ctx.Done():
-		if err := stream.SendCancel(ctx.Err()); err != nil {
-			m.term.Set(errs.Wrap(err))
+		if !stream.Finished() {
+			m.term.Set(ctx.Err())
 		}
-		return
+		stream.Cancel(ctx.Err())
 	}
 }

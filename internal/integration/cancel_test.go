@@ -5,7 +5,7 @@ package integration
 
 import (
 	"context"
-	"errors"
+	"io"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -20,42 +20,46 @@ func TestCancel(t *testing.T) {
 	cli, close := createConnection(standardImpl)
 	defer close()
 
-	{
+	{ // ensure that we get canceled if issuing an rpc with an already canceled context
 		ctx, cancel := context.WithCancel(ctx)
 		cancel()
 
 		out, err := cli.Method1(ctx, in(1))
 		assert.Nil(t, out)
-		assert.That(t, errors.Is(err, context.Canceled))
+		assert.Equal(t, err, context.Canceled)
 	}
 
-	{
+	{ // ensure that if we cancel after rpc is done, transport stays valid
+		{
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+
+			out, err := cli.Method1(ctx, in(1))
+			assert.NotNil(t, out)
+			assert.NoError(t, err)
+
+			cancel()
+		}
+
 		out, err := cli.Method1(ctx, in(1))
 		assert.NotNil(t, out)
 		assert.NoError(t, err)
 	}
 
-	{
+	{ // ensure that cancel in the middle of a stream eventually errors
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
 		stream, err := cli.Method2(ctx)
 		assert.NoError(t, err)
 
-		// we can't check any errors here because the cancel notification
-		// is async, and so it's possible that it never gets scheduled.
-		for i := 0; i < 100; i++ {
-			if i == 50 {
-				cancel()
-			}
-			_ = stream.Send(in(1))
+		for i := 0; i < 10; i++ {
+			assert.NoError(t, stream.Send(in(1)))
 		}
-		_, _ = stream.CloseAndRecv()
-	}
 
-	{
-		out, err := cli.Method1(ctx, in(1))
-		assert.NotNil(t, out)
-		assert.NoError(t, err)
+		go cancel()
+
+		for stream.Send(in(1)) != io.EOF {
+		}
 	}
 }

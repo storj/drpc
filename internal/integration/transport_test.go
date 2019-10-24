@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 )
 
@@ -37,4 +38,25 @@ func TestTransport_Error(t *testing.T) {
 
 	// kill the transport from underneath of it
 	cli.DRPCConn().Transport().Close()
+}
+
+func TestTransport_Blocked(t *testing.T) {
+	// ensure that everything we launch eventually exits
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	// create a transport that signals when reads/writes happen
+	trs := new(transportSignaler)
+	defer trs.Close()
+
+	// start a client issuing an rpc that we keep track of
+	cli := NewDRPCServiceClient(drpcconn.New(trs))
+	ctx.Run(func(ctx context.Context) { _, _ = cli.Method1(ctx, in(1)) })
+
+	// wait for the write to happen before cancelling the context. this
+	// should cause the rpc goroutine to exit.
+	<-trs.write.Signal()
+	ctx.Cancel()
+	ctx.Wait()
 }

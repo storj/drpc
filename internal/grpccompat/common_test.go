@@ -123,17 +123,7 @@ func collectResults(t *testing.T, cli Client, fn testFunc) []result {
 }
 
 func testCompat(t *testing.T, impl *serviceImpl, fn testFunc) {
-	sg := runtime.NumGoroutine()
-	defer func() {
-		start := time.Now()
-		for {
-			if cg := runtime.NumGoroutine(); sg == cg {
-				return
-			} else if time.Since(start) > 10*time.Second {
-				t.Fatal("goroutine leak:", sg, "=>", cg)
-			}
-		}
-	}()
+	defer checkGoroutines(t)
 
 	grpcClient, close := createGRPCConnection(impl.GRPC())
 	defer close()
@@ -153,6 +143,32 @@ func testCompat(t *testing.T, impl *serviceImpl, fn testFunc) {
 //
 // helpers
 //
+
+func stackTrace() string {
+	buf := make([]byte, 1024)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			return string(buf[:n])
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+}
+
+func checkGoroutines(t *testing.T) {
+	if t.Failed() {
+		return
+	}
+
+	start := time.Now()
+	for {
+		if cg := runtime.NumGoroutine(); cg == 2 {
+			return
+		} else if time.Since(start) > 10*time.Second {
+			t.Fatalf("goroutine leak:\n%s", stackTrace())
+		}
+	}
+}
 
 func in(n int64) *In   { return &In{In: n} }
 func out(n int64) *Out { return &Out{Out: n} }

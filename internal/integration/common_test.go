@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"io"
 	"net"
 
 	"github.com/zeebo/errs"
@@ -12,14 +13,8 @@ import (
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
 	"storj.io/drpc/drpcserver"
+	"storj.io/drpc/drpcsignal"
 )
-
-// because we have approximately no other heap usage, trying to run the tests with
-// very high counts is a worst case for the garbage collector: it ends up running
-// far too often and deleting everything. this makes it take ever longer (superlinear
-// for some reason) to run with higher counts. this ballast fixes it by making it so
-// that the heap goal is larger causing gc to run less frequently.
-var ballast = make([]byte, 20*1024*1024) //nolint
 
 //
 // helpers
@@ -113,4 +108,31 @@ var standardImpl = impl{
 		_ = stream.Send(&Out{Out: 4})
 		return nil
 	},
+}
+
+//
+// drpc.Transport that signals when calls are made and blocks until closed
+//
+
+type transportSignaler struct {
+	read  drpcsignal.Signal
+	write drpcsignal.Signal
+	done  drpcsignal.Signal
+}
+
+func (w *transportSignaler) Close() error {
+	w.done.Set(nil)
+	return nil
+}
+
+func (w *transportSignaler) Read(p []byte) (n int, err error) {
+	w.read.Set(nil)
+	<-w.done.Signal()
+	return 0, io.ErrUnexpectedEOF
+}
+
+func (w *transportSignaler) Write(p []byte) (n int, err error) {
+	w.write.Set(nil)
+	<-w.done.Signal()
+	return 0, io.ErrUnexpectedEOF
 }

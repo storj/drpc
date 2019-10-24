@@ -22,13 +22,15 @@ type Stream struct {
 	ctx    context.Context
 	cancel func()
 
-	id drpcwire.ID
-	wr *drpcwire.Writer
+	writeMu chMutex
+	id      drpcwire.ID
+	wr      *drpcwire.Writer
 
-	mu    sync.Mutex
-	send  drpcsignal.Signal
-	recv  drpcsignal.Signal
-	term  drpcsignal.Signal
+	mu    sync.Mutex        // protects state transitions
+	send  drpcsignal.Signal // set when done sending messages
+	recv  drpcsignal.Signal // set when done receiving messages
+	term  drpcsignal.Signal // set when in terminated state
+	fin   drpcsignal.Signal // set when all writes are complete
 	queue chan drpcwire.Packet
 
 	// avoids allocations of closures
@@ -44,12 +46,9 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 		ctx:    ctx,
 		cancel: cancel,
 
-		id: drpcwire.ID{Stream: sid},
 		wr: wr,
 
-		send:  drpcsignal.New(),
-		recv:  drpcsignal.New(),
-		term:  drpcsignal.New(),
+		id:    drpcwire.ID{Stream: sid},
 		queue: make(chan drpcwire.Packet),
 	}
 
@@ -65,6 +64,8 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 func (s *Stream) Context() context.Context { return s.ctx }
 
 func (s *Stream) Terminated() <-chan struct{} { return s.term.Signal() }
+
+func (s *Stream) Finished() bool { return s.fin.IsSet() }
 
 //
 // packet handler
@@ -107,11 +108,12 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (error, bool) {
 		case <-s.term.Signal():
 		case s.queue <- pkt:
 		}
+
 		return nil, true
 
 	case drpcwire.Kind_Error:
 		err := drpcwire.UnmarshalError(pkt.Data)
-		s.send.Set(io.EOF) // weird grpc :(
+		s.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 		s.terminate(err)
 		return nil, false
 
@@ -140,6 +142,14 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (error, bool) {
 // helpers
 //
 
+// checkFinished checks to see if the stream is terminated, and if so, sets the finished
+// flag. This must be called every time right before we release the write mutex.
+func (s *Stream) checkFinished() {
+	if s.term.IsSet() {
+		s.fin.Set(nil)
+	}
+}
+
 func (s *Stream) newPacket(kind drpcwire.Kind, data []byte) drpcwire.Packet {
 	s.id.Message++
 	return drpcwire.Packet{
@@ -150,15 +160,11 @@ func (s *Stream) newPacket(kind drpcwire.Kind, data []byte) drpcwire.Packet {
 }
 
 func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	switch {
-	case s.send.IsSet():
+	if s.send.IsSet() {
 		return s.send.Err()
-	case s.term.IsSet():
+	} else if s.term.IsSet() {
 		return s.term.Err()
-	default:
+	} else {
 		return errs.Wrap(s.wr.WriteFrame(fr))
 	}
 }
@@ -175,8 +181,7 @@ func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) error {
 
 func (s *Stream) terminateIfBothClosed() {
 	if s.send.IsSet() && s.recv.IsSet() {
-		s.term.Set(drpc.Error.New("stream terminated by both issuing close send"))
-		s.cancel()
+		s.terminate(drpc.Error.New("stream terminated by both issuing close send"))
 	}
 }
 
@@ -185,6 +190,14 @@ func (s *Stream) terminate(err error) {
 	s.recv.Set(err)
 	s.term.Set(err)
 	s.cancel()
+
+	// if we can acquire the write mutex, then checkFinished. if not, then we know
+	// some other write is happening, and it will call checkFinished before it
+	// releases the mutex.
+	if s.writeMu.TryLock() {
+		s.checkFinished()
+		s.writeMu.Unlock()
+	}
 }
 
 //
@@ -192,16 +205,17 @@ func (s *Stream) terminate(err error) {
 //
 
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error {
-	s.mu.Lock()
-	pkt := s.newPacket(kind, data)
-	s.mu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	defer s.checkFinished()
 
-	return drpcwire.SplitN(pkt, 0, s.pollWriteFn)
+	return drpcwire.SplitN(s.newPacket(kind, data), 0, s.pollWriteFn)
 }
 
 func (s *Stream) RawFlush() (err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	defer s.checkFinished()
 
 	return errs.Wrap(s.wr.Flush())
 }
@@ -249,7 +263,7 @@ func (s *Stream) MsgRecv(msg drpc.Message) error {
 // terminal messages
 //
 
-func (s *Stream) SendError(err error) error {
+func (s *Stream) SendError(serr error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -257,10 +271,14 @@ func (s *Stream) SendError(err error) error {
 		return nil
 	}
 
-	s.send.Set(io.EOF) // weird grpc :(
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	defer s.checkFinished()
+
+	s.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 	s.terminate(drpc.Error.New("stream terminated by sending error"))
 
-	return s.sendPacket(drpcwire.Kind_Error, drpcwire.MarshalError(err))
+	return s.sendPacket(drpcwire.Kind_Error, drpcwire.MarshalError(serr))
 }
 
 func (s *Stream) Close() error {
@@ -271,39 +289,41 @@ func (s *Stream) Close() error {
 		return nil
 	}
 
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	defer s.checkFinished()
+
 	s.terminate(drpc.Error.New("stream terminated by sending close"))
 
 	return s.sendPacket(drpcwire.Kind_Close, nil)
-}
-
-func (s *Stream) SendCancel(err error) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.term.IsSet() {
-		return nil
-	}
-
-	s.send.Set(io.EOF) // weird grpc :(
-	s.recv.Set(err)
-	s.terminate(drpc.Error.New("stream terminated by sending cancel"))
-
-	return s.sendPacket(drpcwire.Kind_Cancel, nil)
 }
 
 func (s *Stream) CloseSend() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.send.IsSet() {
+	if s.send.IsSet() || s.term.IsSet() {
 		return nil
 	}
-	if s.term.IsSet() {
-		return nil
-	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	defer s.checkFinished()
 
 	s.send.Set(drpc.Error.New("send closed"))
 	s.terminateIfBothClosed()
 
 	return s.sendPacket(drpcwire.Kind_CloseSend, nil)
+}
+
+func (s *Stream) Cancel(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.term.IsSet() {
+		return
+	}
+
+	s.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
+	s.terminate(err)
 }

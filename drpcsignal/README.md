@@ -14,12 +14,6 @@ type Signal struct {
 ```
 
 
-#### func  New
-
-```go
-func New() Signal
-```
-
 #### func (*Signal) Err
 
 ```go

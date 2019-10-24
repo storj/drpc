@@ -10,18 +10,16 @@ import (
 
 type Signal struct {
 	set uint32
+	on  sync.Once
 	mu  sync.Mutex
 	sig chan struct{}
 	err error
 }
 
-func New() Signal {
-	return Signal{
-		sig: make(chan struct{}),
-	}
-}
+func (s *Signal) init() { s.sig = make(chan struct{}) }
 
 func (s *Signal) Signal() chan struct{} {
+	s.on.Do(s.init)
 	return s.sig
 }
 
@@ -37,6 +35,7 @@ func (s *Signal) setSlow(err error) (ok bool) {
 	if s.set == 0 {
 		s.err = err
 		atomic.StoreUint32(&s.set, 1)
+		s.on.Do(s.init)
 		close(s.sig)
 		ok = true
 	}

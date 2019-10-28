@@ -48,14 +48,18 @@ func RandUint64() uint64 {
 }
 
 func RandKind() Kind {
-	return Kind(rand.Intn(int(Kind_Largest)-1) + 1)
+	for {
+		kind := Kind(rand.Intn(int(Kind_Largest)-1) + 1)
+		if _, ok := payloadSize[kind]; ok {
+			return kind
+		}
+	}
 }
 
 var payloadSize = map[Kind]func() int{
 	Kind_Invoke:    func() int { return rand.Intn(1023) + 1 },
 	Kind_Message:   func() int { return rand.Intn(1023) + 1 },
 	Kind_Error:     func() int { return rand.Intn(1023) + 1 },
-	Kind_Cancel:    func() int { return 0 },
 	Kind_Close:     func() int { return 0 },
 	Kind_CloseSend: func() int { return 0 },
 }

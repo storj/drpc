@@ -10,16 +10,15 @@ import "fmt"
 type Kind uint8
 
 const (
-	Kind_Reserved Kind = iota
+	Kind_Reserved Kind = 0
 
-	Kind_Invoke    // body is rpc name
-	Kind_Message   // body is message data
-	Kind_Error     // body is error data
-	Kind_Cancel    // body must be empty
-	Kind_Close     // body must be empty
-	Kind_CloseSend // body must be empty
+	Kind_Invoke    Kind = 1 // body is rpc name
+	Kind_Message   Kind = 2 // body is message data
+	Kind_Error     Kind = 3 // body is error data
+	Kind_Close     Kind = 5 // body must be empty
+	Kind_CloseSend Kind = 6 // body must be empty
 
-	Kind_Largest
+	Kind_Largest Kind = 7
 )
 
 //

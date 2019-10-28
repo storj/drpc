@@ -70,18 +70,18 @@ func TestReader(t *testing.T) {
 			f(Kind_Message, 1, " ", false),
 			f(Kind_Message, 1, "world", true)),
 
-		m(p(Kind_Cancel, 2, ""),
+		m(p(Kind_Close, 2, ""),
 			f(Kind_Message, 1, "hello", false),
 			f(Kind_Message, 1, " ", false),
-			f(Kind_Cancel, 2, "", true)),
+			f(Kind_Close, 2, "", true)),
 
 		{
 			Packets: []Packet{
-				p(Kind_Cancel, 2, ""),
+				p(Kind_Close, 2, ""),
 			},
 			Frames: []Frame{
 				f(Kind_Message, 1, "1", false),
-				f(Kind_Cancel, 2, "", true),
+				f(Kind_Close, 2, "", true),
 				f(Kind_Message, 1, "1", true),
 			},
 			Error: "id monotonicity violation",

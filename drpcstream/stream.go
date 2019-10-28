@@ -120,10 +120,6 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (error, bool) {
 		s.terminate(err)
 		return nil, false
 
-	case drpcwire.Kind_Cancel:
-		s.terminate(context.Canceled)
-		return nil, false
-
 	case drpcwire.Kind_Close:
 		s.sigs.recv.Set(io.EOF)
 		s.terminate(drpc.Error.New("remote closed the stream"))
@@ -153,7 +149,7 @@ func (s *Stream) checkFinished() {
 	}
 }
 
-// checkCancelError will replace a non-nil error with one from the cancel signal if it is
+// checkCancelError will replace the error with one from the cancel signal if it is
 // set. This is to prevent errors from reads/writes to a transport after it has been
 // asynchronously closed due to context cancelation.
 func (s *Stream) checkCancelError(err error) error {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/zeebo/assert"
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 )
@@ -46,17 +47,26 @@ func TestTransport_Blocked(t *testing.T) {
 	defer ctx.Wait()
 	defer ctx.Cancel()
 
+	// create a channel to hold the rpc error
+	errch := make(chan error, 1)
+
 	// create a transport that signals when reads/writes happen
 	trs := new(transportSignaler)
 	defer trs.Close()
 
 	// start a client issuing an rpc that we keep track of
 	cli := NewDRPCServiceClient(drpcconn.New(trs))
-	ctx.Run(func(ctx context.Context) { _, _ = cli.Method1(ctx, in(1)) })
+	ctx.Run(func(ctx context.Context) {
+		_, err := cli.Method1(ctx, in(1))
+		errch <- err
+	})
 
 	// wait for the write to happen before cancelling the context. this
 	// should cause the rpc goroutine to exit.
 	<-trs.write.Signal()
 	ctx.Cancel()
-	ctx.Wait()
+
+	// we should always get a canceled error from issuing the rpc: not
+	// the error returned by the transport due to a read/write.
+	assert.Equal(t, <-errch, context.Canceled)
 }

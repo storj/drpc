@@ -25,6 +25,8 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream
 ```go
 func (s *Stream) Cancel(err error)
 ```
+Cancel transitions the stream into a state where all writes to the transport
+will return the provided error, and terminates the stream.
 
 #### func (*Stream) Close
 

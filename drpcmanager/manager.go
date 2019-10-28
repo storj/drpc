@@ -256,8 +256,8 @@ func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, ctx context.Context, s
 	}
 }
 
-// manageStreamContext ensures that if the stream context is canceled, we attempt
-// to inform
+// manageStreamContext ensures that if the stream context is canceled, we inform the stream and
+// possibly abort the underlying transport if the stream isn't finished.
 func (m *Manager) manageStreamContext(wg *sync.WaitGroup, ctx context.Context, stream *drpcstream.Stream) {
 	defer wg.Done()
 
@@ -269,9 +269,9 @@ func (m *Manager) manageStreamContext(wg *sync.WaitGroup, ctx context.Context, s
 		return
 
 	case <-ctx.Done():
+		stream.Cancel(ctx.Err())
 		if !stream.Finished() {
 			m.term.Set(ctx.Err())
 		}
-		stream.Cancel(ctx.Err())
 	}
 }

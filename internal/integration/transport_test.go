@@ -70,3 +70,40 @@ func TestTransport_Blocked(t *testing.T) {
 	// the error returned by the transport due to a read/write.
 	assert.Equal(t, <-errch, context.Canceled)
 }
+
+func TestTransport_ErrorCausesCancel(t *testing.T) {
+	// ensure that everything we launch eventually exits
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	// create a channel to signal when the rpc has started
+	started := make(chan struct{})
+	errs := make(chan error, 2)
+
+	// create a server that signals then waits for the context to die
+	cli, close := createConnection(impl{
+		Method2Fn: func(stream DRPCService_Method2Stream) error {
+			started <- struct{}{}
+			errs <- stream.MsgRecv(nil)
+			return nil
+		},
+	})
+	defer close()
+
+	// async start the client issuing the rpc
+	ctx.Run(func(ctx context.Context) {
+		stream, _ := cli.Method2(ctx)
+		errs <- stream.MsgRecv(nil)
+	})
+
+	// wait for it to be started
+	<-started
+
+	// kill the transport from underneath of it
+	cli.DRPCConn().Transport().Close()
+
+	// ensure both of the errors we sent are canceled
+	assert.Equal(t, <-errs, context.Canceled)
+	assert.Equal(t, <-errs, context.Canceled)
+}

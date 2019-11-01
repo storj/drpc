@@ -217,10 +217,12 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	go m.manageStreamContext(wg, ctx, stream)
 	wg.Wait()
 
-	// always ensure the stream is terminated if we're done managing it
-	if err := stream.SendError(manageStreamExited); err != nil {
-		m.term.Set(errs.Wrap(err))
-	}
+	// always ensure the stream is terminated if we're done managing it. the
+	// stream should already be in a terminal state unless we're exiting due
+	// to the manager terminating. that only happens if the underlying transport
+	// died, so just assume the remote end issued a cancel by terminating
+	// the transport.
+	stream.Cancel(context.Canceled)
 
 	// release semaphore
 	<-m.sem

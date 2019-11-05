@@ -64,6 +64,12 @@ func TestReader(t *testing.T) {
 		}
 	}
 
+	var megaFrames []Frame
+	for i := 0; i < 10*1024; i++ {
+		megaFrames = append(megaFrames, f(Kind_Message, 1, strings.Repeat("X", 1024), false))
+	}
+	megaFrames = append(megaFrames, f(Kind_Message, 1, "", true))
+
 	cases := []testCase{
 		m(p(Kind_Message, 1, "hello world"),
 			f(Kind_Message, 1, "hello", false),
@@ -85,6 +91,18 @@ func TestReader(t *testing.T) {
 				f(Kind_Message, 1, "1", true),
 			},
 			Error: "id monotonicity violation",
+		},
+
+		{ // a single frame that's too large
+			Packets: []Packet{},
+			Frames:  []Frame{f(Kind_Message, 1, strings.Repeat("X", 2<<20), true)},
+			Error:   "token too long",
+		},
+
+		{ // multiple frames that make too large a packet
+			Packets: []Packet{},
+			Frames:  megaFrames,
+			Error:   "data overflow",
 		},
 	}
 

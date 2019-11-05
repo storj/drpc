@@ -97,11 +97,11 @@ func (s *Reader) ReadPacket() (pkt Packet, err error) {
 		rem, fr, ok, err := ParseFrame(s.buf.Bytes())
 		switch {
 		case err != nil:
-			return pkt, err
+			return Packet{}, drpc.ProtocolError.Wrap(err)
 		case !ok, len(rem) > 0:
-			return pkt, drpc.InternalError.New("problem with scanner")
+			return Packet{}, drpc.InternalError.New("problem with scanner")
 		case fr.ID.Less(s.id):
-			return pkt, drpc.ProtocolError.New("id monotonicity violation")
+			return Packet{}, drpc.ProtocolError.New("id monotonicity violation")
 		case s.id.Less(fr.ID):
 			s.id = fr.ID
 			pkt = Packet{
@@ -110,16 +110,19 @@ func (s *Reader) ReadPacket() (pkt Packet, err error) {
 				Kind: fr.Kind,
 			}
 		case fr.Kind != pkt.Kind:
-			return pkt, drpc.ProtocolError.New("packet kind change")
+			return Packet{}, drpc.ProtocolError.New("packet kind change")
 		}
 
 		pkt.Data = append(pkt.Data, fr.Data...)
-		if fr.Done {
+		switch {
+		case len(pkt.Data) > 4<<20:
+			return Packet{}, drpc.ProtocolError.New("data overflow")
+		case fr.Done:
 			return pkt, nil
 		}
 	}
 	if err := s.buf.Err(); err != nil {
-		return pkt, err
+		return Packet{}, err
 	}
-	return pkt, io.EOF
+	return Packet{}, io.EOF
 }

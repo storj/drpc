@@ -19,12 +19,24 @@ import (
 	"storj.io/drpc/drpcwire"
 )
 
+// Options controls configuration settings for a server.
+type Options struct {
+	// Manager controls the options we pass to the managers this server creates.
+	Manager drpcmanager.Options
+}
+
 type Server struct {
+	opts Options
 	rpcs map[string]rpcData
 }
 
 func New() *Server {
+	return NewWithOptions(Options{})
+}
+
+func NewWithOptions(opts Options) *Server {
 	return &Server{
+		opts: opts,
 		rpcs: make(map[string]rpcData),
 	}
 }
@@ -91,7 +103,7 @@ func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, 
 }
 
 func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
-	man := drpcmanager.New(tr)
+	man := drpcmanager.NewWithOptions(tr, s.opts.Manager)
 	defer func() { err = errs.Combine(err, man.Close()) }()
 
 	for {

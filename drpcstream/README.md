@@ -6,6 +6,17 @@ package drpcstream sends protobufs using the dprc wire protocol.
 
 ## Usage
 
+#### type Options
+
+```go
+type Options struct {
+	// SplitSize controls the default size we split packets into frames.
+	SplitSize int
+}
+```
+
+Options controls configuration settings for a stream.
+
 #### type Stream
 
 ```go
@@ -18,6 +29,12 @@ type Stream struct {
 
 ```go
 func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream
+```
+
+#### func  NewWithOptions
+
+```go
+func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream
 ```
 
 #### func (*Stream) Cancel

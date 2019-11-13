@@ -20,6 +20,12 @@ type Conn struct {
 func New(tr drpc.Transport) *Conn
 ```
 
+#### func  NewWithOptions
+
+```go
+func NewWithOptions(tr drpc.Transport, opts Options) *Conn
+```
+
 #### func (*Conn) Close
 
 ```go
@@ -49,3 +55,14 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 ```go
 func (c *Conn) Transport() drpc.Transport
 ```
+
+#### type Options
+
+```go
+type Options struct {
+	// Manager controls the options we pass to the manager of this conn.
+	Manager drpcmanager.Options
+}
+```
+
+Options controls configuration settings for a conn.

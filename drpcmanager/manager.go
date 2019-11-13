@@ -18,15 +18,23 @@ import (
 	"storj.io/drpc/drpcwire"
 )
 
-var (
-	managerClosed      = errs.New("manager closed")
-	manageStreamExited = errs.New("manage stream exited")
-)
+var managerClosed = errs.New("manager closed")
+
+// Options controls configuration settings for a manager.
+type Options struct {
+	// WriterBufferSize controls the size of the buffer that we will fill before
+	// flushing. Normal writes to streams typically issue a flush explicitly.
+	WriterBufferSize int
+
+	// Stream are passed to any streams the manager creates.
+	Stream drpcstream.Options
+}
 
 type Manager struct {
-	tr drpc.Transport
-	wr *drpcwire.Writer
-	rd *drpcwire.Reader
+	tr   drpc.Transport
+	wr   *drpcwire.Writer
+	rd   *drpcwire.Reader
+	opts Options
 
 	once sync.Once
 
@@ -40,10 +48,15 @@ type Manager struct {
 }
 
 func New(tr drpc.Transport) *Manager {
+	return NewWithOptions(tr, Options{})
+}
+
+func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 	m := &Manager{
-		tr: tr,
-		wr: drpcwire.NewWriter(tr, 1024),
-		rd: drpcwire.NewReader(tr),
+		tr:   tr,
+		wr:   drpcwire.NewWriter(tr, opts.WriterBufferSize),
+		rd:   drpcwire.NewReader(tr),
+		opts: opts,
 
 		// this semaphore controls the number of concurrent streams. it MUST be 1.
 		sem:   make(chan struct{}, 1),
@@ -130,7 +143,7 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 	}
 
 	m.sid++
-	stream = drpcstream.New(m.ctx, m.sid, m.wr)
+	stream = drpcstream.NewWithOptions(m.ctx, m.sid, m.wr, m.opts.Stream)
 	go m.manageStream(ctx, stream)
 	return stream, nil
 }
@@ -158,7 +171,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 				continue
 			}
 
-			stream = drpcstream.New(m.ctx, pkt.ID.Stream, m.wr)
+			stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)
 			go m.manageStream(ctx, stream)
 			return stream, string(pkt.Data), nil
 		}

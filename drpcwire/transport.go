@@ -23,6 +23,10 @@ type Writer struct {
 }
 
 func NewWriter(w io.Writer, size int) *Writer {
+	if size == 0 {
+		size = 1024
+	}
+
 	return &Writer{
 		w:    w,
 		size: size,

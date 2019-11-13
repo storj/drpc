@@ -15,6 +15,12 @@ import (
 	"storj.io/drpc/drpcwire"
 )
 
+// Options controls configuration settings for a conn.
+type Options struct {
+	// Manager controls the options we pass to the manager of this conn.
+	Manager drpcmanager.Options
+}
+
 type Conn struct {
 	tr  drpc.Transport
 	man *drpcmanager.Manager
@@ -23,9 +29,13 @@ type Conn struct {
 var _ drpc.Conn = (*Conn)(nil)
 
 func New(tr drpc.Transport) *Conn {
+	return NewWithOptions(tr, Options{})
+}
+
+func NewWithOptions(tr drpc.Transport, opts Options) *Conn {
 	return &Conn{
 		tr:  tr,
-		man: drpcmanager.New(tr),
+		man: drpcmanager.NewWithOptions(tr, opts.Manager),
 	}
 }
 

@@ -20,6 +20,12 @@ type Manager struct {
 func New(tr drpc.Transport) *Manager
 ```
 
+#### func  NewWithOptions
+
+```go
+func NewWithOptions(tr drpc.Transport, opts Options) *Manager
+```
+
 #### func (*Manager) Close
 
 ```go
@@ -43,3 +49,18 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 ```go
 func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Stream, rpc string, err error)
 ```
+
+#### type Options
+
+```go
+type Options struct {
+	// WriterBufferSize controls the size of the buffer that we will fill before
+	// flushing. Normal writes to streams typically issue a flush explicitly.
+	WriterBufferSize int
+
+	// Stream are passed to any streams the manager creates.
+	Stream drpcstream.Options
+}
+```
+
+Options controls configuration settings for a manager.

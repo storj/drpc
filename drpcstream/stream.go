@@ -18,9 +18,16 @@ import (
 	"storj.io/drpc/drpcwire"
 )
 
+// Options controls configuration settings for a stream.
+type Options struct {
+	// SplitSize controls the default size we split packets into frames.
+	SplitSize int
+}
+
 type Stream struct {
 	ctx    context.Context
 	cancel func()
+	opts   Options
 
 	writeMu chMutex
 	id      drpcwire.ID
@@ -43,11 +50,16 @@ type Stream struct {
 var _ drpc.Stream = (*Stream)(nil)
 
 func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
+	return NewWithOptions(ctx, sid, wr, Options{})
+}
+
+func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
 	ctx, cancel := context.WithCancel(ctx)
 
 	s := &Stream{
 		ctx:    ctx,
 		cancel: cancel,
+		opts:   opts,
 
 		wr: wr,
 
@@ -218,7 +230,7 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error {
 	defer s.writeMu.Unlock()
 	defer s.checkFinished()
 
-	return drpcwire.SplitN(s.newPacket(kind, data), 0, s.pollWriteFn)
+	return drpcwire.SplitN(s.newPacket(kind, data), s.opts.SplitSize, s.pollWriteFn)
 }
 
 func (s *Stream) RawFlush() (err error) {

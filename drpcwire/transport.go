@@ -15,6 +15,7 @@ import (
 // Writer
 //
 
+// Writer is a helper to buffer and write packets and frames to an io.Writer.
 type Writer struct {
 	w    io.Writer
 	size int
@@ -22,6 +23,8 @@ type Writer struct {
 	buf  []byte
 }
 
+// NewWriter returns a Writer that will attempt to buffer size data before
+// sending it to the io.Writer.
 func NewWriter(w io.Writer, size int) *Writer {
 	if size == 0 {
 		size = 1024
@@ -34,6 +37,8 @@ func NewWriter(w io.Writer, size int) *Writer {
 	}
 }
 
+// WritePacket writes the packet as a single frame, ignoring any size
+// constraints.
 func (b *Writer) WritePacket(pkt Packet) (err error) {
 	return b.WriteFrame(Frame{
 		Data: pkt.Data,
@@ -43,6 +48,8 @@ func (b *Writer) WritePacket(pkt Packet) (err error) {
 	})
 }
 
+// WriteFrame appends the frame into the buffer, and if the buffer is larger
+// than the configured size, flushes it.
 func (b *Writer) WriteFrame(fr Frame) (err error) {
 	b.mu.Lock()
 	b.buf = AppendFrame(b.buf, fr)
@@ -54,6 +61,8 @@ func (b *Writer) WriteFrame(fr Frame) (err error) {
 	return err
 }
 
+// Flush forces a flush of any buffered data to the io.Writer. It is a no-op if
+// there is no data in the buffer.
 func (b *Writer) Flush() (err error) {
 	b.mu.Lock()
 	if len(b.buf) > 0 {
@@ -68,6 +77,7 @@ func (b *Writer) Flush() (err error) {
 // Reader
 //
 
+// SplitFrame is used by bufio.Scanner to split frames out of a stream of bytes.
 func SplitFrame(data []byte, atEOF bool) (int, []byte, error) {
 	rem, _, ok, err := ParseFrame(data)
 	switch advance := len(data) - len(rem); {
@@ -84,11 +94,13 @@ func SplitFrame(data []byte, atEOF bool) (int, []byte, error) {
 	}
 }
 
+// Reader reconstructs packets from frames read from an io.Reader.
 type Reader struct {
 	buf *bufio.Scanner
 	id  ID
 }
 
+// NewReader constructs a Reader to read Packets from the io.Reader.
 func NewReader(r io.Reader) *Reader {
 	buf := bufio.NewScanner(r)
 	buf.Buffer(make([]byte, 4<<10), 1<<20)
@@ -96,6 +108,11 @@ func NewReader(r io.Reader) *Reader {
 	return &Reader{buf: buf}
 }
 
+// ReadPacket reads a packet from the io.Reader. IDs read from frames
+// must be monotonically increasing. When a new ID is read, the old
+// data is discarded. This allows for easier asynchronous interrupts.
+// If the amount of data in the Packet becomes too large, an error is
+// returned.
 func (s *Reader) ReadPacket() (pkt Packet, err error) {
 	for s.buf.Scan() {
 		rem, fr, ok, err := ParseFrame(s.buf.Bytes())

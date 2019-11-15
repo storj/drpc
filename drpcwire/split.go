@@ -3,6 +3,10 @@
 
 package drpcwire
 
+// SplitN splits the marshaled form of the Packet into a number of
+// frames such that each frame is at most n bytes. It calls
+// the callback with every such frame. If n is zero, a default of
+// 1024 is used.
 func SplitN(pkt Packet, n int, cb func(fr Frame) error) error {
 	switch {
 	case n == 0:

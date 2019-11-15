@@ -157,7 +157,7 @@ func (d *drpc) generateService(file *generator.FileDescriptor, service *pb.Servi
 
 	// Server methods
 	for _, method := range service.Method {
-		d.generateServerMethod(servName, fullServName, method)
+		d.generateServerMethod(servName, method)
 	}
 }
 
@@ -305,7 +305,7 @@ func (d *drpc) generateServerHandler(servName string, method *pb.MethodDescripto
 	d.P(")")
 }
 
-func (d *drpc) generateServerMethod(servName, fullServName string, method *pb.MethodDescriptorProto) {
+func (d *drpc) generateServerMethod(servName string, method *pb.MethodDescriptorProto) {
 	methName := generator.CamelCase(method.GetName())
 	inType := d.typeName(method.GetInputType())
 	outType := d.typeName(method.GetOutputType())

@@ -24,6 +24,7 @@ type Options struct {
 	SplitSize int
 }
 
+// Stream represents an rpc actively happening on a transport.
 type Stream struct {
 	ctx    context.Context
 	cancel func()
@@ -49,10 +50,17 @@ type Stream struct {
 
 var _ drpc.Stream = (*Stream)(nil)
 
+// New returns a new stream bound to the context with the given stream id and will
+// use the writer to write messages on. It is important use monotonically increasing
+// stream ids within a single transport.
 func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 	return NewWithOptions(ctx, sid, wr, Options{})
 }
 
+// NewWithOptions returns a new stream bound to the context with the given stream id
+// and will use the writer to write messages on. It is important use monotonically increasing
+// stream ids within a single transport. The options are used to control details of how
+// the Stream operates.
 func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -76,10 +84,15 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 // accessors
 //
 
+// Context returns the context associated with the stream. It is closed when
+// the Stream will no longer issue any writes or reads.
 func (s *Stream) Context() context.Context { return s.ctx }
 
+// Terminated returns a channel when the stream has been terminated.
 func (s *Stream) Terminated() <-chan struct{} { return s.sigs.term.Signal() }
 
+// Finished returns true if the stream is fully finished and will no longer
+// issue any writes or reads.
 func (s *Stream) Finished() bool { return s.sigs.finish.IsSet() }
 
 //
@@ -89,25 +102,25 @@ func (s *Stream) Finished() bool { return s.sigs.finish.IsSet() }
 // HandlePacket advances the stream state machine by inspecting the packet. It returns
 // any major errors that should terminate the transport the stream is operating on as
 // well as a boolean indicating if the stream expects more packets.
-func (s *Stream) HandlePacket(pkt drpcwire.Packet) (error, bool) {
+func (s *Stream) HandlePacket(pkt drpcwire.Packet) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: %v", s, s.id.Stream, pkt) })
 
 	if pkt.ID.Stream != s.id.Stream {
-		return nil, true
+		return true, nil
 	}
 
 	switch pkt.Kind {
-	case drpcwire.Kind_Invoke:
+	case drpcwire.KindInvoke:
 		err := drpc.ProtocolError.New("invoke on existing stream")
 		s.terminate(err)
-		return err, false
+		return false, err
 
-	case drpcwire.Kind_Message:
+	case drpcwire.KindMessage:
 		if s.sigs.recv.IsSet() || s.sigs.term.IsSet() {
-			return nil, true
+			return true, nil
 		}
 
 		// drop the mutex while we either send into the queue or we're told that
@@ -124,28 +137,28 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (error, bool) {
 		case s.queue <- pkt:
 		}
 
-		return nil, true
+		return true, nil
 
-	case drpcwire.Kind_Error:
+	case drpcwire.KindError:
 		err := drpcwire.UnmarshalError(pkt.Data)
 		s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 		s.terminate(err)
-		return nil, false
+		return false, nil
 
-	case drpcwire.Kind_Close:
+	case drpcwire.KindClose:
 		s.sigs.recv.Set(io.EOF)
 		s.terminate(drpc.Error.New("remote closed the stream"))
-		return nil, false
+		return false, nil
 
-	case drpcwire.Kind_CloseSend:
+	case drpcwire.KindCloseSend:
 		s.sigs.recv.Set(io.EOF)
 		s.terminateIfBothClosed()
-		return nil, false
+		return false, nil
 
 	default:
 		err := drpc.InternalError.New("unknown packet kind: %s", pkt.Kind)
 		s.terminate(err)
-		return err, false
+		return false, err
 	}
 }
 
@@ -165,12 +178,14 @@ func (s *Stream) checkFinished() {
 // set. This is to prevent errors from reads/writes to a transport after it has been
 // asynchronously closed due to context cancelation.
 func (s *Stream) checkCancelError(err error) error {
-	if err, ok := s.sigs.cancel.Get(); ok {
-		return err
+	if sigErr, ok := s.sigs.cancel.Get(); ok {
+		return sigErr
 	}
 	return err
 }
 
+// newPackage bumps the internal message id and returns a packet. It must be called
+// under a mutex.
 func (s *Stream) newPacket(kind drpcwire.Kind, data []byte) drpcwire.Packet {
 	s.id.Message++
 	return drpcwire.Packet{
@@ -180,6 +195,8 @@ func (s *Stream) newPacket(kind drpcwire.Kind, data []byte) drpcwire.Packet {
 	}
 }
 
+// pollWrite checks for any conditions that should cause a write to not happen and
+// then issues the write of the frame.
 func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
 	if s.sigs.send.IsSet() {
 		return s.sigs.send.Err()
@@ -190,6 +207,9 @@ func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
 	}
 }
 
+// sendPacket sends the packet in a single write and flushes. It does not check for
+// any conditions to stop it from writing and is meant for internal stream use to
+// do things like signal errors or closes to the remote side.
 func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) error {
 	if err := s.wr.WritePacket(s.newPacket(kind, data)); err != nil {
 		return errs.Wrap(err)
@@ -200,12 +220,16 @@ func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) error {
 	return nil
 }
 
+// terminateIfBothClosed is a helper to terminate the stream if both sides have
+// issued a CloseSend.
 func (s *Stream) terminateIfBothClosed() {
 	if s.sigs.send.IsSet() && s.sigs.recv.IsSet() {
 		s.terminate(drpc.Error.New("stream terminated by both issuing close send"))
 	}
 }
 
+// terminate marks the stream as terminated with the given error. It also marks
+// the stream as finished if no writes are happening at the time of the call.
 func (s *Stream) terminate(err error) {
 	s.sigs.send.Set(err)
 	s.sigs.recv.Set(err)
@@ -225,6 +249,7 @@ func (s *Stream) terminate(err error) {
 // raw read/write
 //
 
+// RawWrite sends the data bytes with the given kind.
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -233,6 +258,7 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error {
 	return drpcwire.SplitN(s.newPacket(kind, data), s.opts.SplitSize, s.pollWriteFn)
 }
 
+// RawFlush flushes any buffers of data.
 func (s *Stream) RawFlush() (err error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -241,6 +267,7 @@ func (s *Stream) RawFlush() (err error) {
 	return s.checkCancelError(errs.Wrap(s.wr.Flush()))
 }
 
+// RawRecv returns the raw bytes received for a message.
 func (s *Stream) RawRecv() ([]byte, error) {
 	if s.sigs.recv.IsSet() {
 		return nil, s.sigs.recv.Err()
@@ -258,12 +285,13 @@ func (s *Stream) RawRecv() ([]byte, error) {
 // msg read/write
 //
 
+// MsgSend marshals the message with protobuf, writes it, and flushes.
 func (s *Stream) MsgSend(msg drpc.Message) error {
 	data, err := proto.Marshal(msg)
 	if err != nil {
 		return errs.Wrap(err)
 	}
-	if err := s.RawWrite(drpcwire.Kind_Message, data); err != nil {
+	if err := s.RawWrite(drpcwire.KindMessage, data); err != nil {
 		return err
 	}
 	if err := s.RawFlush(); err != nil {
@@ -272,6 +300,7 @@ func (s *Stream) MsgSend(msg drpc.Message) error {
 	return nil
 }
 
+// MsgRecv recives some protobuf data and unmarshals it into msg.
 func (s *Stream) MsgRecv(msg drpc.Message) error {
 	data, err := s.RawRecv()
 	if err != nil {
@@ -284,6 +313,8 @@ func (s *Stream) MsgRecv(msg drpc.Message) error {
 // terminal messages
 //
 
+// SendError terminates the stream and sends the error to the remote. It is a no-op if
+// the stream is already terminated.
 func (s *Stream) SendError(serr error) error {
 	s.mu.Lock()
 	if s.sigs.term.IsSet() {
@@ -299,9 +330,11 @@ func (s *Stream) SendError(serr error) error {
 	s.terminate(drpc.Error.New("stream terminated by sending error"))
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.Kind_Error, drpcwire.MarshalError(serr)))
+	return s.checkCancelError(s.sendPacket(drpcwire.KindError, drpcwire.MarshalError(serr)))
 }
 
+// Close terminates the stream and sends that the stream has been closed to the remote.
+// It is a no-op if the stream is already terminated.
 func (s *Stream) Close() error {
 	s.mu.Lock()
 	if s.sigs.term.IsSet() {
@@ -316,9 +349,12 @@ func (s *Stream) Close() error {
 	s.terminate(drpc.Error.New("stream terminated by sending close"))
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.Kind_Close, nil))
+	return s.checkCancelError(s.sendPacket(drpcwire.KindClose, nil))
 }
 
+// CloseSend informs the remote that no more messages will be sent. If the remote has
+// also already issued a CloseSend, the stream is terminated. It is a no-op if the
+// stream already has sent a CloseSend or if it is terminated.
 func (s *Stream) CloseSend() error {
 	s.mu.Lock()
 	if s.sigs.send.IsSet() || s.sigs.term.IsSet() {
@@ -334,11 +370,12 @@ func (s *Stream) CloseSend() error {
 	s.terminateIfBothClosed()
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.Kind_CloseSend, nil))
+	return s.checkCancelError(s.sendPacket(drpcwire.KindCloseSend, nil))
 }
 
 // Cancel transitions the stream into a state where all writes to the transport will return
-// the provided error, and terminates the stream.
+// the provided error, and terminates the stream. It is a no-op if the stream is already
+// terminated.
 func (s *Stream) Cancel(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

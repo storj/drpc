@@ -20,8 +20,7 @@ import (
 // helpers
 //
 
-func in(n int64) *In   { return &In{In: n} }
-func out(n int64) *Out { return &Out{Out: n} } //nolint
+func in(n int64) *In { return &In{In: n} }
 
 func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
 	ctx := drpcctx.NewTracker(context.Background())

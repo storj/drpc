@@ -2,7 +2,7 @@
 
 `import "storj.io/drpc/drpcdebug"`
 
-package drpcdebug provides helpers for debugging.
+Package drpcdebug provides helpers for debugging.
 
 ## Usage
 

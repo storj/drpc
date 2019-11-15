@@ -2,7 +2,7 @@
 
 `import "storj.io/drpc/drpcerr"`
 
-package drpcerr lets one associate error codes with errors.
+Package drpcerr lets one associate error codes with errors.
 
 ## Usage
 

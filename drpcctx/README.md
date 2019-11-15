@@ -2,7 +2,7 @@
 
 `import "storj.io/drpc/drpcctx"`
 
-package drpcctx has helpers to interact with context.Context.
+Package drpcctx has helpers to interact with context.Context.
 
 ## Usage
 

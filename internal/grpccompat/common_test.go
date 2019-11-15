@@ -34,27 +34,27 @@ type errResult int
 
 const (
 	_ errResult = iota
-	errResult_None
-	errResult_Canceled
-	errResult_DeadlineExceeded
-	errResult_EOF
-	errResult_Marker
-	errResult_Other
+	errResultNone
+	errResultCanceled
+	errResultDeadlineExceeded
+	errResultEOF
+	errResultMarker
+	errResultOther
 )
 
 func (e errResult) String() string {
 	switch e {
-	case errResult_None:
+	case errResultNone:
 		return "None"
-	case errResult_Canceled:
+	case errResultCanceled:
 		return "Canceled"
-	case errResult_DeadlineExceeded:
+	case errResultDeadlineExceeded:
 		return "DeadlineExceeded"
-	case errResult_EOF:
+	case errResultEOF:
 		return "EOF"
-	case errResult_Marker:
+	case errResultMarker:
 		return "Marker"
-	case errResult_Other:
+	case errResultOther:
 		return "Other"
 	default:
 		return "Invalid"
@@ -82,17 +82,17 @@ func getResult(out *Out, err error) (res result) {
 func getErrResult(err error) errResult {
 	switch code := status.Code(err); {
 	case err == nil:
-		return errResult_None
+		return errResultNone
 	case code == codes.Canceled, err == context.Canceled:
-		return errResult_Canceled
+		return errResultCanceled
 	case code == codes.DeadlineExceeded, err == context.DeadlineExceeded:
-		return errResult_DeadlineExceeded
+		return errResultDeadlineExceeded
 	case err == io.EOF:
-		return errResult_EOF
+		return errResultEOF
 	case strings.Contains(err.Error(), "marker"):
-		return errResult_Marker
+		return errResultMarker
 	default:
-		return errResult_Other
+		return errResultOther
 	}
 }
 
@@ -250,25 +250,25 @@ func (l *listenOne) Accept() (conn net.Conn, err error) {
 
 type Client interface {
 	Method1(ctx context.Context, in *In) (*Out, error)
-	Method2(ctx context.Context) (Client_Method2Stream, error)
-	Method3(ctx context.Context, in *In) (Client_Method3Stream, error)
-	Method4(ctx context.Context) (Client_Method4Stream, error)
+	Method2(ctx context.Context) (ClientMethod2Stream, error)
+	Method3(ctx context.Context, in *In) (ClientMethod3Stream, error)
+	Method4(ctx context.Context) (ClientMethod4Stream, error)
 }
 
-type Client_Method2Stream interface {
+type ClientMethod2Stream interface {
 	Context() context.Context
 
 	Send(*In) error
 	CloseAndRecv() (*Out, error)
 }
 
-type Client_Method3Stream interface {
+type ClientMethod3Stream interface {
 	Context() context.Context
 
 	Recv() (*Out, error)
 }
 
-type Client_Method4Stream interface {
+type ClientMethod4Stream interface {
 	Context() context.Context
 
 	Send(*In) error
@@ -284,13 +284,13 @@ type grpcWrapper struct{ c ServiceClient }
 func (g grpcWrapper) Method1(ctx context.Context, in *In) (*Out, error) {
 	return g.c.Method1(ctx, in)
 }
-func (g grpcWrapper) Method2(ctx context.Context) (Client_Method2Stream, error) {
+func (g grpcWrapper) Method2(ctx context.Context) (ClientMethod2Stream, error) {
 	return g.c.Method2(ctx)
 }
-func (g grpcWrapper) Method3(ctx context.Context, in *In) (Client_Method3Stream, error) {
+func (g grpcWrapper) Method3(ctx context.Context, in *In) (ClientMethod3Stream, error) {
 	return g.c.Method3(ctx, in)
 }
-func (g grpcWrapper) Method4(ctx context.Context) (Client_Method4Stream, error) {
+func (g grpcWrapper) Method4(ctx context.Context) (ClientMethod4Stream, error) {
 	return g.c.Method4(ctx)
 }
 
@@ -303,13 +303,13 @@ type drpcWrapper struct{ c DRPCServiceClient }
 func (d drpcWrapper) Method1(ctx context.Context, in *In) (*Out, error) {
 	return d.c.Method1(ctx, in)
 }
-func (d drpcWrapper) Method2(ctx context.Context) (Client_Method2Stream, error) {
+func (d drpcWrapper) Method2(ctx context.Context) (ClientMethod2Stream, error) {
 	return d.c.Method2(ctx)
 }
-func (d drpcWrapper) Method3(ctx context.Context, in *In) (Client_Method3Stream, error) {
+func (d drpcWrapper) Method3(ctx context.Context, in *In) (ClientMethod3Stream, error) {
 	return d.c.Method3(ctx, in)
 }
-func (d drpcWrapper) Method4(ctx context.Context) (Client_Method4Stream, error) {
+func (d drpcWrapper) Method4(ctx context.Context) (ClientMethod4Stream, error) {
 	return d.c.Method4(ctx)
 }
 
@@ -319,25 +319,25 @@ func (d drpcWrapper) Method4(ctx context.Context) (Client_Method4Stream, error) 
 
 type serviceImpl struct {
 	Method1Fn func(ctx context.Context, in *In) (*Out, error)
-	Method2Fn func(stream Server_Method2Stream) error
-	Method3Fn func(in *In, stream Server_Method3Stream) error
-	Method4Fn func(stream Server_Method4Stream) error
+	Method2Fn func(stream ServerMethod2Stream) error
+	Method3Fn func(in *In, stream ServerMethod3Stream) error
+	Method4Fn func(stream ServerMethod4Stream) error
 }
 
-type Server_Method2Stream interface {
+type ServerMethod2Stream interface {
 	Context() context.Context
 
 	Recv() (*In, error)
 	SendAndClose(*Out) error
 }
 
-type Server_Method3Stream interface {
+type ServerMethod3Stream interface {
 	Context() context.Context
 
 	Send(*Out) error
 }
 
-type Server_Method4Stream interface {
+type ServerMethod4Stream interface {
 	Context() context.Context
 
 	Send(*Out) error

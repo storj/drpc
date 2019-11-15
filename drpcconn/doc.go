@@ -1,5 +1,5 @@
 // Copyright (C) 2019 Storj Labs, Inc.
 // See LICENSE for copying information.
 
-// package drpcconn creates a drpc client connection from a transport.
+// Package drpcconn creates a drpc client connection from a transport.
 package drpcconn

@@ -13,7 +13,7 @@ import (
 
 func TestCancel_ErrorAfterCancel(t *testing.T) {
 	impl := &serviceImpl{
-		Method4Fn: func(stream Server_Method4Stream) error {
+		Method4Fn: func(stream ServerMethod4Stream) error {
 			<-stream.Context().Done()
 			return errs.New("marker")
 		},
@@ -33,7 +33,7 @@ func TestCancel_ErrorAfterCancel(t *testing.T) {
 }
 func TestCancel_CancelAfterError(t *testing.T) {
 	impl := &serviceImpl{
-		Method4Fn: func(stream Server_Method4Stream) error {
+		Method4Fn: func(stream ServerMethod4Stream) error {
 			return errs.New("marker")
 		},
 	}
@@ -49,13 +49,13 @@ func TestCancel_CancelAfterError(t *testing.T) {
 		ensure(nil, stream.Send(in(0)))
 		cancel()
 		ensure(stream.Recv())
-		ensure(nil, stream.Send(in(0)))
+		ensure(nil, stream.Send(in(1)))
 	})
 }
 
 func TestCancel_CancelAfterSuccess(t *testing.T) {
 	impl := &serviceImpl{
-		Method4Fn: func(stream Server_Method4Stream) error {
+		Method4Fn: func(stream ServerMethod4Stream) error {
 			_ = stream.Send(out(2))
 			_, _ = stream.Recv()
 			<-stream.Context().Done()
@@ -74,6 +74,6 @@ func TestCancel_CancelAfterSuccess(t *testing.T) {
 		ensure(nil, stream.Send(in(0)))
 		cancel()
 		ensure(stream.Recv())
-		ensure(nil, stream.Send(in(0)))
+		ensure(nil, stream.Send(in(1)))
 	})
 }

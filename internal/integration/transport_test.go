@@ -38,7 +38,7 @@ func TestTransport_Error(t *testing.T) {
 	<-started
 
 	// kill the transport from underneath of it
-	cli.DRPCConn().Transport().Close()
+	assert.NoError(t, cli.DRPCConn().Transport().Close())
 }
 
 func TestTransport_Blocked(t *testing.T) {
@@ -52,7 +52,7 @@ func TestTransport_Blocked(t *testing.T) {
 
 	// create a transport that signals when reads/writes happen
 	trs := new(transportSignaler)
-	defer trs.Close()
+	defer func() { assert.NoError(t, trs.Close()) }()
 
 	// start a client issuing an rpc that we keep track of
 	cli := NewDRPCServiceClient(drpcconn.New(trs))
@@ -61,7 +61,7 @@ func TestTransport_Blocked(t *testing.T) {
 		errch <- err
 	})
 
-	// wait for the write to happen before cancelling the context. this
+	// wait for the write to happen before canceling the context. this
 	// should cause the rpc goroutine to exit.
 	<-trs.write.Signal()
 	ctx.Cancel()
@@ -101,7 +101,7 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	<-started
 
 	// kill the transport from underneath of it
-	cli.DRPCConn().Transport().Close()
+	assert.NoError(t, cli.DRPCConn().Transport().Close())
 
 	// ensure both of the errors we sent are canceled
 	assert.Equal(t, <-errs, context.Canceled)

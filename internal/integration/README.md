@@ -2,7 +2,7 @@
 
 `import "storj.io/drpc/internal/integration"`
 
-package integration holds integration tests for drpc.
+Package integration holds integration tests for drpc.
 
 ## Usage
 

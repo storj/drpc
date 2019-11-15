@@ -49,7 +49,7 @@ func RandUint64() uint64 {
 
 func RandKind() Kind {
 	for {
-		kind := Kind(rand.Intn(int(Kind_Largest)-1) + 1)
+		kind := Kind(rand.Intn(7))
 		if _, ok := payloadSize[kind]; ok {
 			return kind
 		}
@@ -57,11 +57,11 @@ func RandKind() Kind {
 }
 
 var payloadSize = map[Kind]func() int{
-	Kind_Invoke:    func() int { return rand.Intn(1023) + 1 },
-	Kind_Message:   func() int { return rand.Intn(1023) + 1 },
-	Kind_Error:     func() int { return rand.Intn(1023) + 1 },
-	Kind_Close:     func() int { return 0 },
-	Kind_CloseSend: func() int { return 0 },
+	KindInvoke:    func() int { return rand.Intn(1023) + 1 },
+	KindMessage:   func() int { return rand.Intn(1023) + 1 },
+	KindError:     func() int { return rand.Intn(1023) + 1 },
+	KindClose:     func() int { return 0 },
+	KindCloseSend: func() int { return 0 },
 }
 
 func RandFrame() Frame {

@@ -13,7 +13,7 @@ import (
 
 func TestError_ErrorPassedBack(t *testing.T) {
 	impl := &serviceImpl{
-		Method4Fn: func(stream Server_Method4Stream) error {
+		Method4Fn: func(stream ServerMethod4Stream) error {
 			return errs.New("marker")
 		},
 	}

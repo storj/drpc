@@ -25,15 +25,19 @@ type Options struct {
 	Manager drpcmanager.Options
 }
 
+// Server is an implementation of drpc.Server to serve drpc connections.
 type Server struct {
 	opts Options
 	rpcs map[string]rpcData
 }
 
+// New constructs a new Server.
 func New() *Server {
 	return NewWithOptions(Options{})
 }
 
+// NewWithOptions constructs a new Server using the provided options to tune
+// how the drpc connections are handled.
 func NewWithOptions(opts Options) *Server {
 	return &Server{
 		opts: opts,
@@ -57,6 +61,8 @@ type rpcData struct {
 	in2     reflect.Type
 }
 
+// Register associates the rpcs described by the description in the server. It will
+// panic if there are problems with the registration.
 func (s *Server) Register(srv interface{}, desc drpc.Description) {
 	n := desc.NumMethods()
 	for i := 0; i < n; i++ {
@@ -68,6 +74,7 @@ func (s *Server) Register(srv interface{}, desc drpc.Description) {
 	}
 }
 
+// registerOne does the work to register a single rpc.
 func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, method interface{}) {
 	if _, ok := s.rpcs[rpc]; ok {
 		panicf("rpc already registered for %q", rpc)
@@ -102,6 +109,7 @@ func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, 
 	s.rpcs[rpc] = data
 }
 
+// ServeOne serves a single set of rpcs on the provided transport.
 func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
 	man := drpcmanager.NewWithOptions(tr, s.opts.Manager)
 	defer func() { err = errs.Combine(err, man.Close()) }()
@@ -117,6 +125,8 @@ func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
 	}
 }
 
+// Serve listens for connections on the listener and serves the drpc request
+// on new connections.
 func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
 	tracker := drpcctx.NewTracker(ctx)
 	defer tracker.Cancel()
@@ -149,6 +159,7 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
 	}
 }
 
+// HandleRPC handles the rpc that has been requested by the stream.
 func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error {
 	err := s.doHandle(stream, rpc)
 	if err != nil {
@@ -157,6 +168,7 @@ func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error {
 	return errs.Wrap(stream.CloseSend())
 }
 
+// doHandle does the work to handle the stream.
 func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
 	data, ok := s.rpcs[rpc]
 	if !ok {
@@ -165,7 +177,10 @@ func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
 
 	in := interface{}(stream)
 	if data.in1 != streamType {
-		msg := reflect.New(data.in1.Elem()).Interface().(drpc.Message)
+		msg, ok := reflect.New(data.in1.Elem()).Interface().(drpc.Message)
+		if !ok {
+			return drpc.InternalError.New("invalid rpc input type")
+		}
 		if err := stream.MsgRecv(msg); err != nil {
 			return errs.Wrap(err)
 		}
@@ -181,7 +196,7 @@ func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
 		if err != nil {
 			return errs.Wrap(err)
 		}
-		return stream.RawWrite(drpcwire.Kind_Message, data)
+		return stream.RawWrite(drpcwire.KindMessage, data)
 	default:
 		return nil
 	}

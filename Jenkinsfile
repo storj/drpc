@@ -10,14 +10,17 @@ pipeline {
         stage('Download') {
             steps {
                 checkout scm
-                sh 'go mod download'
-                sh 'cd ./internal/grpccompat; go mod download'
+                sh './scripts/download.sh'
             }
         }
         stage('Test') {
             steps {
-                sh 'go test storj.io/drpc/...'
-                sh 'cd ./internal/grpccompat; go test storj.io/drpc/internal/grpccompat/...'
+                sh './scripts/test.sh'
+            }
+        }
+        stage('Lint') {
+            steps {
+                sh './scripts/lint.sh'
             }
         }
     }

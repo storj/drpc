@@ -3,3 +3,7 @@
 
 // Package drpcmanager reads packets from a transport to make streams.
 package drpcmanager
+
+import "github.com/spacemonkeygo/monkit/v3"
+
+var mon = monkit.Package()

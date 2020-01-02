@@ -111,6 +111,8 @@ func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, 
 
 // ServeOne serves a single set of rpcs on the provided transport.
 func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
+	defer mon.Task()(&ctx)(&err)
+
 	man := drpcmanager.NewWithOptions(tr, s.opts.Manager)
 	defer func() { err = errs.Combine(err, man.Close()) }()
 
@@ -127,7 +129,9 @@ func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
 
 // Serve listens for connections on the listener and serves the drpc request
 // on new connections.
-func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
+func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
+	defer mon.Task()(&ctx)(&err)
+
 	tracker := drpcctx.NewTracker(ctx)
 	defer tracker.Cancel()
 
@@ -160,8 +164,10 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
 }
 
 // HandleRPC handles the rpc that has been requested by the stream.
-func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error {
-	err := s.doHandle(stream, rpc)
+func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) (err error) {
+	defer mon.TaskNamed("handle" + rpc)(nil)(&err)
+
+	err = s.doHandle(stream, rpc)
 	if err != nil {
 		return errs.Wrap(stream.SendError(err))
 	}

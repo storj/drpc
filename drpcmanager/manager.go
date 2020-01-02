@@ -201,6 +201,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 // manageTransport ensures that if the manager's done signal is ever set, then
 // the underlying transport is closed and the error is recorded.
 func (m *Manager) manageTransport() {
+	defer mon.Task()(nil)(nil)
 	<-m.term.Signal()
 	m.tport.Set(m.tr.Close())
 }
@@ -214,6 +215,7 @@ func (m *Manager) manageTransport() {
 // ensure that no one is reading on the reader. It sets the done signal if there is
 // any error reading packets.
 func (m *Manager) manageReader() {
+	defer mon.Task()(nil)(nil)
 	defer m.read.Set(managerClosed)
 
 	for {
@@ -241,6 +243,8 @@ func (m *Manager) manageReader() {
 // manageStream watches the context and the stream and returns when the stream is
 // finished, canceling the stream if the context is canceled.
 func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
+	defer mon.Task()(nil)(nil)
+
 	// create a wait group, launch the workers, and wait for them
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
@@ -265,6 +269,7 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 // indicate that the stream requires no more packets, and so manageStream can
 // just exit. It releases the semaphore whenever it exits.
 func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Stream) {
+	defer mon.Task()(nil)(nil)
 	defer wg.Done()
 
 	for {
@@ -292,6 +297,7 @@ func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Str
 // manageStreamContext ensures that if the stream context is canceled, we inform the stream and
 // possibly abort the underlying transport if the stream isn't finished.
 func (m *Manager) manageStreamContext(ctx context.Context, wg *sync.WaitGroup, stream *drpcstream.Stream) {
+	defer mon.Task()(nil)(nil)
 	defer wg.Done()
 
 	select {

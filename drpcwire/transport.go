@@ -64,6 +64,8 @@ func (b *Writer) WriteFrame(fr Frame) (err error) {
 // Flush forces a flush of any buffered data to the io.Writer. It is a no-op if
 // there is no data in the buffer.
 func (b *Writer) Flush() (err error) {
+	defer mon.Task()(nil)(&err)
+
 	b.mu.Lock()
 	if len(b.buf) > 0 {
 		_, err = b.w.Write(b.buf)
@@ -114,6 +116,8 @@ func NewReader(r io.Reader) *Reader {
 // If the amount of data in the Packet becomes too large, an error is
 // returned.
 func (s *Reader) ReadPacket() (pkt Packet, err error) {
+	defer mon.Task()(nil)(&err)
+
 	for s.buf.Scan() {
 		rem, fr, ok, err := ParseFrame(s.buf.Bytes())
 		switch {

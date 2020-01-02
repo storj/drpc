@@ -57,7 +57,7 @@ stream is already terminated.
 #### func (*Stream) Close
 
 ```go
-func (s *Stream) Close() error
+func (s *Stream) Close() (err error)
 ```
 Close terminates the stream and sends that the stream has been closed to the
 remote. It is a no-op if the stream is already terminated.
@@ -65,7 +65,7 @@ remote. It is a no-op if the stream is already terminated.
 #### func (*Stream) CloseSend
 
 ```go
-func (s *Stream) CloseSend() error
+func (s *Stream) CloseSend() (err error)
 ```
 CloseSend informs the remote that no more messages will be sent. If the remote
 has also already issued a CloseSend, the stream is terminated. It is a no-op if
@@ -90,7 +90,7 @@ any writes or reads.
 #### func (*Stream) HandlePacket
 
 ```go
-func (s *Stream) HandlePacket(pkt drpcwire.Packet) (error, bool)
+func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error)
 ```
 HandlePacket advances the stream state machine by inspecting the packet. It
 returns any major errors that should terminate the transport the stream is
@@ -99,14 +99,14 @@ operating on as well as a boolean indicating if the stream expects more packets.
 #### func (*Stream) MsgRecv
 
 ```go
-func (s *Stream) MsgRecv(msg drpc.Message) error
+func (s *Stream) MsgRecv(msg drpc.Message) (err error)
 ```
 MsgRecv recives some protobuf data and unmarshals it into msg.
 
 #### func (*Stream) MsgSend
 
 ```go
-func (s *Stream) MsgSend(msg drpc.Message) error
+func (s *Stream) MsgSend(msg drpc.Message) (err error)
 ```
 MsgSend marshals the message with protobuf, writes it, and flushes.
 
@@ -120,21 +120,21 @@ RawFlush flushes any buffers of data.
 #### func (*Stream) RawRecv
 
 ```go
-func (s *Stream) RawRecv() ([]byte, error)
+func (s *Stream) RawRecv() (data []byte, err error)
 ```
 RawRecv returns the raw bytes received for a message.
 
 #### func (*Stream) RawWrite
 
 ```go
-func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) error
+func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error)
 ```
 RawWrite sends the data bytes with the given kind.
 
 #### func (*Stream) SendError
 
 ```go
-func (s *Stream) SendError(serr error) error
+func (s *Stream) SendError(serr error) (err error)
 ```
 SendError terminates the stream and sends the error to the remote. It is a no-op
 if the stream is already terminated.

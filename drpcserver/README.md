@@ -44,7 +44,7 @@ the drpc connections are handled.
 #### func (*Server) HandleRPC
 
 ```go
-func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) error
+func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) (err error)
 ```
 HandleRPC handles the rpc that has been requested by the stream.
 
@@ -59,7 +59,7 @@ panic if there are problems with the registration.
 #### func (*Server) Serve
 
 ```go
-func (s *Server) Serve(ctx context.Context, lis net.Listener) error
+func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error)
 ```
 Serve listens for connections on the listener and serves the drpc request on new
 connections.

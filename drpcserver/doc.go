@@ -3,3 +3,7 @@
 
 // Package drpcserver allows one to execute registered rpcs.
 package drpcserver
+
+import "github.com/spacemonkeygo/monkit/v3"
+
+var mon = monkit.Package()

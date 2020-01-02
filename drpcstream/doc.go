@@ -3,3 +3,7 @@
 
 // Package drpcstream sends protobufs using the dprc wire protocol.
 package drpcstream
+
+import "github.com/spacemonkeygo/monkit/v3"
+
+var mon = monkit.Package()

@@ -4,6 +4,6 @@
 // Package drpcconn creates a drpc client connection from a transport.
 package drpcconn
 
-import "github.com/spacemonkeygo/monkit/v3"
+import "gopkg.in/spacemonkeygo/monkit.v2"
 
 var mon = monkit.Package()

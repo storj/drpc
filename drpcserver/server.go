@@ -165,7 +165,10 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
 
 // HandleRPC handles the rpc that has been requested by the stream.
 func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) (err error) {
-	defer mon.TaskNamed("handle" + rpc)(nil)(&err)
+	ctx := stream.Context()
+	defer mon.Task()(&ctx)(&err)
+	defer mon.TaskNamed("handle" + rpc)(&ctx)(&err)
+	mon.Event("incoming_requests")
 
 	err = s.doHandle(stream, rpc)
 	if err != nil {

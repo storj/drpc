@@ -347,7 +347,7 @@ type ServerMethod4Stream interface {
 func (i *serviceImpl) DRPC() (d *drpcImpl) {
 	d = new(drpcImpl)
 	if i.Method1Fn != nil {
-		d.Method1Fn = func(ctx context.Context, in *In) (*Out, error) { return i.Method1Fn(ctx, in) }
+		d.Method1Fn = i.Method1Fn
 	}
 	if i.Method2Fn != nil {
 		d.Method2Fn = func(stream DRPCService_Method2Stream) error { return i.Method2Fn(stream) }
@@ -364,7 +364,7 @@ func (i *serviceImpl) DRPC() (d *drpcImpl) {
 func (i *serviceImpl) GRPC() (g *grpcImpl) {
 	g = new(grpcImpl)
 	if i.Method1Fn != nil {
-		g.Method1Fn = func(ctx context.Context, in *In) (*Out, error) { return i.Method1Fn(ctx, in) }
+		g.Method1Fn = i.Method1Fn
 	}
 	if i.Method2Fn != nil {
 		g.Method2Fn = func(stream Service_Method2Server) error { return i.Method2Fn(stream) }

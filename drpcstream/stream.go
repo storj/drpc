@@ -211,13 +211,14 @@ func (s *Stream) newPacket(kind drpcwire.Kind, data []byte) drpcwire.Packet {
 // pollWrite checks for any conditions that should cause a write to not happen and
 // then issues the write of the frame.
 func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
-	if s.sigs.send.IsSet() {
+	switch {
+	case s.sigs.send.IsSet():
 		return s.sigs.send.Err()
-	} else if s.sigs.term.IsSet() {
+	case s.sigs.term.IsSet():
 		return s.sigs.term.Err()
-	} else {
-		return s.checkCancelError(errs.Wrap(s.wr.WriteFrame(fr)))
 	}
+
+	return s.checkCancelError(errs.Wrap(s.wr.WriteFrame(fr)))
 }
 
 // sendPacket sends the packet in a single write and flushes. It does not check for

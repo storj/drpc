@@ -5,43 +5,48 @@ run:
 
   skip-files:
     - ".*\\.pb\\.go$"
+    - ".*\\.dbx\\.go$"
+
 
 linters:
   enable:
-    - govet       # check standard vet rules
-    - golint      # check standard linting rules
-    - staticcheck # comprehensive checks
-    - errcheck    # find unchecked errors
-    - ineffassign # find ineffective assignments
-    - varcheck    # find unused global variables and constants
-    - structcheck # check for unused struct parameters
-    - deadcode    # find code that is not used
-    - bodyclose   # find unclosed http response bodies
-    - nakedret    # check for naked returns
-    - gofmt       # sanity check formatting
-    - misspell    # check spelling
-    - unconvert   # remove unnecessary conversions
-    - scopelint   # checks for unpinned variables
-    - dogsled     # checks for too many ignored arguments
-    - whitespace  # checks for leading/trailing newlines
-    - unparam     # check for unused parameters
-    - maligned    # check for better memory usage
-    - prealloc    # easy optimizations
-    - gosec       # checks for security options
-    - goconst     # check for things that could be replaced by constants
-    - stylecheck  # catches other things in golint
-    - goimports   # like gofmt but also checks imports
+    - govet                   # check standard vet rules
+    - golint                  # check standard linting rules
+    - staticcheck             # comprehensive checks
+    - errcheck                # find unchecked errors
+    - ineffassign             # find ineffective assignments
+    - varcheck                # find unused global variables and constants
+    - structcheck             # check for unused struct parameters
+    - deadcode                # find code that is not used
+    - bodyclose               # find unclosed http response bodies
+    - nakedret                # check for naked returns
+    - gofmt                   # sanity check formatting
+    - misspell                # check spelling
+    - unconvert               # remove unnecessary conversions
+    - scopelint               # checks for unpinned variables
+    - gocritic                # checks for style, performance issues, and common programming errors
+    - dogsled                 # checks for too many ignored arguments
+    - goprintffuncname        # Checks that printf-like functions are named with `f` at the end [fast: true, auto-fix: false]
+    #TODO#- whitespace        # checks for leading/trailing newlines
+    #TODO#- unparam           # check for unused parameters
+    #TODO#- maligned          # check for better memory usage
+    #TODO#- prealloc          # easy optimizations
+    #TODO#- gosec
   disable:
-    - godox       # TODO/FIXME is useful
-    - wsl         # too noisy
-    - gocritic    # hates my if-else chains for error handling
-    - gocyclo     # needs tweaking
-    - depguard    # unused
-    - dupl        # slow
-    - interfacer  # not that useful
-    - gosimple    # part of staticcheck
-    - unused      # part of staticcheck
-    - lll         # not that useful
+    - godox
+    - wsl             # too much noise
+    - goimports       # disabled, because it's slow, using scripts/check-imports.go instead.
+    - goconst         # check for things that could be replaced by constants
+    - gocyclo         # needs tweaking
+    - depguard        # unused
+    - gosec           # needs tweaking
+    - stylecheck      # has false positives
+    - dupl            # slow
+    - interfacer      # not that useful
+    - gosimple        # part of staticcheck
+    - unused          # part of staticcheck
+    - lll
+    - rowserrcheck    # checks if sql.Rows.Err is checked correctly - Disabled  because it reports false positive with defer statements after Query call
   fast: false
 
 output:
@@ -53,14 +58,14 @@ linters-settings:
   errcheck:
     # report about not checking of errors in type assetions: `a := b.(MyStruct)`;
     # default is false: such cases aren't reported by default.
-    check-type-assertions: true
+    check-type-assertions: false
 
     # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`;
     # default is false: such cases aren't reported by default.
     check-blank: false
   govet:
     # report about shadowed variables
-    check-shadowing: true
+    #TODO# check-shadowing: true
 
     # Obtain type information from installed (to $GOPATH/pkg) package files:
     # golangci-lint will execute `go install -i` and `go test -i` for analyzed packages
@@ -86,7 +91,9 @@ linters-settings:
     min-len: 3
     min-occurrences: 3
   misspell:
-    locale: US
+  lll:
+    line-length: 140
+    tab-width: 1
   unused:
     # treat code as a program (not a library) and report unused exported identifiers; default is false.
     # XXX: if you enable this setting, unused will report a lot of false-positives in text editors:
@@ -105,13 +112,13 @@ linters-settings:
     check-exported: false
   nakedret:
     # make an issue if func has more lines of code than this setting and it has naked returns; default is 30
-    max-func-lines: 0
+    max-func-lines: 30
   prealloc:
     # Report preallocation suggestions only on simple loops that have no returns/breaks/continues/gotos in them.
     # True by default.
     simple: true
     range-loops: true # Report preallocation suggestions on range loops, true by default
-    for-loops: true # Report preallocation suggestions on for loops, false by default
+    for-loops: false # Report preallocation suggestions on for loops, false by default
 
 issues:
   max-issues-per-linter: 0

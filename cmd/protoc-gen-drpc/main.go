@@ -59,6 +59,9 @@ func (d *drpc) Generate(file *generator.FileDescriptor) {
 	d.drpcServer = d.drpcPkg + ".Server"
 	d.contextPkg = string(d.AddImport("context"))
 
+	d.P("// --- DRPC BEGIN ---\n")
+	defer d.P("// --- DRPC END ---\n")
+
 	for i, service := range file.FileDescriptorProto.Service {
 		d.generateService(file, service, i)
 	}

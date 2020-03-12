@@ -28,7 +28,10 @@ func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
 
 	srv := drpcserver.New()
 	DRPCRegisterService(srv, server)
-	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
+
+	ctx.Run(func(ctx context.Context) {
+		_ = srv.ServeOne(ctx, c1)
+	})
 	conn := drpcconn.New(c2)
 
 	return NewDRPCServiceClient(conn), func() {

@@ -5,14 +5,17 @@ package drpcconn
 
 import (
 	"context"
+	"encoding/binary"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemonkeygo/monkit/v3"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal"
 )
 
 // Options controls configuration settings for a conn.
@@ -66,6 +69,39 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_invokes")
 
+	msg := make([]byte, 2)
+	header := internal.Invoke{
+		Version: internal.INVOKE_HEADER_VERSION_1,
+		Header:  make(map[string][]byte),
+	}
+
+	traceIDBuf := make([]byte, binary.MaxVarintLen64)
+	parentIDBuf := make([]byte, binary.MaxVarintLen64)
+	spanIDBuf := make([]byte, binary.MaxVarintLen64)
+
+	span := monkit.SpanFromCtx(ctx)
+	if span != nil {
+		binary.PutVarint(traceIDBuf, span.Trace().Id())
+		binary.PutVarint(parentIDBuf, span.Parent().Id())
+		binary.PutVarint(spanIDBuf, span.Id())
+		header.Header[internal.INVOKE_HEADER_TRACEID] = traceIDBuf
+		header.Header[internal.INVOKE_HEADER_PARENTID] = parentIDBuf
+		header.Header["span-id"] = spanIDBuf
+	}
+
+	headerData, err := proto.Marshal(&header)
+	if err != nil {
+		return errs.Wrap(err)
+	}
+
+	if len(headerData) > 255 {
+		return errs.New("header data is too big")
+	}
+
+	msg = append(msg, byte(len(headerData)+1))
+	msg = append(msg, []byte(headerData)...)
+	msg = append(msg, []byte(rpc)...)
+
 	data, err := proto.Marshal(in)
 	if err != nil {
 		return errs.Wrap(err)
@@ -77,7 +113,7 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, []byte(rpc), data, out); err != nil {
+	if err := c.doInvoke(stream, msg, data, out); err != nil {
 		return err
 	}
 	return nil

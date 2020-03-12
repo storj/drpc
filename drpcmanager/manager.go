@@ -4,21 +4,27 @@
 package drpcmanager
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"sync"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/spacemonkeygo/monkit/v3"
 	"github.com/zeebo/errs"
-
 	"storj.io/drpc"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal"
 )
 
 var managerClosed = errs.New("manager closed")
+
+var versionByte = make([]byte, 2)
 
 // Options controls configuration settings for a manager.
 type Options struct {
@@ -185,6 +191,31 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 			// that the stream they were sent for is done.
 			if pkt.Kind != drpcwire.KindInvoke {
 				continue
+			}
+
+			data := pkt.Data[2:]
+			flag := pkt.Data[:2]
+			if bytes.Equal(flag, versionByte) {
+				// parse context data
+				headerBoundary := int(data[0])
+				clientSpan := internal.Invoke{}
+				err = proto.Unmarshal(data[1:headerBoundary], &clientSpan)
+				if err != nil {
+					fmt.Println("got an unmarshal error", err)
+					return nil, "", err
+				}
+
+				traceID, n := binary.Varint(clientSpan.Header[internal.INVOKE_HEADER_TRACEID])
+				if n == 0 {
+					return nil, "", err
+				}
+				spanID, n := binary.Varint(clientSpan.Header["span-id"])
+				if n == 0 {
+					return nil, "", err
+				}
+				f := mon.Func()
+				f.RemoteTrace(&m.ctx, spanID, monkit.NewTrace(traceID))
+				pkt.Data = data[headerBoundary:]
 			}
 
 			stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)

@@ -6,8 +6,9 @@ package integration
 import (
 	context "context"
 	fmt "fmt"
-	proto "github.com/gogo/protobuf/proto"
 	math "math"
+
+	proto "github.com/gogo/protobuf/proto"
 	drpc "storj.io/drpc"
 )
 

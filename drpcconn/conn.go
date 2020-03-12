@@ -10,10 +10,15 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal"
 )
+
+// INVOKE_HEADER_VERSION_1 indicates version 1 of invoke header.
+const INVOKE_HEADER_VERSION_1 = 1
 
 // Options controls configuration settings for a conn.
 type Options struct {
@@ -66,18 +71,29 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_invokes")
 
-	data, err := proto.Marshal(in)
-	if err != nil {
-		return errs.Wrap(err)
-	}
-
 	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, []byte(rpc), data, out); err != nil {
+	invokeMsg := make([]byte, 0)
+	metadata, ok := drpcctx.Metadata(ctx)
+	if ok {
+		invokeMsg, err = c.encodeMetadata(ctx, metadata, invokeMsg)
+		if err != nil {
+			return err
+		}
+	}
+
+	invokeMsg = append(invokeMsg, []byte(rpc)...)
+
+	data, err := proto.Marshal(in)
+	if err != nil {
+		return errs.Wrap(err)
+	}
+
+	if err := c.doInvoke(stream, invokeMsg, data, out); err != nil {
 		return err
 	}
 	return nil
@@ -112,7 +128,18 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 		return nil, err
 	}
 
-	if err := c.doNewStream(stream, []byte(rpc)); err != nil {
+	invokeMsg := make([]byte, 0)
+	metadata, ok := drpcctx.Metadata(ctx)
+	if ok {
+		invokeMsg, err = c.encodeMetadata(ctx, metadata, invokeMsg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	invokeMsg = append(invokeMsg, []byte(rpc)...)
+
+	if err := c.doNewStream(stream, invokeMsg); err != nil {
 		return nil, errs.Combine(err, stream.Close())
 	}
 	return stream, nil
@@ -126,4 +153,28 @@ func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (c *Conn) encodeMetadata(ctx context.Context, metadata map[string]string, buffer []byte) ([]byte, error) {
+	msg := internal.Invoke{
+		Version:  INVOKE_HEADER_VERSION_1,
+		Metadata: metadata,
+	}
+
+	msgBytes, err := proto.Marshal(&msg)
+	if err != nil {
+		return buffer, errs.Wrap(err)
+	}
+
+	if len(msgBytes) > 255 {
+		return buffer, errs.New("metadata is too big, expected: %d, got: %d", 255, len(msgBytes))
+	}
+
+	versionFlag := make([]byte, 2)
+
+	buffer = append(buffer, versionFlag...)
+	buffer = append(buffer, byte(len(msgBytes)))
+	buffer = append(buffer, []byte(msgBytes)...)
+
+	return buffer, nil
 }

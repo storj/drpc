@@ -8,14 +8,15 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
-
 	"storj.io/drpc"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal"
 )
 
 var managerClosed = errs.New("manager closed")
@@ -191,7 +192,21 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 
 			case drpcwire.KindInvoke:
 				if metadata.ID.Stream == pkt.ID.Stream {
-					// TODO: parse and attach metadata from metadata.Data
+					streamCtx := m.ctx
+			// we use the first two bytes as the version flag to indicate whether
+			// there's metadata stored in the invoke message.
+			// If so, we should store the metadata onto the stream context
+			if metadata != nil {
+				msg := internal.Invoke{}
+				pkt.Data, err = m.consumeMetadata(ctx, pkt.Data, &msg)
+				if err != nil {
+					return nil, "", err
+				}
+
+				for key, val := range msg.Metadata {
+					streamCtx = drpcctx.WithMetadata(streamCtx, key, val)
+				}
+			
 					_ = metadata.Data
 				}
 
@@ -205,8 +220,23 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 				// that the stream they were sent for is done.
 				continue
 			}
+}
+
+			stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)
+			go m.manageStream(ctx, stream)
+			return stream, string(pkt.Data), nil
 		}
 	}
+}
+
+func (m *Manager) consumeMetadata(ctx context.Context, data []byte, msg *internal.Invoke) ([]byte, error) {
+	msgLen := int(data[2])
+	err := proto.Unmarshal(data[3:msgLen+3], msg)
+	if err != nil {
+		return data, err
+	}
+
+	return data[msgLen+3:], nil
 }
 
 //

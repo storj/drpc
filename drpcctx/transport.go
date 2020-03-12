@@ -57,3 +57,22 @@ func (t *Tracker) Cancel() { t.cancel() }
 
 // Wait blocks until all callbacks started with Run have exited.
 func (t *Tracker) Wait() { t.wg.Wait() }
+
+type metadataKey struct{}
+
+// WithMetadata associates a key/value pair on the context.
+func WithMetadata(ctx context.Context, key, value string) context.Context {
+	metadata, ok := Metadata(ctx)
+	if !ok {
+		metadata = make(map[string]string)
+		ctx = context.WithValue(ctx, metadataKey{}, metadata)
+	}
+	metadata[key] = value
+	return ctx
+}
+
+// Metadata returns all key/value pairs on the given context.
+func Metadata(ctx context.Context) (map[string]string, bool) {
+	metadata, ok := ctx.Value(metadataKey{}).(map[string]string)
+	return metadata, ok
+}

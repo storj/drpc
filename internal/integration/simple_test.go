@@ -6,38 +6,19 @@ package integration
 import (
 	"context"
 	"io"
-	"net/http"
 	"testing"
 	"time"
 
-	"github.com/spacemonkeygo/monkit/v3"
-	"github.com/spacemonkeygo/monkit/v3/environment"
-	"github.com/spacemonkeygo/monkit/v3/present"
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
-	jaeger "storj.io/monkit-jaeger"
 )
 
-var mon = monkit.Package()
-
 func TestSimple(t *testing.T) {
-	environment.Register(monkit.Default)
-	go http.ListenAndServe("localhost:9000", present.HTTP(monkit.Default))
-	collector, err := jaeger.NewUDPCollector("localhost:5775", 250, "test")
-	if err != nil {
-		panic(err)
-	}
-	jaeger.RegisterJaeger(monkit.Default, collector, jaeger.Options{
-		Fraction: 1})
-	testCtx := context.Background()
-
-	ctx := drpcctx.NewTracker(testCtx)
+	ctx := drpcctx.NewTracker(context.Background())
 	defer ctx.Wait()
 	defer ctx.Cancel()
-
-	defer mon.Task()(&testCtx)(nil)
 
 	cli, close := createConnection(standardImpl)
 	defer close()

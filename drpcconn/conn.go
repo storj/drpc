@@ -5,13 +5,12 @@ package drpcconn
 
 import (
 	"context"
-	"encoding/binary"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemonkeygo/monkit/v3"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
@@ -69,51 +68,29 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_invokes")
 
-	msg := make([]byte, 2)
-	header := internal.Invoke{
-		Version: internal.INVOKE_HEADER_VERSION_1,
-		Header:  make(map[string][]byte),
-	}
-
-	traceIDBuf := make([]byte, binary.MaxVarintLen64)
-	parentIDBuf := make([]byte, binary.MaxVarintLen64)
-	spanIDBuf := make([]byte, binary.MaxVarintLen64)
-
-	span := monkit.SpanFromCtx(ctx)
-	if span != nil {
-		binary.PutVarint(traceIDBuf, span.Trace().Id())
-		binary.PutVarint(parentIDBuf, span.Parent().Id())
-		binary.PutVarint(spanIDBuf, span.Id())
-		header.Header[internal.INVOKE_HEADER_TRACEID] = traceIDBuf
-		header.Header[internal.INVOKE_HEADER_PARENTID] = parentIDBuf
-		header.Header["span-id"] = spanIDBuf
-	}
-
-	headerData, err := proto.Marshal(&header)
-	if err != nil {
-		return errs.Wrap(err)
-	}
-
-	if len(headerData) > 255 {
-		return errs.New("header data is too big")
-	}
-
-	msg = append(msg, byte(len(headerData)+1))
-	msg = append(msg, []byte(headerData)...)
-	msg = append(msg, []byte(rpc)...)
-
-	data, err := proto.Marshal(in)
-	if err != nil {
-		return errs.Wrap(err)
-	}
-
 	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, msg, data, out); err != nil {
+	invokeMsg := make([]byte, 0)
+	metadata, ok := drpcctx.Metadata(ctx)
+	if ok {
+		invokeMsg, err = c.encodeMetadata(ctx, metadata, invokeMsg)
+		if err != nil {
+			return err
+		}
+	}
+
+	invokeMsg = append(invokeMsg, []byte(rpc)...)
+
+	data, err := proto.Marshal(in)
+	if err != nil {
+		return errs.Wrap(err)
+	}
+
+	if err := c.doInvoke(stream, invokeMsg, data, out); err != nil {
 		return err
 	}
 	return nil
@@ -148,7 +125,18 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 		return nil, err
 	}
 
-	if err := c.doNewStream(stream, []byte(rpc)); err != nil {
+	invokeMsg := make([]byte, 0)
+	metadata, ok := drpcctx.Metadata(ctx)
+	if ok {
+		invokeMsg, err = c.encodeMetadata(ctx, metadata, invokeMsg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	invokeMsg = append(invokeMsg, []byte(rpc)...)
+
+	if err := c.doNewStream(stream, invokeMsg); err != nil {
 		return nil, errs.Combine(err, stream.Close())
 	}
 	return stream, nil
@@ -162,4 +150,28 @@ func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (c *Conn) encodeMetadata(ctx context.Context, metadata map[string]string, buffer []byte) ([]byte, error) {
+	msg := internal.Invoke{
+		Version:  internal.INVOKE_HEADER_VERSION_1,
+		Metadata: metadata,
+	}
+
+	msgBytes, err := proto.Marshal(&msg)
+	if err != nil {
+		return buffer, errs.Wrap(err)
+	}
+
+	if len(msgBytes) > 255 {
+		return buffer, errs.New("metadata is too big, expected: %i, got: %i", 255, len(msgBytes))
+	}
+
+	versionFlag := make([]byte, 2)
+
+	buffer = append(buffer, versionFlag...)
+	buffer = append(buffer, byte(len(msgBytes)))
+	buffer = append(buffer, []byte(msgBytes)...)
+
+	return buffer, nil
 }

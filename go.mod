@@ -1,6 +1,6 @@
 module storj.io/drpc
 
-go 1.12
+go 1.14
 
 require (
 	github.com/gogo/protobuf v1.2.1

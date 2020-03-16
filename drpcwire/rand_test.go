@@ -57,11 +57,12 @@ func RandKind() Kind {
 }
 
 var payloadSize = map[Kind]func() int{
-	KindInvoke:    func() int { return rand.Intn(1023) + 1 },
-	KindMessage:   func() int { return rand.Intn(1023) + 1 },
-	KindError:     func() int { return rand.Intn(1023) + 1 },
-	KindClose:     func() int { return 0 },
-	KindCloseSend: func() int { return 0 },
+	KindInvoke:         func() int { return rand.Intn(1023) + 1 },
+	KindMessage:        func() int { return rand.Intn(1023) + 1 },
+	KindError:          func() int { return rand.Intn(1023) + 1 },
+	KindClose:          func() int { return 0 },
+	KindCloseSend:      func() int { return 0 },
+	KindInvokeMetadata: func() int { return rand.Intn(1023) + 1 },
 }
 
 func RandFrame() Frame {

@@ -48,12 +48,13 @@ func TestReader(t *testing.T) {
 		}
 	}
 
-	f := func(kind Kind, id uint64, data string, done bool) Frame {
+	f := func(kind Kind, id uint64, data string, done, control bool) Frame {
 		return Frame{
-			Data: []byte(data),
-			ID:   ID{Stream: 1, Message: id},
-			Kind: kind,
-			Done: done,
+			Data:    []byte(data),
+			ID:      ID{Stream: 1, Message: id},
+			Kind:    kind,
+			Done:    done,
+			Control: control,
 		}
 	}
 
@@ -66,36 +67,36 @@ func TestReader(t *testing.T) {
 
 	megaFrames := make([]Frame, 0, 10*1024)
 	for i := 0; i < 10*1024; i++ {
-		megaFrames = append(megaFrames, f(KindMessage, 1, strings.Repeat("X", 1024), false))
+		megaFrames = append(megaFrames, f(KindMessage, 1, strings.Repeat("X", 1024), false, false))
 	}
-	megaFrames = append(megaFrames, f(KindMessage, 1, "", true))
+	megaFrames = append(megaFrames, f(KindMessage, 1, "", true, false))
 
 	cases := []testCase{
 		m(p(KindMessage, 1, "hello world"),
-			f(KindMessage, 1, "hello", false),
-			f(KindMessage, 1, " ", false),
-			f(KindMessage, 1, "world", true)),
+			f(KindMessage, 1, "hello", false, false),
+			f(KindMessage, 1, " ", false, false),
+			f(KindMessage, 1, "world", true, false)),
 
 		m(p(KindClose, 2, ""),
-			f(KindMessage, 1, "hello", false),
-			f(KindMessage, 1, " ", false),
-			f(KindClose, 2, "", true)),
+			f(KindMessage, 1, "hello", false, false),
+			f(KindMessage, 1, " ", false, false),
+			f(KindClose, 2, "", true, false)),
 
 		{
 			Packets: []Packet{
 				p(KindClose, 2, ""),
 			},
 			Frames: []Frame{
-				f(KindMessage, 1, "1", false),
-				f(KindClose, 2, "", true),
-				f(KindMessage, 1, "1", true),
+				f(KindMessage, 1, "1", false, false),
+				f(KindClose, 2, "", true, false),
+				f(KindMessage, 1, "1", true, false),
 			},
 			Error: "id monotonicity violation",
 		},
 
 		{ // a single frame that's too large
 			Packets: []Packet{},
-			Frames:  []Frame{f(KindMessage, 1, strings.Repeat("X", 2<<20), true)},
+			Frames:  []Frame{f(KindMessage, 1, strings.Repeat("X", 2<<20), true, false)},
 			Error:   "token too long",
 		},
 
@@ -103,6 +104,17 @@ func TestReader(t *testing.T) {
 			Packets: []Packet{},
 			Frames:  megaFrames,
 			Error:   "data overflow",
+		},
+
+		{ // Control bit is ignored
+			Packets: []Packet{
+				p(KindClose, 2, ""),
+			},
+			Frames: []Frame{
+				f(KindMessage, 1, "1", false, false),
+				f(KindClose, 2, "", true, false),
+				f(KindMessage, 1, "1", true, true),
+			},
 		},
 	}
 

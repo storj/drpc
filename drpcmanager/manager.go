@@ -169,6 +169,8 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 		return nil, "", err
 	}
 
+	var metadata drpcwire.Packet
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -180,16 +182,29 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 			return nil, "", m.term.Err()
 
 		case pkt := <-m.queue:
-			// we ignore packets that arent invokes because perhaps older streams have
-			// messages in the queue sent concurrently with our notification to them
-			// that the stream they were sent for is done.
-			if pkt.Kind != drpcwire.KindInvoke {
+			switch pkt.Kind {
+			case drpcwire.KindInvokeMetadata:
+				// keep track of any metadata being sent before an invoke so that we can
+				// include it if the stream id matches the eventual invoke.
+				metadata = pkt
+				continue
+
+			case drpcwire.KindInvoke:
+				if metadata.ID.Stream == pkt.ID.Stream {
+					// TODO: parse and attach metadata from metadata.Data
+					_ = metadata.Data
+				}
+
+				stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)
+				go m.manageStream(ctx, stream)
+				return stream, string(pkt.Data), nil
+
+			default:
+				// we ignore packets that arent invokes because perhaps older streams have
+				// messages in the queue sent concurrently with our notification to them
+				// that the stream they were sent for is done.
 				continue
 			}
-
-			stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)
-			go m.manageStream(ctx, stream)
-			return stream, string(pkt.Data), nil
 		}
 	}
 }

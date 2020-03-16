@@ -147,6 +147,9 @@ const (
 	// KindCloseSend is used to inform that no more messages will be sent.
 	// It has no body.
 	KindCloseSend Kind = 6 // body must be empty
+
+	// KindInvokeMetadata includes metadata about the next Invoke packet.
+	KindInvokeMetadata Kind = 7
 )
 ```
 

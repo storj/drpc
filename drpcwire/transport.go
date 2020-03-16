@@ -125,6 +125,11 @@ func (s *Reader) ReadPacket() (pkt Packet, err error) {
 			return Packet{}, drpc.ProtocolError.Wrap(err)
 		case !ok, len(rem) > 0:
 			return Packet{}, drpc.InternalError.New("problem with scanner")
+		case fr.Control:
+			// Ignore any frames with the control bit set so that we can
+			// use it in the future to mean things to people who understand
+			// it.
+			continue
 		case fr.ID.Less(s.id):
 			return Packet{}, drpc.ProtocolError.New("id monotonicity violation")
 		case s.id.Less(fr.ID):

@@ -15,11 +15,12 @@ func _() {
 	_ = x[KindError-3]
 	_ = x[KindClose-5]
 	_ = x[KindCloseSend-6]
+	_ = x[KindInvokeMetadata-7]
 }
 
-const _Kind_name = "kindReservedKindInvokeKindMessageKindErrorkindCancelDeprecatedKindCloseKindCloseSend"
+const _Kind_name = "kindReservedKindInvokeKindMessageKindErrorkindCancelDeprecatedKindCloseKindCloseSendKindInvokeMetadata"
 
-var _Kind_index = [...]uint8{0, 12, 22, 33, 42, 62, 71, 84}
+var _Kind_index = [...]uint8{0, 12, 22, 33, 42, 62, 71, 84, 102}
 
 func (i Kind) String() string {
 	if i >= Kind(len(_Kind_index)-1) {

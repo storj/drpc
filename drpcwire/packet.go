@@ -33,6 +33,9 @@ const (
 	// KindCloseSend is used to inform that no more messages will be sent.
 	// It has no body.
 	KindCloseSend Kind = 6 // body must be empty
+
+	// KindInvokeMetadata includes metadata about the next Invoke packet.
+	KindInvokeMetadata Kind = 7
 )
 
 //
@@ -75,6 +78,9 @@ type Frame struct {
 
 	// Done is true if this is the last frame for the ID.
 	Done bool
+
+	// Control is true if the frame has the control bit set.
+	Control bool
 }
 
 // ParseFrame attempts to parse a frame at the beginning of buf. If successful
@@ -90,8 +96,9 @@ func ParseFrame(buf []byte) (rem []byte, fr Frame, ok bool, err error) {
 	}
 
 	rem, control = buf[1:], buf[0]
-	fr.Done = control&1 > 0
-	fr.Kind = Kind(control >> 1)
+	fr.Done = (control & 0b00000001) > 0
+	fr.Control = (control & 0b10000000) > 0
+	fr.Kind = Kind((control & 0b01111110) >> 1)
 	rem, fr.ID.Stream, ok, err = ReadVarint(rem)
 	if !ok || err != nil {
 		goto bad
@@ -115,7 +122,10 @@ bad:
 func AppendFrame(buf []byte, fr Frame) []byte {
 	control := byte(fr.Kind << 1)
 	if fr.Done {
-		control |= 1
+		control |= 0b00000001
+	}
+	if fr.Control {
+		control |= 0b10000000
 	}
 
 	out := buf

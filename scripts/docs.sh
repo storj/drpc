@@ -28,7 +28,7 @@ GODOCDOWN=$(
 
 	IMPORT=github.com/robertkrimen/godocdown/godocdown
 	go install -v "${IMPORT}"
-	echo $(go list -f '{{ .Target }}' "${IMPORT}")
+	go list -f '{{ .Target }}' "${IMPORT}"
 )
 
 # walk all the packages and generate docs

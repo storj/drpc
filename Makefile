@@ -1,11 +1,11 @@
 .DEFAULT_GOAL = check
 
 .PHONY: check
-check: build test lint
+check: generate build lint test docs
 
 .PHONY: build
 build:
-	./scripts/build.sh
+	./scripts/run.sh go build ./...
 
 .PHONY: docs
 docs:
@@ -13,16 +13,21 @@ docs:
 
 .PHONY: download
 download:
-	./scripts/download.sh
+	./scripts/run.sh go mod download
+
+.PHONY: generate
+generate:
+	./scripts/run.sh go generate ./...
 
 .PHONY: lint
 lint:
-	./scripts/lint.sh
+	./scripts/run.sh staticcheck ./...
+	./scripts/run.sh golangci-lint -j=2 run
 
 .PHONY: tidy
 tidy:
-	./scripts/tidy.sh
+	./scripts/run.sh go mod tidy
 
 .PHONY: test
 test:
-	./scripts/test.sh
+	./scripts/run.sh go test ./... -count=1

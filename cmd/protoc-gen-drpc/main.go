@@ -21,13 +21,13 @@ func main() {
 type drpc struct {
 	*generator.Generator
 
-	contextPkg  string
-	drpcPkg     string
-	drpcConn    string
-	drpcStream  string
-	drpcHandler string
-	drpcMessage string
-	drpcServer  string
+	contextPkg   string
+	drpcPkg      string
+	drpcConn     string
+	drpcStream   string
+	drpcReceiver string
+	drpcMessage  string
+	drpcServer   string
 }
 
 //
@@ -54,7 +54,7 @@ func (d *drpc) Generate(file *generator.FileDescriptor) {
 	d.drpcPkg = string(d.AddImport("storj.io/drpc"))
 	d.drpcConn = d.drpcPkg + ".Conn"
 	d.drpcStream = d.drpcPkg + ".Stream"
-	d.drpcHandler = d.drpcPkg + ".Handler"
+	d.drpcReceiver = d.drpcPkg + ".Receiver"
 	d.drpcMessage = d.drpcPkg + ".Message"
 	d.drpcServer = d.drpcPkg + ".Server"
 	d.contextPkg = string(d.AddImport("context"))
@@ -138,13 +138,13 @@ func (d *drpc) generateService(file *generator.FileDescriptor, service *pb.Servi
 	d.P()
 	d.P("func (", servName, "Description) NumMethods() int { return ", len(service.Method), " }")
 	d.P()
-	d.P("func (", servName, "Description) Method(n int) (string, ", d.drpcHandler, ", interface{}, bool) {")
+	d.P("func (", servName, "Description) Method(n int) (string, ", d.drpcReceiver, ", interface{}, bool) {")
 	d.P("switch n {")
 	for i, method := range service.Method {
 		methName := generator.CamelCase(method.GetName())
 		d.P("case ", i, ":")
 		d.P("return ", strconv.Quote("/"+fullServName+"/"+method.GetName()), ",")
-		d.generateServerHandler(servName, method)
+		d.generateServerReceiver(servName, method)
 		d.P("}, ", servName, "Server.", methName, ", true")
 	}
 	d.P("default:")
@@ -282,7 +282,7 @@ func (d *drpc) generateServerSignature(servName string, method *pb.MethodDescrip
 	return methName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
 }
 
-func (d *drpc) generateServerHandler(servName string, method *pb.MethodDescriptorProto) {
+func (d *drpc) generateServerReceiver(servName string, method *pb.MethodDescriptorProto) {
 	methName := generator.CamelCase(method.GetName())
 	streamType := unexport(servName) + methName + "Stream"
 

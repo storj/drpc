@@ -55,10 +55,10 @@ var (
 )
 
 type rpcData struct {
-	srv     interface{}
-	handler drpc.Handler
-	in1     reflect.Type
-	in2     reflect.Type
+	srv      interface{}
+	receiver drpc.Receiver
+	in1      reflect.Type
+	in2      reflect.Type
 }
 
 // Register associates the rpcs described by the description in the server. It will
@@ -66,20 +66,20 @@ type rpcData struct {
 func (s *Server) Register(srv interface{}, desc drpc.Description) {
 	n := desc.NumMethods()
 	for i := 0; i < n; i++ {
-		rpc, handler, method, ok := desc.Method(i)
+		rpc, receiver, method, ok := desc.Method(i)
 		if !ok {
 			panicf("description returned not ok for method %d", i)
 		}
-		s.registerOne(srv, rpc, handler, method)
+		s.registerOne(srv, rpc, receiver, method)
 	}
 }
 
 // registerOne does the work to register a single rpc.
-func (s *Server) registerOne(srv interface{}, rpc string, handler drpc.Handler, method interface{}) {
+func (s *Server) registerOne(srv interface{}, rpc string, receiver drpc.Receiver, method interface{}) {
 	if _, ok := s.rpcs[rpc]; ok {
 		panicf("rpc already registered for %q", rpc)
 	}
-	data := rpcData{srv: srv, handler: handler}
+	data := rpcData{srv: srv, receiver: receiver}
 
 	switch mt := reflect.TypeOf(method); {
 	// unitary input, unitary output
@@ -196,7 +196,7 @@ func (s *Server) doHandle(stream *drpcstream.Stream, rpc string) error {
 		in = msg
 	}
 
-	out, err := data.handler(data.srv, stream.Context(), in, stream)
+	out, err := data.receiver(data.srv, stream.Context(), in, stream)
 	switch {
 	case err != nil:
 		return errs.Wrap(err)

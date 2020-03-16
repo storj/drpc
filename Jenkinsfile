@@ -10,17 +10,17 @@ pipeline {
         stage('Download') {
             steps {
                 checkout scm
-                sh './scripts/download.sh'
+                sh 'make download'
             }
         }
         stage('Test') {
             steps {
-                sh './scripts/test.sh'
+                sh 'make test'
             }
         }
         stage('Lint') {
             steps {
-                sh './scripts/lint.sh'
+                sh 'make lint'
             }
         }
     }

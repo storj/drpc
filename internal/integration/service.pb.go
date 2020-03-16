@@ -119,6 +119,8 @@ var fileDescriptor_a0b84a42fa06f626 = []byte{
 	0xe7, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xfd, 0xcc, 0xd1, 0x37, 0x0a, 0x01, 0x00, 0x00,
 }
 
+// --- DRPC BEGIN ---
+
 type DRPCServiceClient interface {
 	DRPCConn() drpc.Conn
 
@@ -255,7 +257,7 @@ type DRPCServiceDescription struct{}
 
 func (DRPCServiceDescription) NumMethods() int { return 4 }
 
-func (DRPCServiceDescription) Method(n int) (string, drpc.Handler, interface{}, bool) {
+func (DRPCServiceDescription) Method(n int) (string, drpc.Receiver, interface{}, bool) {
 	switch n {
 	case 0:
 		return "/service.Service/Method1",
@@ -375,3 +377,5 @@ func (x *drpcServiceMethod4Stream) Recv() (*In, error) {
 	}
 	return m, nil
 }
+
+// --- DRPC END ---

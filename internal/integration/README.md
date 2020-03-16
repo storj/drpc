@@ -42,7 +42,7 @@ type DRPCServiceDescription struct{}
 #### func (DRPCServiceDescription) Method
 
 ```go
-func (DRPCServiceDescription) Method(n int) (string, drpc.Handler, interface{}, bool)
+func (DRPCServiceDescription) Method(n int) (string, drpc.Receiver, interface{}, bool)
 ```
 
 #### func (DRPCServiceDescription) NumMethods

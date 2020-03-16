@@ -47,20 +47,12 @@ type Description interface {
 	// Method returns the information about the nth method along with a handler
 	// to invoke it. The method interface that it returns is expected to be
 	// a method expression like `(*Type).HandlerName`.
-	Method(n int) (rpc string, handler Handler, method interface{}, ok bool)
+	Method(n int) (rpc string, receiver Receiver, method interface{}, ok bool)
 }
 ```
 
 Description is the interface implemented by things that can be registered by a
 Server.
-
-#### type Handler
-
-```go
-type Handler = func(srv interface{}, ctx context.Context, in1, in2 interface{}) (out Message, err error)
-```
-
-Handler is invoked by a server for a given rpc.
 
 #### type Message
 
@@ -74,6 +66,14 @@ type Message interface {
 
 Message is a protobuf message, just here so protobuf isn't necessary to import
 or be exposed in the types.
+
+#### type Receiver
+
+```go
+type Receiver = func(srv interface{}, ctx context.Context, in1, in2 interface{}) (out Message, err error)
+```
+
+Receiver is invoked by a server for a given rpc.
 
 #### type Server
 

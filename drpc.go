@@ -70,8 +70,8 @@ type Stream interface {
 	Close() error
 }
 
-// Handler is invoked by a server for a given rpc.
-type Handler = func(srv interface{}, ctx context.Context, in1, in2 interface{}) (out Message, err error)
+// Receiver is invoked by a server for a given rpc.
+type Receiver = func(srv interface{}, ctx context.Context, in1, in2 interface{}) (out Message, err error)
 
 // Description is the interface implemented by things that can be registered by
 // a Server.
@@ -82,7 +82,7 @@ type Description interface {
 	// Method returns the information about the nth method along with a handler
 	// to invoke it. The method interface that it returns is expected to be
 	// a method expression like `(*Type).HandlerName`.
-	Method(n int) (rpc string, handler Handler, method interface{}, ok bool)
+	Method(n int) (rpc string, receiver Receiver, method interface{}, ok bool)
 }
 
 // Server is a drpc server for handling rpcs.

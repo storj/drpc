@@ -29,32 +29,17 @@ Server is an implementation of drpc.Server to serve drpc connections.
 #### func  New
 
 ```go
-func New() *Server
+func New(handler drpc.Handler) *Server
 ```
 New constructs a new Server.
 
 #### func  NewWithOptions
 
 ```go
-func NewWithOptions(opts Options) *Server
+func NewWithOptions(handler drpc.Handler, opts Options) *Server
 ```
 NewWithOptions constructs a new Server using the provided options to tune how
 the drpc connections are handled.
-
-#### func (*Server) HandleRPC
-
-```go
-func (s *Server) HandleRPC(stream *drpcstream.Stream, rpc string) (err error)
-```
-HandleRPC handles the rpc that has been requested by the stream.
-
-#### func (*Server) Register
-
-```go
-func (s *Server) Register(srv interface{}, desc drpc.Description)
-```
-Register associates the rpcs described by the description in the server. It will
-panic if there are problems with the registration.
 
 #### func (*Server) Serve
 

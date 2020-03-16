@@ -198,7 +198,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 // manage transport
 //
 
-// manageTransport ensures that if the manager's done signal is ever set, then
+// manageTransport ensures that if the manager's term signal is ever set, then
 // the underlying transport is closed and the error is recorded.
 func (m *Manager) manageTransport() {
 	defer mon.Task()(nil)(nil)
@@ -211,8 +211,8 @@ func (m *Manager) manageTransport() {
 //
 
 // manageReader is always reading a packet and sending it into the queue of packets
-// the manager has. It sets the rdSig signal when it exits so that one can wait to
-// ensure that no one is reading on the reader. It sets the done signal if there is
+// the manager has. It sets the read signal when it exits so that one can wait to
+// ensure that no one is reading on the reader. It sets the term signal if there is
 // any error reading packets.
 func (m *Manager) manageReader() {
 	defer mon.Task()(nil)(nil)
@@ -265,7 +265,7 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 
 // manageStreamPackets repeatedly reads from the queue of packets and asks the stream to
 // handle them. If there is an error handling a packet, that is considered to
-// be fatal to the manager, so we set done. HandlePacket also returns a bool to
+// be fatal to the manager, so we set term. HandlePacket also returns a bool to
 // indicate that the stream requires no more packets, and so manageStream can
 // just exit. It releases the semaphore whenever it exits.
 func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Stream) {

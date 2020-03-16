@@ -6,7 +6,6 @@ package drpc
 import (
 	"context"
 	"io"
-	"net"
 
 	"github.com/zeebo/errs"
 )
@@ -85,11 +84,12 @@ type Description interface {
 	Method(n int) (rpc string, receiver Receiver, method interface{}, ok bool)
 }
 
-// Server is a drpc server for handling rpcs.
-type Server interface {
-	// Server listens on the listener for drpc connections and handles them.
-	Serve(ctx context.Context, lis net.Listener) error
+// Mux is a type that can have an implementation and a Description registered with it.
+type Mux interface {
+	Register(srv interface{}, desc Description) error
+}
 
-	// Register registers a collection of rpcs to host.
-	Register(srv interface{}, desc Description)
+// Handler handles streams and rpcs dispatched to it by a Server.
+type Handler interface {
+	HandleRPC(stream Stream, rpc string) (err error)
 }

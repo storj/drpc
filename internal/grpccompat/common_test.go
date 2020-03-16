@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/status"
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 )
 
@@ -177,8 +178,9 @@ func createDRPCConnection(server DRPCServiceServer) (DRPCServiceClient, func()) 
 	ctx := drpcctx.NewTracker(context.Background())
 	c1, c2 := net.Pipe()
 
-	srv := drpcserver.New()
-	DRPCRegisterService(srv, server)
+	mux := drpcmux.New()
+	_ = DRPCRegisterService(mux, server)
+	srv := drpcserver.New(mux)
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
 	conn := drpcconn.New(c2)
 

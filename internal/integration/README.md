@@ -9,7 +9,7 @@ Package integration holds integration tests for drpc.
 #### func  DRPCRegisterService
 
 ```go
-func DRPCRegisterService(srv drpc.Server, impl DRPCServiceServer)
+func DRPCRegisterService(mux drpc.Mux, impl DRPCServiceServer) error
 ```
 
 #### type DRPCServiceClient

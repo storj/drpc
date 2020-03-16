@@ -27,7 +27,7 @@ type drpc struct {
 	drpcStream   string
 	drpcReceiver string
 	drpcMessage  string
-	drpcServer   string
+	drpcMux      string
 }
 
 //
@@ -56,7 +56,7 @@ func (d *drpc) Generate(file *generator.FileDescriptor) {
 	d.drpcStream = d.drpcPkg + ".Stream"
 	d.drpcReceiver = d.drpcPkg + ".Receiver"
 	d.drpcMessage = d.drpcPkg + ".Message"
-	d.drpcServer = d.drpcPkg + ".Server"
+	d.drpcMux = d.drpcPkg + ".Mux"
 	d.contextPkg = string(d.AddImport("context"))
 
 	d.P("// --- DRPC BEGIN ---\n")
@@ -153,9 +153,9 @@ func (d *drpc) generateService(file *generator.FileDescriptor, service *pb.Servi
 	d.P("}")
 	d.P()
 
-	// Server registration helper
-	d.P("func DRPCRegister", cleanServName, "(srv ", d.drpcServer, ", impl ", servName, "Server) {")
-	d.P("srv.Register(impl, ", servName, "Description{})")
+	// Mux registration helper
+	d.P("func DRPCRegister", cleanServName, "(mux ", d.drpcMux, ", impl ", servName, "Server) error {")
+	d.P("return mux.Register(impl, ", servName, "Description{})")
 	d.P("}")
 
 	// Server methods

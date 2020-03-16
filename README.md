@@ -54,6 +54,16 @@ type Description interface {
 Description is the interface implemented by things that can be registered by a
 Server.
 
+#### type Handler
+
+```go
+type Handler interface {
+	HandleRPC(stream Stream, rpc string) (err error)
+}
+```
+
+Handler handles streams and rpcs dispatched to it by a Server.
+
 #### type Message
 
 ```go
@@ -67,6 +77,17 @@ type Message interface {
 Message is a protobuf message, just here so protobuf isn't necessary to import
 or be exposed in the types.
 
+#### type Mux
+
+```go
+type Mux interface {
+	Register(srv interface{}, desc Description) error
+}
+```
+
+Mux is a type that can have an implementation and a Description registered with
+it.
+
 #### type Receiver
 
 ```go
@@ -74,20 +95,6 @@ type Receiver = func(srv interface{}, ctx context.Context, in1, in2 interface{})
 ```
 
 Receiver is invoked by a server for a given rpc.
-
-#### type Server
-
-```go
-type Server interface {
-	// Server listens on the listener for drpc connections and handles them.
-	Serve(ctx context.Context, lis net.Listener) error
-
-	// Register registers a collection of rpcs to host.
-	Register(srv interface{}, desc Description)
-}
-```
-
-Server is a drpc server for handling rpcs.
 
 #### type Stream
 

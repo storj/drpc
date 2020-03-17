@@ -171,6 +171,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	}
 
 	var metadata drpcwire.Packet
+	streamCtx := m.ctx
 
 	for {
 		select {
@@ -192,51 +193,30 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 
 			case drpcwire.KindInvoke:
 				if metadata.ID.Stream == pkt.ID.Stream {
-					streamCtx := m.ctx
-			// we use the first two bytes as the version flag to indicate whether
-			// there's metadata stored in the invoke message.
-			// If so, we should store the metadata onto the stream context
-			if metadata != nil {
-				msg := internal.Invoke{}
-				pkt.Data, err = m.consumeMetadata(ctx, pkt.Data, &msg)
-				if err != nil {
-					return nil, "", err
+					// we use the first two bytes as the version flag to indicate whether
+					// there's metadata stored in the invoke message.
+					// If so, we should store the metadata onto the stream context
+					msg := internal.Invoke{}
+					err := proto.Unmarshal(metadata.Data, &msg)
+					if err != nil {
+						return nil, "", err
+					}
+					for key, val := range msg.Metadata {
+						streamCtx = drpcctx.WithMetadata(streamCtx, key, val)
+					}
 				}
 
-				for key, val := range msg.Metadata {
-					streamCtx = drpcctx.WithMetadata(streamCtx, key, val)
-				}
-			
-					_ = metadata.Data
-				}
-
-				stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)
+				stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)
 				go m.manageStream(ctx, stream)
 				return stream, string(pkt.Data), nil
-
 			default:
 				// we ignore packets that arent invokes because perhaps older streams have
 				// messages in the queue sent concurrently with our notification to them
 				// that the stream they were sent for is done.
 				continue
 			}
-}
-
-			stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)
-			go m.manageStream(ctx, stream)
-			return stream, string(pkt.Data), nil
 		}
 	}
-}
-
-func (m *Manager) consumeMetadata(ctx context.Context, data []byte, msg *internal.Invoke) ([]byte, error) {
-	msgLen := int(data[2])
-	err := proto.Unmarshal(data[3:msgLen+3], msg)
-	if err != nil {
-		return data, err
-	}
-
-	return data[msgLen+3:], nil
 }
 
 //

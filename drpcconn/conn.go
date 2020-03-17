@@ -84,16 +84,17 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 		if err != nil {
 			return err
 		}
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, invokeMsg); err != nil {
+			return err
+		}
 	}
-
-	invokeMsg = append(invokeMsg, []byte(rpc)...)
 
 	data, err := proto.Marshal(in)
 	if err != nil {
 		return errs.Wrap(err)
 	}
 
-	if err := c.doInvoke(stream, invokeMsg, data, out); err != nil {
+	if err := c.doInvoke(stream, []byte(rpc), data, out); err != nil {
 		return err
 	}
 	return nil
@@ -135,11 +136,12 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 		if err != nil {
 			return nil, err
 		}
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, invokeMsg); err != nil {
+			return nil, err
+		}
 	}
 
-	invokeMsg = append(invokeMsg, []byte(rpc)...)
-
-	if err := c.doNewStream(stream, invokeMsg); err != nil {
+	if err := c.doNewStream(stream, []byte(rpc)); err != nil {
 		return nil, errs.Combine(err, stream.Close())
 	}
 	return stream, nil
@@ -166,15 +168,7 @@ func (c *Conn) encodeMetadata(ctx context.Context, metadata map[string]string, b
 		return buffer, errs.Wrap(err)
 	}
 
-	if len(msgBytes) > 255 {
-		return buffer, errs.New("metadata is too big, expected: %d, got: %d", 255, len(msgBytes))
-	}
-
-	versionFlag := make([]byte, 2)
-
-	buffer = append(buffer, versionFlag...)
-	buffer = append(buffer, byte(len(msgBytes)))
-	buffer = append(buffer, []byte(msgBytes)...)
+	buffer = append(buffer, msgBytes...)
 
 	return buffer, nil
 }

@@ -7,8 +7,12 @@ import (
 	"context"
 	"io"
 	"net"
+	"strconv"
 
+	"github.com/spacemonkeygo/monkit/v3"
 	"github.com/zeebo/errs"
+
+	drpc "storj.io/drpc"
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
@@ -28,8 +32,11 @@ func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
 	c1, c2 := net.Pipe()
 
 	mux := drpcmux.New()
+	traceHandler := handler{
+		mu: mux,
+	}
 	_ = DRPCRegisterService(mux, server)
-	srv := drpcserver.New(mux)
+	srv := drpcserver.New(&traceHandler)
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
 	conn := drpcconn.New(c2)
 
@@ -38,6 +45,39 @@ func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
 		ctx.Cancel()
 		ctx.Wait()
 	}
+}
+
+type streamWrapper struct {
+	drpc.Stream
+	ctx context.Context
+}
+
+func (s *streamWrapper) Context() context.Context { return s.ctx }
+
+type handler struct {
+	mu *drpcmux.Mux
+}
+
+func (handler *handler) HandleRPC(stream drpc.Stream, rpc string) (err error) {
+	streamCtx := stream.Context()
+	metadata, ok := drpcctx.Metadata(streamCtx)
+	if ok {
+		parentID, err := strconv.ParseInt(metadata[INVOKE_HEADER_PARENTID], 10, 64)
+		if err != nil {
+			return errs.New("parse error")
+		}
+
+		traceID, err := strconv.ParseInt(metadata[INVOKE_HEADER_TRACEID], 10, 64)
+		if err != nil {
+			return errs.New("parse error")
+		}
+		newTrace := monkit.NewTrace(traceID)
+		newTrace.Set(2, parentID)
+		f := mon.Func()
+		defer f.RemoteTrace(&streamCtx, monkit.NewId(), newTrace)(&err)
+	}
+
+	return handler.mu.HandleRPC(&streamWrapper{Stream: stream, ctx: streamCtx}, rpc)
 }
 
 //
@@ -73,6 +113,7 @@ func (i impl) Method4(stream DRPCService_Method4Stream) error {
 
 var standardImpl = impl{
 	Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
+		defer mon.Task()(&ctx)(nil)
 		if in.In != 1 {
 			return nil, drpcerr.WithCode(errs.New("test"), uint64(in.In))
 		}

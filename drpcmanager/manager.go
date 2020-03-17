@@ -219,6 +219,16 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	}
 }
 
+func (m *Manager) consumeMetadata(ctx context.Context, data []byte, msg *internal.Invoke) ([]byte, error) {
+	msgLen := int(data[2])
+	err := proto.Unmarshal(data[3:msgLen+3], msg)
+	if err != nil {
+		return data, err
+	}
+
+	return data[msgLen+3:], nil
+}
+
 //
 // manage transport
 //

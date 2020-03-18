@@ -10,11 +10,10 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
-	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcmanager"
+	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
-	"storj.io/drpc/internal"
 )
 
 // INVOKE_HEADER_VERSION_1 indicates version 1 of invoke header.
@@ -77,14 +76,14 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	invokeMsg := make([]byte, 0)
-	metadata, ok := drpcctx.Metadata(ctx)
+	invokeMetadata := make([]byte, 0)
+	metadata, ok := drpcmetadata.Get(ctx)
 	if ok {
-		invokeMsg, err = c.encodeMetadata(ctx, metadata, invokeMsg)
+		invokeMetadata, err = metadata.Encode(invokeMetadata)
 		if err != nil {
 			return err
 		}
-		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, invokeMsg); err != nil {
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, invokeMetadata); err != nil {
 			return err
 		}
 	}
@@ -130,9 +129,9 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 	}
 
 	invokeMsg := make([]byte, 0)
-	metadata, ok := drpcctx.Metadata(ctx)
+	metadata, ok := drpcmetadata.Get(ctx)
 	if ok {
-		invokeMsg, err = c.encodeMetadata(ctx, metadata, invokeMsg)
+		invokeMsg, err = metadata.Encode(invokeMsg)
 		if err != nil {
 			return nil, err
 		}
@@ -155,20 +154,4 @@ func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte) error {
 		return err
 	}
 	return nil
-}
-
-func (c *Conn) encodeMetadata(ctx context.Context, metadata map[string]string, buffer []byte) ([]byte, error) {
-	msg := internal.Invoke{
-		Version:  INVOKE_HEADER_VERSION_1,
-		Metadata: metadata,
-	}
-
-	msgBytes, err := proto.Marshal(&msg)
-	if err != nil {
-		return buffer, errs.Wrap(err)
-	}
-
-	buffer = append(buffer, msgBytes...)
-
-	return buffer, nil
 }

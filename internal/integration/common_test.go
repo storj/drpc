@@ -16,6 +16,7 @@ import (
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
+	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 	"storj.io/drpc/drpcsignal"
@@ -60,7 +61,7 @@ type handler struct {
 
 func (handler *handler) HandleRPC(stream drpc.Stream, rpc string) (err error) {
 	streamCtx := stream.Context()
-	metadata, ok := drpcctx.Metadata(streamCtx)
+	metadata, ok := drpcmetadata.Get(streamCtx)
 	if ok {
 		parentID, err := strconv.ParseInt(metadata[INVOKE_HEADER_PARENTID], 10, 64)
 		if err != nil {

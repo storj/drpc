@@ -33,6 +33,7 @@ golang.org/x/tools v0.0.0-20180221164845-07fd8470d635/go.mod h1:n7NCudcB/nEzxVGm
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/spacemonkeygo/monkit-zipkin.v2 v2.0.0-20190419051645-ef9e56ba1633 h1:Z8UpEZC24VCgbDEi8Urgi0vgqWkstn6q8/h8GMJ8BgI=
 gopkg.in/spacemonkeygo/monkit-zipkin.v2 v2.0.0-20190419051645-ef9e56ba1633/go.mod h1:pEbh8z/a1Jj9ZHhVsVhLfCZJKE/DVv3twibVY47FWPs=
+gopkg.in/spacemonkeygo/monkit.v2 v2.0.0-20180827161543-6ebf5a752f9b h1:zkhw+LuPvld5/ZwIlpYzd4DX/r0KxTvhEpo+2lcrp9k=
 gopkg.in/spacemonkeygo/monkit.v2 v2.0.0-20180827161543-6ebf5a752f9b/go.mod h1:6UQdi0rNB4YDNwVYP8fJNmjLNaU8MA84WCdXStx3Spo=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 storj.io/monkit-jaeger v0.0.0-20200305222653-48145d285891 h1:8kEmGLyH6HtU+f/Kt9sDLZ9kY1UK1i29YhFI+qr8/NI=

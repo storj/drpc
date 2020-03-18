@@ -8,15 +8,15 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
 	"storj.io/drpc"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
+
+	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
-	"storj.io/drpc/internal"
 )
 
 var managerClosed = errs.New("manager closed")
@@ -196,14 +196,11 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 					// we use the first two bytes as the version flag to indicate whether
 					// there's metadata stored in the invoke message.
 					// If so, we should store the metadata onto the stream context
-					msg := internal.Invoke{}
-					err := proto.Unmarshal(metadata.Data, &msg)
+					msg, err := drpcmetadata.Decode(metadata.Data)
 					if err != nil {
 						return nil, "", err
 					}
-					for key, val := range msg.Metadata {
-						streamCtx = drpcctx.WithMetadata(streamCtx, key, val)
-					}
+					streamCtx = drpcmetadata.New(msg.GetData()).AddPairs(streamCtx)
 				}
 
 				stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)
@@ -217,16 +214,6 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 			}
 		}
 	}
-}
-
-func (m *Manager) consumeMetadata(ctx context.Context, data []byte, msg *internal.Invoke) ([]byte, error) {
-	msgLen := int(data[2])
-	err := proto.Unmarshal(data[3:msgLen+3], msg)
-	if err != nil {
-		return data, err
-	}
-
-	return data[msgLen+3:], nil
 }
 
 //

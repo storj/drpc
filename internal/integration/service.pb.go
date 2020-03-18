@@ -7,10 +7,18 @@ import (
 	context "context"
 	fmt "fmt"
 	math "math"
+	"strconv"
 
 	proto "github.com/gogo/protobuf/proto"
+	"github.com/spacemonkeygo/monkit/v3"
+
 	drpc "storj.io/drpc"
+	"storj.io/drpc/drpcmetadata"
 )
+
+const INVOKE_HEADER_TRACEID = "trace-id"
+
+const INVOKE_HEADER_PARENTID = "parent-id"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -142,6 +150,14 @@ func NewDRPCServiceClient(cc drpc.Conn) DRPCServiceClient {
 func (c *drpcServiceClient) DRPCConn() drpc.Conn { return c.cc }
 
 func (c *drpcServiceClient) Method1(ctx context.Context, in *In) (*Out, error) {
+	defer mon.Task()(&ctx)(nil)
+	span := monkit.SpanFromCtx(ctx)
+	data := map[string]string{
+		INVOKE_HEADER_TRACEID:  strconv.FormatInt(span.Trace().Id(), 10),
+		INVOKE_HEADER_PARENTID: strconv.FormatInt(span.Id(), 10),
+	}
+	metadata := drpcmetadata.New(data)
+	ctx = metadata.AddPairs(ctx)
 	out := new(Out)
 	err := c.cc.Invoke(ctx, "/service.Service/Method1", in, out)
 	if err != nil {

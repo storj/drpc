@@ -7,7 +7,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"strconv"
 	"testing"
 	"time"
 
@@ -22,10 +21,6 @@ import (
 
 var mon = monkit.Package()
 
-const INVOKE_HEADER_TRACEID = "trace-id"
-
-const INVOKE_HEADER_PARENTID = "parent-id"
-
 func TestSimple(t *testing.T) {
 	go http.ListenAndServe("localhost:9000", present.HTTP(monkit.Default))
 	collector, err := jaeger.NewUDPCollector("localhost:5775", 250, "test")
@@ -35,8 +30,7 @@ func TestSimple(t *testing.T) {
 	jaeger.RegisterJaeger(monkit.Default, collector, jaeger.Options{
 		Fraction: 1})
 
-	trackerCtx := context.Background()
-	tracker := drpcctx.NewTracker(trackerCtx)
+	tracker := drpcctx.NewTracker(context.Background())
 	defer mon.Task()(&tracker.Context)(nil)
 	defer tracker.Wait()
 	defer tracker.Cancel()
@@ -45,13 +39,9 @@ func TestSimple(t *testing.T) {
 	defer close()
 
 	{
-		span := monkit.SpanFromCtx(tracker.Context)
-		tracker.Context = drpcctx.WithMetadata(tracker.Context, INVOKE_HEADER_TRACEID, strconv.FormatInt(span.Trace().Id(), 10))
-		tracker.Context = drpcctx.WithMetadata(tracker.Context, INVOKE_HEADER_PARENTID, strconv.FormatInt(span.Id(), 10))
 		out, err := cli.Method1(tracker, &In{In: 1})
 		assert.NoError(t, err)
 		assert.DeepEqual(t, out, &Out{Out: 1})
-		time.Sleep(5 * time.Second)
 	}
 
 	{
@@ -100,4 +90,7 @@ func TestSimple(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, drpcerr.Code(err), 5)
 	}
+
+	time.Sleep(5 * time.Second)
+
 }

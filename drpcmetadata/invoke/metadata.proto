@@ -6,6 +6,6 @@ option go_package = "invoke";
 
 package metadata;
 
-message InvokeMetadata {
-    map<string, string> data = 2;
+message Metadata {
+    map<string, string> data = 1;
 }

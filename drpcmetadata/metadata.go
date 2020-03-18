@@ -22,7 +22,7 @@ func AddPairs(ctx context.Context, md map[string]string) context.Context {
 
 // Encode generates byte form of the metadata and appends it onto the passed in buffer.
 func Encode(buffer []byte, md map[string]string) ([]byte, error) {
-	msg := invoke.InvokeMetadata{
+	msg := invoke.Metadata{
 		Data: md,
 	}
 
@@ -37,8 +37,8 @@ func Encode(buffer []byte, md map[string]string) ([]byte, error) {
 }
 
 // Decode translate byte form of metadata into metadata struct defined by protobuf.
-func Decode(data []byte) (*invoke.InvokeMetadata, error) {
-	msg := invoke.InvokeMetadata{}
+func Decode(data []byte) (*invoke.Metadata, error) {
+	msg := invoke.Metadata{}
 	err := proto.Unmarshal(data, &msg)
 	if err != nil {
 		return nil, err

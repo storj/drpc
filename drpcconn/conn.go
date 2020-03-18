@@ -122,8 +122,7 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 	mon.Event("outgoing_streams")
 
 	var metadata []byte
-	md, ok := drpcmetadata.Get(ctx)
-	if ok {
+	if md, ok := drpcmetadata.Get(ctx); ok {
 		metadata, err = drpcmetadata.Encode(metadata, md)
 		if err != nil {
 			return nil, err

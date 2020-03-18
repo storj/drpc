@@ -192,11 +192,11 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 			case drpcwire.KindInvoke:
 				streamCtx := m.ctx
 				if metadata.ID.Stream == pkt.ID.Stream {
-					msg, err := drpcmetadata.Decode(metadata.Data)
+					md, err := drpcmetadata.Decode(metadata.Data)
 					if err != nil {
 						return nil, "", err
 					}
-					streamCtx = drpcmetadata.AddPairs(streamCtx, msg.Data)
+					streamCtx = drpcmetadata.AddPairs(streamCtx, md)
 				}
 
 				stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)

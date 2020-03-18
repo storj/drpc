@@ -6,13 +6,17 @@ package drpcmetadata
 import (
 	"context"
 
-	proto "github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
 	"storj.io/drpc/drpcmetadata/invoke"
 )
 
 // AddPairs attaches metadata onto a context and return the context.
 func AddPairs(ctx context.Context, md map[string]string) context.Context {
+	if len(md) < 1 {
+		return ctx
+	}
+
 	for key, val := range md {
 		ctx = Add(ctx, key, val)
 	}
@@ -22,6 +26,10 @@ func AddPairs(ctx context.Context, md map[string]string) context.Context {
 
 // Encode generates byte form of the metadata and appends it onto the passed in buffer.
 func Encode(buffer []byte, md map[string]string) ([]byte, error) {
+	if len(md) < 1 {
+		return buffer, nil
+	}
+
 	msg := invoke.Metadata{
 		Data: md,
 	}
@@ -36,15 +44,19 @@ func Encode(buffer []byte, md map[string]string) ([]byte, error) {
 	return buffer, nil
 }
 
-// Decode translate byte form of metadata into metadata struct defined by protobuf.
-func Decode(data []byte) (*invoke.Metadata, error) {
+// Decode translate byte form of metadata into key/value metadata.
+func Decode(data []byte) (map[string]string, error) {
+	if len(data) < 1 {
+		return map[string]string{}, nil
+	}
+
 	msg := invoke.Metadata{}
 	err := proto.Unmarshal(data, &msg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &msg, nil
+	return msg.Data, nil
 }
 
 type metadataKey struct{}

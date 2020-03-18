@@ -9,11 +9,8 @@ import (
 
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
-	ppb "storj.io/drpc/drpcmetadata/proto"
+	"storj.io/drpc/drpcmetadata/invoke"
 )
-
-// InvokMetadataVersion1 indicates the version of InvokeMetadata message is 1.
-const InvokMetadataVersion1 = 1
 
 // Metadata is a mapping from metadata key to value.
 type Metadata map[string]string
@@ -39,9 +36,8 @@ func (md Metadata) AddPairs(ctx context.Context) context.Context {
 
 // Encode generates byte form of the metadata and appends it onto the passed in buffer.
 func (md Metadata) Encode(buffer []byte) ([]byte, error) {
-	msg := ppb.InvokeMetadata{
-		Version: InvokMetadataVersion1,
-		Data:    md,
+	msg := invoke.InvokeMetadata{
+		Data: md,
 	}
 
 	msgBytes, err := proto.Marshal(&msg)
@@ -56,7 +52,7 @@ func (md Metadata) Encode(buffer []byte) ([]byte, error) {
 
 // Decode translate byte form of metadata into metadata struct defined by protobuf.
 func Decode(data []byte) (*ppb.InvokeMetadata, error) {
-	msg := ppb.InvokeMetadata{}
+	msg := invoke.InvokeMetadata{}
 	err := proto.Unmarshal(data, &msg)
 	if err != nil {
 		return nil, err

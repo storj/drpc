@@ -74,6 +74,9 @@ type Frame struct {
 
 	// Done is true if this is the last frame for the ID.
 	Done bool
+
+	// Control is true if the frame has the control bit set.
+	Control bool
 }
 ```
 

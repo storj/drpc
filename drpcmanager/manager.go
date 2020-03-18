@@ -170,7 +170,6 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	}
 
 	var metadata drpcwire.Packet
-	streamCtx := m.ctx
 
 	for {
 		select {
@@ -191,6 +190,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 				continue
 
 			case drpcwire.KindInvoke:
+				streamCtx := m.ctx
 				if metadata.ID.Stream == pkt.ID.Stream {
 					msg, err := drpcmetadata.Decode(metadata.Data)
 					if err != nil {

@@ -67,20 +67,10 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_invokes")
 
-	stream, err := c.man.NewClientStream(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errs.Combine(err, stream.Close()) }()
-
-	invokeMetadata := make([]byte, 0)
-	metadata, ok := drpcmetadata.Get(ctx)
-	if ok {
-		invokeMetadata, err = metadata.Encode(invokeMetadata)
+	var metadata []byte
+	if md, ok := drpcmetadata.Get(ctx); ok {
+		metadata, err = md.Encode(metadata)
 		if err != nil {
-			return err
-		}
-		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, invokeMetadata); err != nil {
 			return err
 		}
 	}
@@ -90,13 +80,24 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 		return errs.Wrap(err)
 	}
 
+	stream, err := c.man.NewClientStream(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errs.Combine(err, stream.Close()) }()
+
 	if err := c.doInvoke(stream, []byte(rpc), data, out); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, out drpc.Message) (err error) {
+func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, metadata []byte, out drpc.Message) (err error) {
+	if len(metadata) > 0 {
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
+			return err
+		}
+	}
 	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}
@@ -120,30 +121,32 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_streams")
 
+	var metadata []byte
+	md, ok := drpcmetadata.Get(ctx)
+	if ok {
+		metadata, err = md.Encode(metadata)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	invokeMsg := make([]byte, 0)
-	metadata, ok := drpcmetadata.Get(ctx)
-	if ok {
-		invokeMsg, err = metadata.Encode(invokeMsg)
-		if err != nil {
-			return nil, err
-		}
-		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, invokeMsg); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := c.doNewStream(stream, []byte(rpc)); err != nil {
+	if err := c.doNewStream(stream, []byte(rpc), metadata); err != nil {
 		return nil, errs.Combine(err, stream.Close())
 	}
 	return stream, nil
 }
 
-func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte) error {
+func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte, metadata []byte) error {
+	if len(metadata) > 0 {
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
+			return nil, err
+		}
+	}
 	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}

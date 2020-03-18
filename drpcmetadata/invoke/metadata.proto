@@ -2,11 +2,10 @@
 // See LICENSE for copying information.
 
 syntax = "proto3";
-option go_package = "proto";
+option go_package = "invoke";
 
 package metadata;
 
 message InvokeMetadata {
-    uint32 version = 1;
     map<string, string> data = 2;
 }

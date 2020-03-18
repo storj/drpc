@@ -12,10 +12,13 @@ import (
 	ppb "storj.io/drpc/drpcmetadata/proto"
 )
 
-const INVOKE_HEADER_VERSION_1 = 1
+// INVOKE_METADATA_VERSION_1 indicates the version of InvokeMetadata message is 1.
+const INVOKE_METADATA_VERSION_1 = 1
 
+// Metadata is a mapping from metadata key to value.
 type Metadata map[string]string
 
+// New generates a new Metadata instance with keys set to lowercase.
 func New(data map[string]string) Metadata {
 	md := Metadata{}
 	for k, val := range data {
@@ -25,6 +28,7 @@ func New(data map[string]string) Metadata {
 	return md
 }
 
+// AddPairs attaches metadata onto a context and return the context.
 func (md Metadata) AddPairs(ctx context.Context) context.Context {
 	for key, val := range md {
 		ctx = Add(ctx, key, val)
@@ -33,9 +37,10 @@ func (md Metadata) AddPairs(ctx context.Context) context.Context {
 	return ctx
 }
 
+// Encode generates byte form of the metadata and appends it onto the passed in buffer.
 func (md Metadata) Encode(buffer []byte) ([]byte, error) {
 	msg := ppb.InvokeMetadata{
-		Version: INVOKE_HEADER_VERSION_1,
+		Version: INVOKE_METADATA_VERSION_1,
 		Data:    md,
 	}
 
@@ -49,6 +54,7 @@ func (md Metadata) Encode(buffer []byte) ([]byte, error) {
 	return buffer, nil
 }
 
+// Decode translate byte form of metadata into metadata struct defined by protobuf.
 func Decode(data []byte) (*ppb.InvokeMetadata, error) {
 	msg := ppb.InvokeMetadata{}
 	err := proto.Unmarshal(data, &msg)

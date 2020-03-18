@@ -5,7 +5,6 @@ package drpcmetadata
 
 import (
 	"context"
-	"strings"
 
 	proto "github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
@@ -19,7 +18,6 @@ type Metadata map[string]string
 func New(data map[string]string) Metadata {
 	md := Metadata{}
 	for k, val := range data {
-		key := strings.ToLower(k)
 		md[key] = val
 	}
 	return md
@@ -70,7 +68,6 @@ func Add(ctx context.Context, key, value string) context.Context {
 		metadata = make(Metadata)
 		ctx = context.WithValue(ctx, metadataKey{}, metadata)
 	}
-	k := strings.ToLower(key)
 	metadata[k] = value
 	return ctx
 }

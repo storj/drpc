@@ -196,7 +196,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 					if err != nil {
 						return nil, "", err
 					}
-					streamCtx = drpcmetadata.New(msg.GetData()).AddPairs(streamCtx)
+					streamCtx = drpcmetadata.AddPairs(streamCtx, msg.Data)
 				}
 
 				stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)

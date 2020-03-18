@@ -69,7 +69,7 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 
 	var metadata []byte
 	if md, ok := drpcmetadata.Get(ctx); ok {
-		metadata, err = md.Encode(metadata)
+		metadata, err = drpcmetadata.Encode(metadata, md)
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, []byte(rpc), data, out); err != nil {
+	if err := c.doInvoke(stream, []byte(rpc), data, metadata, out); err != nil {
 		return err
 	}
 	return nil
@@ -124,7 +124,7 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 	var metadata []byte
 	md, ok := drpcmetadata.Get(ctx)
 	if ok {
-		metadata, err = md.Encode(metadata)
+		metadata, err = drpcmetadata.Encode(metadata, md)
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +144,7 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte, metadata []byte) error {
 	if len(metadata) > 0 {
 		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {

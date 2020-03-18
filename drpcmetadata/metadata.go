@@ -11,20 +11,8 @@ import (
 	"storj.io/drpc/drpcmetadata/invoke"
 )
 
-// Metadata is a mapping from metadata key to value.
-type Metadata map[string]string
-
-// New generates a new Metadata instance with keys set to lowercase.
-func New(data map[string]string) Metadata {
-	md := Metadata{}
-	for k, val := range data {
-		md[key] = val
-	}
-	return md
-}
-
 // AddPairs attaches metadata onto a context and return the context.
-func (md Metadata) AddPairs(ctx context.Context) context.Context {
+func AddPairs(ctx context.Context, md map[string]string) context.Context {
 	for key, val := range md {
 		ctx = Add(ctx, key, val)
 	}
@@ -33,7 +21,7 @@ func (md Metadata) AddPairs(ctx context.Context) context.Context {
 }
 
 // Encode generates byte form of the metadata and appends it onto the passed in buffer.
-func (md Metadata) Encode(buffer []byte) ([]byte, error) {
+func Encode(buffer []byte, md map[string]string) ([]byte, error) {
 	msg := invoke.InvokeMetadata{
 		Data: md,
 	}
@@ -49,7 +37,7 @@ func (md Metadata) Encode(buffer []byte) ([]byte, error) {
 }
 
 // Decode translate byte form of metadata into metadata struct defined by protobuf.
-func Decode(data []byte) (*ppb.InvokeMetadata, error) {
+func Decode(data []byte) (*invoke.InvokeMetadata, error) {
 	msg := invoke.InvokeMetadata{}
 	err := proto.Unmarshal(data, &msg)
 	if err != nil {
@@ -65,15 +53,15 @@ type metadataKey struct{}
 func Add(ctx context.Context, key, value string) context.Context {
 	metadata, ok := Get(ctx)
 	if !ok {
-		metadata = make(Metadata)
+		metadata = make(map[string]string)
 		ctx = context.WithValue(ctx, metadataKey{}, metadata)
 	}
-	metadata[k] = value
+	metadata[key] = value
 	return ctx
 }
 
 // Get returns all key/value pairs on the given context.
-func Get(ctx context.Context) (Metadata, bool) {
-	metadata, ok := ctx.Value(metadataKey{}).(Metadata)
+func Get(ctx context.Context) (map[string]string, bool) {
+	metadata, ok := ctx.Value(metadataKey{}).(map[string]string)
 	return metadata, ok
 }

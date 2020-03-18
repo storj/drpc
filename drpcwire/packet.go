@@ -3,10 +3,7 @@
 
 package drpcwire
 
-import (
-	"bytes"
-	"fmt"
-)
+import "fmt"
 
 //go:generate stringer -type=Kind -trimprefix=Kind_ -output=packet_string.go
 
@@ -160,14 +157,4 @@ type Packet struct {
 func (p Packet) String() string {
 	return fmt.Sprintf("<s:%d m:%d kind:%s data:%d>",
 		p.ID.Stream, p.ID.Message, p.Kind, len(p.Data))
-}
-
-// IsVersioned checks wether a given packet contains versioning bytes.
-// Currently, we use the first two bytes to indicate versioning.
-func (p Packet) IsVersioned() bool {
-	if len(p.Data) < 3 {
-		return false
-	}
-
-	return bytes.Equal(p.Data[:2], []byte{0, 0})
 }

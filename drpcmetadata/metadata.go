@@ -12,8 +12,8 @@ import (
 	ppb "storj.io/drpc/drpcmetadata/proto"
 )
 
-// INVOKE_METADATA_VERSION_1 indicates the version of InvokeMetadata message is 1.
-const INVOKE_METADATA_VERSION_1 = 1
+// InvokMetadataVersion1 indicates the version of InvokeMetadata message is 1.
+const InvokMetadataVersion1 = 1
 
 // Metadata is a mapping from metadata key to value.
 type Metadata map[string]string
@@ -40,7 +40,7 @@ func (md Metadata) AddPairs(ctx context.Context) context.Context {
 // Encode generates byte form of the metadata and appends it onto the passed in buffer.
 func (md Metadata) Encode(buffer []byte) ([]byte, error) {
 	msg := ppb.InvokeMetadata{
-		Version: INVOKE_METADATA_VERSION_1,
+		Version: InvokMetadataVersion1,
 		Data:    md,
 	}
 

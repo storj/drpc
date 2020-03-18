@@ -9,7 +9,6 @@ import (
 	"net"
 
 	"github.com/zeebo/errs"
-
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
@@ -29,11 +28,8 @@ func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
 	c1, c2 := net.Pipe()
 
 	mux := drpcmux.New()
-	traceHandler := handler{
-		mu: mux,
-	}
 	_ = DRPCRegisterService(mux, server)
-	srv := drpcserver.New(&traceHandler)
+	srv := drpcserver.New(mux)
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
 	conn := drpcconn.New(c2)
 

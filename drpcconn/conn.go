@@ -16,9 +16,6 @@ import (
 	"storj.io/drpc/drpcwire"
 )
 
-// INVOKE_HEADER_VERSION_1 indicates version 1 of invoke header.
-const INVOKE_HEADER_VERSION_1 = 1
-
 // Options controls configuration settings for a conn.
 type Options struct {
 	// Manager controls the options we pass to the manager of this conn.

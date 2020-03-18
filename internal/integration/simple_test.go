@@ -8,31 +8,28 @@ import (
 	"io"
 	"testing"
 
-	"github.com/spacemonkeygo/monkit/v3"
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
 )
 
-var mon = monkit.Package()
-
 func TestSimple(t *testing.T) {
-	tracker := drpcctx.NewTracker(context.Background())
-	defer tracker.Wait()
-	defer tracker.Cancel()
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
 
 	cli, close := createConnection(standardImpl)
 	defer close()
 
 	{
-		out, err := cli.Method1(tracker, &In{In: 1})
+		out, err := cli.Method1(ctx, &In{In: 1})
 		assert.NoError(t, err)
 		assert.DeepEqual(t, out, &Out{Out: 1})
 	}
 
 	{
-		stream, err := cli.Method2(tracker)
+		stream, err := cli.Method2(ctx)
 		assert.NoError(t, err)
 		assert.NoError(t, stream.Send(&In{In: 2}))
 		assert.NoError(t, stream.Send(&In{In: 2}))
@@ -42,7 +39,7 @@ func TestSimple(t *testing.T) {
 	}
 
 	{
-		stream, err := cli.Method3(tracker, &In{In: 3})
+		stream, err := cli.Method3(ctx, &In{In: 3})
 		assert.NoError(t, err)
 		for {
 			out, err := stream.Recv()
@@ -55,7 +52,7 @@ func TestSimple(t *testing.T) {
 	}
 
 	{
-		stream, err := cli.Method4(tracker)
+		stream, err := cli.Method4(ctx)
 		assert.NoError(t, err)
 		assert.NoError(t, stream.Send(&In{In: 4}))
 		assert.NoError(t, stream.Send(&In{In: 4}))
@@ -73,7 +70,7 @@ func TestSimple(t *testing.T) {
 	}
 
 	{
-		_, err := cli.Method1(tracker, &In{In: 5})
+		_, err := cli.Method1(ctx, &In{In: 5})
 		assert.Error(t, err)
 		assert.Equal(t, drpcerr.Code(err), 5)
 	}

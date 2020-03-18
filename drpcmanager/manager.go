@@ -12,7 +12,6 @@ import (
 	"storj.io/drpc"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
-
 	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"
@@ -193,9 +192,6 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 
 			case drpcwire.KindInvoke:
 				if metadata.ID.Stream == pkt.ID.Stream {
-					// we use the first two bytes as the version flag to indicate whether
-					// there's metadata stored in the invoke message.
-					// If so, we should store the metadata onto the stream context
 					msg, err := drpcmetadata.Decode(metadata.Data)
 					if err != nil {
 						return nil, "", err

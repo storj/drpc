@@ -7,7 +7,6 @@ import (
 	"context"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/zeebo/errs"
 	"storj.io/drpc/drpcmetadata/invoke"
 )
 
@@ -36,7 +35,7 @@ func Encode(buffer []byte, md map[string]string) ([]byte, error) {
 
 	msgBytes, err := proto.Marshal(&msg)
 	if err != nil {
-		return buffer, errs.Wrap(err)
+		return buffer, err
 	}
 
 	buffer = append(buffer, msgBytes...)

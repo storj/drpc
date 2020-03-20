@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/gogo/protobuf/proto"
+
 	"storj.io/drpc/drpcmetadata/invoke"
 )
 

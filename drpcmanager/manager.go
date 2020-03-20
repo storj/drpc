@@ -9,10 +9,10 @@ import (
 	"sync"
 
 	"github.com/zeebo/errs"
-
 	"storj.io/drpc"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
+	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
@@ -190,15 +190,18 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 				continue
 
 			case drpcwire.KindInvoke:
+				streamCtx := m.ctx
 				if metadata.ID.Stream == pkt.ID.Stream {
-					// TODO: parse and attach metadata from metadata.Data
-					_ = metadata.Data
+					md, err := drpcmetadata.Decode(metadata.Data)
+					if err != nil {
+						return nil, "", err
+					}
+					streamCtx = drpcmetadata.AddPairs(streamCtx, md)
 				}
 
-				stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)
+				stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)
 				go m.manageStream(ctx, stream)
 				return stream, string(pkt.Data), nil
-
 			default:
 				// we ignore packets that arent invokes because perhaps older streams have
 				// messages in the queue sent concurrently with our notification to them

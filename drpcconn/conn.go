@@ -11,6 +11,7 @@ import (
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcmanager"
+	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
 )
@@ -66,6 +67,14 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_invokes")
 
+	var metadata []byte
+	if md, ok := drpcmetadata.Get(ctx); ok {
+		metadata, err = drpcmetadata.Encode(metadata, md)
+		if err != nil {
+			return err
+		}
+	}
+
 	data, err := proto.Marshal(in)
 	if err != nil {
 		return errs.Wrap(err)
@@ -77,13 +86,18 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, []byte(rpc), data, out); err != nil {
+	if err := c.doInvoke(stream, []byte(rpc), data, metadata, out); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, out drpc.Message) (err error) {
+func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, metadata []byte, out drpc.Message) (err error) {
+	if len(metadata) > 0 {
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
+			return err
+		}
+	}
 	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}
@@ -107,18 +121,31 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_streams")
 
+	var metadata []byte
+	if md, ok := drpcmetadata.Get(ctx); ok {
+		metadata, err = drpcmetadata.Encode(metadata, md)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := c.doNewStream(stream, []byte(rpc)); err != nil {
+	if err := c.doNewStream(stream, []byte(rpc), metadata); err != nil {
 		return nil, errs.Combine(err, stream.Close())
 	}
 	return stream, nil
 }
 
-func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte) error {
+func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte, metadata []byte) error {
+	if len(metadata) > 0 {
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
+			return err
+		}
+	}
 	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}

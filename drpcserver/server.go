@@ -10,6 +10,7 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpccache"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcstream"
@@ -47,6 +48,11 @@ func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
 
 	man := drpcmanager.NewWithOptions(tr, s.opts.Manager)
 	defer func() { err = errs.Combine(err, man.Close()) }()
+
+	cache := drpccache.New()
+	defer cache.Clear()
+
+	ctx = drpccache.WithContext(ctx, cache)
 
 	for {
 		stream, rpc, err := man.NewServerStream(ctx)

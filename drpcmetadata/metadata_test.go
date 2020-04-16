@@ -13,38 +13,32 @@ import (
 
 func TestEncode(t *testing.T) {
 	t.Run("Empty Metadata", func(t *testing.T) {
-		var buffer []byte
 		var metadata map[string]string
-		buf, err := Encode(buffer, metadata)
-		assert.Equal(t, len(buffer), len(buf))
+		buf, err := Encode(nil, metadata)
+		assert.Nil(t, buf)
 		assert.NoError(t, err)
 	})
 
 	t.Run("With Metadata", func(t *testing.T) {
-		var buffer []byte
-		metadata := map[string]string{
+		data, err := Encode(nil, map[string]string{
 			"test1": "a",
 			"test2": "b",
-		}
-		buf, err := Encode(buffer, metadata)
+		})
 		assert.NoError(t, err)
-		assert.That(t, len(buf) > 0)
+		assert.That(t, len(data) > 0)
 	})
 }
 
 func TestDecode(t *testing.T) {
 	t.Run("Empty Metadata", func(t *testing.T) {
-		var data []byte
-		metadata, err := Decode(data)
+		metadata, err := Decode(nil)
 		assert.NoError(t, err)
-		assert.Equal(t, 0, len(metadata))
+		assert.Nil(t, metadata)
 	})
 
 	t.Run("With Metadata", func(t *testing.T) {
 		msg := invoke.Metadata{
-			Data: map[string]string{
-				"test": "a",
-			},
+			Data: map[string]string{"test": "a"},
 		}
 		data, err := proto.Marshal(&msg)
 		assert.NoError(t, err)

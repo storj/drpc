@@ -279,13 +279,6 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	go m.manageStreamContext(ctx, wg, stream)
 	wg.Wait()
 
-	// always ensure the stream is terminated if we're done managing it. the
-	// stream should already be in a terminal state unless we're exiting due
-	// to the manager terminating. that only happens if the underlying transport
-	// died, so just assume the remote end issued a cancel by terminating
-	// the transport.
-	stream.Cancel(context.Canceled)
-
 	// release semaphore
 	<-m.sem
 }
@@ -302,6 +295,7 @@ func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Str
 	for {
 		select {
 		case <-m.term.Signal():
+			stream.Cancel(context.Canceled)
 			return
 
 		case <-stream.Terminated():
@@ -329,6 +323,7 @@ func (m *Manager) manageStreamContext(ctx context.Context, wg *sync.WaitGroup, s
 
 	select {
 	case <-m.term.Signal():
+		stream.Cancel(context.Canceled)
 		return
 
 	case <-stream.Terminated():

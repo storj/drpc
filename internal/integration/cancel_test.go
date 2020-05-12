@@ -7,8 +7,10 @@ import (
 	"context"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/zeebo/assert"
+
 	"storj.io/drpc/drpcctx"
 )
 
@@ -61,5 +63,49 @@ func TestCancel(t *testing.T) {
 
 		for stream.Send(in(1)) != io.EOF {
 		}
+	}
+}
+
+func TestCancellationPropagation(t *testing.T) {
+	t.Skip("This is broken.")
+
+	timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	called := make(chan struct{}, 1)
+	cancelled := make(chan struct{}, 1)
+
+	sleepy := impl{
+		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
+			called <- struct{}{}
+			select {
+			case <-timeout.Done():
+			case <-ctx.Done():
+				cancelled <- struct{}{}
+			}
+			return &Out{Out: 1}, nil
+		},
+	}
+
+	cli, close := createConnection(sleepy)
+	defer close()
+
+	clientctx := drpcctx.NewTracker(context.Background())
+	clientctx.Run(func(ctx context.Context) {
+		_, _ = cli.Method1(ctx, in(1))
+	})
+
+	<-called
+	clientctx.Cancel()
+	clientctx.Wait()
+
+	select {
+	case <-cancelled:
+	case <-timeout.Done():
+		t.Fatal("did not finish in time")
 	}
 }

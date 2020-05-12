@@ -9,6 +9,7 @@ import (
 	"net"
 
 	"github.com/zeebo/errs"
+
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"

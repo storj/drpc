@@ -37,6 +37,8 @@ for DESC in ${PACKAGES}; do
 	PACKAGE="$(echo "${DESC}" | cut -d '|' -f 1)"
 	DIR="$(echo "${DESC}" | cut -d '|' -f 2)"
 
-	log "generating docs for ${PACKAGE}..."
-	"${GODOCDOWN}" -template "${TEMPLATE}" "${DIR}" > "${DIR}/README.md"
+	if [[ "$PACKAGE" != "storj.io/drpc" ]]; then
+		log "generating docs for ${PACKAGE}..."
+		"${GODOCDOWN}" -template "${TEMPLATE}" "${DIR}" > "${DIR}/README.md"
+	fi
 done

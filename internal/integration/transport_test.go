@@ -94,10 +94,16 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	// async start the client issuing the rpc
 	ctx.Run(func(ctx context.Context) {
 		stream, _ := cli.Method2(ctx)
+		started <- struct{}{}
 		errs <- stream.MsgRecv(nil)
 	})
 
-	// wait for it to be started
+	// wait for it to be started. it is important to wait for
+	// both the client and server to be started, otherwise there's
+	// a race due to the client performing multiple operations to
+	// invoke, and the server can send on started before the client
+	// returns the stream, causing the client to return <nil>, canceled.
+	<-started
 	<-started
 
 	// kill the transport from underneath of it

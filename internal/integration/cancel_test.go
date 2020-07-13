@@ -66,9 +66,7 @@ func TestCancel(t *testing.T) {
 	}
 }
 
-func TestCancellationPropagation(t *testing.T) {
-	t.Skip("This is broken.")
-
+func TestCancellationPropagation_Unitary(t *testing.T) {
 	timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -99,6 +97,61 @@ func TestCancellationPropagation(t *testing.T) {
 		_, _ = cli.Method1(ctx, in(1))
 	})
 
+	<-called
+	clientctx.Cancel()
+	clientctx.Wait()
+
+	select {
+	case <-cancelled:
+	case <-timeout.Done():
+		t.Fatal("did not finish in time")
+	}
+}
+
+func TestCancellationPropagation_Stream(t *testing.T) {
+	timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	called := make(chan struct{}, 1)
+	cancelled := make(chan struct{}, 1)
+
+	sleepy := impl{
+		Method4Fn: func(stream DRPCService_Method4Stream) error {
+			called <- struct{}{}
+			select {
+			case <-stream.Context().Done():
+				cancelled <- struct{}{}
+			case <-timeout.Done():
+				t.Error("server did not exit")
+			}
+			return nil
+		},
+	}
+
+	cli, close := createConnection(sleepy)
+	defer close()
+
+	clientctx := drpcctx.NewTracker(context.Background())
+	clientctx.Run(func(ctx context.Context) {
+		stream, _ := cli.Method4(ctx)
+		called <- struct{}{}
+		select {
+		case <-stream.Context().Done():
+		case <-timeout.Done():
+			t.Error("client did not exit")
+		}
+	})
+
+	// Ensuring both the client and the server have called is important
+	// before canceling, otherwise there's a race due to the client
+	// performing multiple operations to invoke, and the server can
+	// send on called before the client returns the stream, causing
+	// the client to return <nil>, canceled.
+	<-called
 	<-called
 	clientctx.Cancel()
 	clientctx.Wait()

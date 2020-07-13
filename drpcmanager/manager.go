@@ -302,8 +302,6 @@ func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Str
 			return
 
 		case pkt := <-m.queue:
-			drpcdebug.Log(func() string { return fmt.Sprintf("FWD[%p][%p]: %v", m, stream, pkt) })
-
 			ok, err := stream.HandlePacket(pkt)
 			if err != nil {
 				m.term.Set(errs.Wrap(err))
@@ -330,8 +328,12 @@ func (m *Manager) manageStreamContext(ctx context.Context, wg *sync.WaitGroup, s
 		return
 
 	case <-ctx.Done():
+		// If the stream isn't already finished, we have to terminate the transport
+		// to do an active cancel. If it is already finished, there is no need.
+		finished := stream.Finished()
 		stream.Cancel(ctx.Err())
-		if !stream.Finished() {
+		if !finished {
+			drpcdebug.Log(func() string { return fmt.Sprintf("MAN[%p][%p]: unfinished", m, stream) })
 			m.term.Set(ctx.Err())
 		}
 	}

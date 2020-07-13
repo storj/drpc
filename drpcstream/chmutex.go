@@ -36,3 +36,14 @@ func (m *chMutex) Unlock() {
 	m.once.Do(m.init)
 	<-m.ch
 }
+
+func (m *chMutex) Unlocked() bool {
+	m.once.Do(m.init)
+	select {
+	case m.ch <- struct{}{}:
+		<-m.ch
+		return true
+	default:
+		return false
+	}
+}

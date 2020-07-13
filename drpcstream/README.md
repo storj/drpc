@@ -144,4 +144,4 @@ if the stream is already terminated.
 ```go
 func (s *Stream) Terminated() <-chan struct{}
 ```
-Terminated returns a channel when the stream has been terminated.
+Terminated returns a channel that is closed when the stream has been terminated.

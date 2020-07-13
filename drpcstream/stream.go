@@ -30,17 +30,19 @@ type Stream struct {
 	cancel func()
 	opts   Options
 
-	writeMu chMutex
-	id      drpcwire.ID
-	wr      *drpcwire.Writer
+	write chMutex
+	read  chMutex
+
+	id drpcwire.ID
+	wr *drpcwire.Writer
 
 	mu   sync.Mutex // protects state transitions
 	sigs struct {
 		send   drpcsignal.Signal // set when done sending messages
 		recv   drpcsignal.Signal // set when done receiving messages
-		term   drpcsignal.Signal // set when in terminated state
-		finish drpcsignal.Signal // set when all writes are complete
-		cancel drpcsignal.Signal // set when externally canceled and transport will be closed
+		term   drpcsignal.Signal // set when the stream is terminating and no new ops should begin
+		fin    drpcsignal.Signal // set when the stream is finished and all ops are complete
+		cancel drpcsignal.Signal // set when externally canceled
 	}
 	queue chan drpcwire.Packet
 
@@ -99,12 +101,12 @@ func (s *Stream) monCtx() *context.Context {
 // the Stream will no longer issue any writes or reads.
 func (s *Stream) Context() context.Context { return s.ctx }
 
-// Terminated returns a channel when the stream has been terminated.
+// Terminated returns a channel that is closed when the stream has been terminated.
 func (s *Stream) Terminated() <-chan struct{} { return s.sigs.term.Signal() }
 
 // Finished returns true if the stream is fully finished and will no longer
 // issue any writes or reads.
-func (s *Stream) Finished() bool { return s.sigs.finish.IsSet() }
+func (s *Stream) Finished() bool { return s.sigs.fin.IsSet() }
 
 //
 // packet handler
@@ -180,10 +182,11 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
 //
 
 // checkFinished checks to see if the stream is terminated, and if so, sets the finished
-// flag. This must be called every time right before we release the write mutex.
+// flag. This must be called after every read or write is complete, as well as when
+// the stream becomes terminated.
 func (s *Stream) checkFinished() {
-	if s.sigs.term.IsSet() {
-		s.sigs.finish.Set(nil)
+	if s.sigs.term.IsSet() && s.write.Unlocked() && s.read.Unlocked() {
+		s.sigs.fin.Set(nil)
 	}
 }
 
@@ -251,14 +254,7 @@ func (s *Stream) terminate(err error) {
 	s.sigs.recv.Set(err)
 	s.sigs.term.Set(err)
 	s.cancel()
-
-	// if we can acquire the write mutex, then checkFinished. if not, then we know
-	// some other write is happening, and it will call checkFinished before it
-	// releases the mutex.
-	if s.writeMu.TryLock() {
-		s.checkFinished()
-		s.writeMu.Unlock()
-	}
+	s.checkFinished()
 }
 
 //
@@ -269,9 +265,9 @@ func (s *Stream) terminate(err error) {
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error) {
 	defer mon.Task()(s.monCtx())(&err)
 
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	defer s.checkFinished()
+	s.write.Lock()
+	defer s.write.Unlock()
 
 	return drpcwire.SplitN(s.newPacket(kind, data), s.opts.SplitSize, s.pollWriteFn)
 }
@@ -280,9 +276,9 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error) {
 func (s *Stream) RawFlush() (err error) {
 	defer mon.Task()(s.monCtx())(&err)
 
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	defer s.checkFinished()
+	s.write.Lock()
+	defer s.write.Unlock()
 
 	return s.checkCancelError(errs.Wrap(s.wr.Flush()))
 }
@@ -291,8 +287,12 @@ func (s *Stream) RawFlush() (err error) {
 func (s *Stream) RawRecv() (data []byte, err error) {
 	defer mon.Task()(s.monCtx())(&err)
 
-	if s.sigs.recv.IsSet() {
-		return nil, s.sigs.recv.Err()
+	defer s.checkFinished()
+	s.read.Lock()
+	defer s.read.Unlock()
+
+	if err, ok := s.sigs.recv.Get(); ok {
+		return nil, err
 	}
 
 	select {
@@ -350,9 +350,9 @@ func (s *Stream) SendError(serr error) (err error) {
 		return nil
 	}
 
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	defer s.checkFinished()
+	s.write.Lock()
+	defer s.write.Unlock()
 
 	s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 	s.terminate(drpc.Error.New("stream terminated by sending error"))
@@ -372,9 +372,9 @@ func (s *Stream) Close() (err error) {
 		return nil
 	}
 
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	defer s.checkFinished()
+	s.write.Lock()
+	defer s.write.Unlock()
 
 	s.terminate(drpc.Error.New("stream terminated by sending close"))
 	s.mu.Unlock()
@@ -394,9 +394,9 @@ func (s *Stream) CloseSend() (err error) {
 		return nil
 	}
 
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	defer s.checkFinished()
+	s.write.Lock()
+	defer s.write.Unlock()
 
 	s.sigs.send.Set(drpc.Error.New("send closed"))
 	s.terminateIfBothClosed()

@@ -4,6 +4,8 @@
 
 Package drpcstream sends protobufs using the dprc wire protocol.
 
+![Stream state machine diagram](./state.png)
+
 ## Usage
 
 #### type Options

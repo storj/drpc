@@ -7,7 +7,7 @@ require (
 	github.com/zeebo/assert v1.1.0
 	github.com/zeebo/errs v1.2.2
 	google.golang.org/grpc v1.25.1
-	storj.io/drpc v0.0.4
+	storj.io/drpc v0.0.0-00010101000000-000000000000
 )
 
 replace storj.io/drpc => ../..

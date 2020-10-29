@@ -34,6 +34,7 @@ type rpcData struct {
 	receiver drpc.Receiver
 	in1      reflect.Type
 	in2      reflect.Type
+	unitary  bool
 }
 
 // Register associates the rpcs described by the description in the server.
@@ -59,6 +60,7 @@ func (m *Mux) registerOne(srv interface{}, rpc string, receiver drpc.Receiver, m
 	switch mt := reflect.TypeOf(method); {
 	// unitary input, unitary output
 	case mt.NumOut() == 2:
+		data.unitary = true
 		data.in1 = mt.In(2)
 		if !data.in1.Implements(messageType) {
 			return errs.New("input argument not a drpc message: %v", data.in1)
@@ -83,34 +85,4 @@ func (m *Mux) registerOne(srv interface{}, rpc string, receiver drpc.Receiver, m
 
 	m.rpcs[rpc] = data
 	return nil
-}
-
-// HandleRPC handles the rpc that has been requested by the stream.
-func (m *Mux) HandleRPC(stream drpc.Stream, rpc string) (err error) {
-	data, ok := m.rpcs[rpc]
-	if !ok {
-		return drpc.ProtocolError.New("unknown rpc: %q", rpc)
-	}
-
-	in := interface{}(stream)
-	if data.in1 != streamType {
-		msg, ok := reflect.New(data.in1.Elem()).Interface().(drpc.Message)
-		if !ok {
-			return drpc.InternalError.New("invalid rpc input type")
-		}
-		if err := stream.MsgRecv(msg); err != nil {
-			return errs.Wrap(err)
-		}
-		in = msg
-	}
-
-	out, err := data.receiver(data.srv, stream.Context(), in, stream)
-	switch {
-	case err != nil:
-		return errs.Wrap(err)
-	case out != nil:
-		return stream.MsgSend(out)
-	default:
-		return nil
-	}
 }

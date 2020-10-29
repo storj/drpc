@@ -22,7 +22,7 @@ func TestCache(t *testing.T) {
 
 	// create a server that signals then waits for the context to die
 	cli, close := createConnection(impl{
-		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
+		Method1Fn: func(ctx context.Context, _ *In) (*Out, error) {
 			cache := drpccache.FromContext(ctx)
 			if cache == nil {
 				return nil, errs.New("cache is missing")

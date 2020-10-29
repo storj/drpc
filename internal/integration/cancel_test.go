@@ -78,7 +78,7 @@ func TestCancellationPropagation_Unitary(t *testing.T) {
 	cancelled := make(chan struct{}, 1)
 
 	sleepy := impl{
-		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
+		Method1Fn: func(ctx context.Context, _ *In) (*Out, error) {
 			called <- struct{}{}
 			select {
 			case <-timeout.Done():

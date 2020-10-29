@@ -7,12 +7,14 @@ import (
 	"context"
 	"io"
 	"net"
+	"strconv"
 
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
+	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 	"storj.io/drpc/drpcsignal"
@@ -77,7 +79,14 @@ var standardImpl = impl{
 		if in.In != 1 {
 			return nil, drpcerr.WithCode(errs.New("test"), uint64(in.In))
 		}
-		return &Out{Out: 1}, nil
+
+		var out int64 = 1
+		if metadata, ok := drpcmetadata.Get(ctx); ok {
+			v, _ := strconv.ParseInt(metadata["inc"], 10, 64)
+			out += v
+		}
+
+		return &Out{Out: out}, nil
 	},
 
 	Method2Fn: func(stream DRPCService_Method2Stream) error {
@@ -90,7 +99,7 @@ var standardImpl = impl{
 		return stream.SendAndClose(&Out{Out: 2})
 	},
 
-	Method3Fn: func(in *In, stream DRPCService_Method3Stream) error {
+	Method3Fn: func(_ *In, stream DRPCService_Method3Stream) error {
 		_ = stream.Send(&Out{Out: 3})
 		_ = stream.Send(&Out{Out: 3})
 		_ = stream.Send(&Out{Out: 3})

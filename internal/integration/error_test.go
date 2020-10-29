@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 
@@ -51,4 +52,21 @@ func TestError_Context(t *testing.T) {
 		assert.Error(t, err)
 		assert.That(t, strings.Contains(err.Error(), "context"))
 	}
+}
+
+func TestError_UnitaryNilResponse(t *testing.T) {
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	cli, close := createConnection(impl{
+		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
+			return nil, nil
+		},
+	})
+	defer close()
+
+	out, err := cli.Method1(ctx, in(1))
+	assert.Equal(t, err, io.EOF)
+	assert.Nil(t, out)
 }

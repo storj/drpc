@@ -30,4 +30,4 @@ tidy:
 
 .PHONY: test
 test:
-	./scripts/run.sh go test ./... -count=1
+	./scripts/run.sh go test ./... -race -count=1 -bench=. -benchtime=1x

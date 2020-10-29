@@ -3,9 +3,12 @@
 
 package drpcerr
 
+import "unsafe"
+
 // Code returns the error code associated with the error or 0 if none is.
 func Code(err error) uint64 {
 	for i := 0; i < 100; i++ {
+		prev := err
 		switch v := err.(type) {
 		case interface{ Code() uint64 }:
 			return v.Code()
@@ -13,11 +16,24 @@ func Code(err error) uint64 {
 			err = v.Cause()
 		case interface{ Unwrap() error }:
 			err = v.Unwrap()
-		case nil:
+		default:
+			return 0
+		}
+		// short-circuit any trivial cycles
+		if shallowEqual(err, prev) {
 			return 0
 		}
 	}
 	return 0
+}
+
+// shallowEqual returns true if the two errors are equal without comparing
+// their values. It may return false even if the errors are equal, but if
+// returns true, then the errors are equal.
+//
+//nolint:gosec
+func shallowEqual(x, y error) bool {
+	return *(*[2]uintptr)(unsafe.Pointer(&x)) == *(*[2]uintptr)(unsafe.Pointer(&y))
 }
 
 // WithCode associates the code with the error if it is non nil and the code

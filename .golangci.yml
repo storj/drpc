@@ -127,3 +127,10 @@ issues:
   max-same-issues: 0
   new: false
   exclude-use-default: false
+
+  exclude-rules:
+    # allow math/rand usage in _test.go files
+    - path: _test\.go
+      linters:
+      - gosec
+      text: "G404:"

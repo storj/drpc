@@ -51,6 +51,7 @@ type Manager struct {
 	tport drpcsignal.Signal // set after the transport has been closed
 	queue chan drpcwire.Packet
 	ctx   context.Context
+	prev  *drpcstream.Stream
 }
 
 // New returns a new Manager for the transport.
@@ -152,15 +153,46 @@ func (m *Manager) Close() error {
 	return m.tport.Err()
 }
 
+// waitForPreviousStream will, if there was a previous stream, ensure it is Closed and
+// then wait until it is in the Finished state, where it will no longer make any
+// reads or writes on the transport. It exits early if the context is canceled or
+// the manager is terminated.
+func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
+	if m.prev == nil {
+		return nil
+	}
+
+	if err := m.prev.Close(); err != nil {
+		return err
+	}
+
+	select {
+	case <-m.prev.Finished():
+		return nil
+
+	case <-m.term.Signal():
+		return m.term.Err()
+
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // NewClientStream starts a stream on the managed transport for use by a client.
 func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Stream, err error) {
 	if err := m.acquireSemaphore(ctx); err != nil {
 		return nil, err
 	}
 
+	if err := m.waitForPreviousStream(ctx); err != nil {
+		return nil, err
+	}
+
 	m.sid++
 	stream = drpcstream.NewWithOptions(m.ctx, m.sid, m.wr, m.opts.Stream)
+	m.prev = stream
 	go m.manageStream(ctx, stream)
+
 	return stream, nil
 }
 
@@ -208,11 +240,18 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 					streamCtx = drpcmetadata.AddPairs(streamCtx, md)
 				}
 
+				if err := m.waitForPreviousStream(ctx); err != nil {
+					return nil, "", err
+				}
+
 				stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)
+				m.prev = stream
 				go m.manageStream(ctx, stream)
+
 				return stream, string(pkt.Data), nil
+
 			default:
-				// we ignore packets that arent invokes because perhaps older streams have
+				// we ignore packets that aren't invokes because perhaps older streams have
 				// messages in the queue sent concurrently with our notification to them
 				// that the stream they were sent for is done.
 				continue
@@ -330,9 +369,9 @@ func (m *Manager) manageStreamContext(ctx context.Context, wg *sync.WaitGroup, s
 	case <-ctx.Done():
 		// If the stream isn't already finished, we have to terminate the transport
 		// to do an active cancel. If it is already finished, there is no need.
-		finished := stream.Finished()
+		isFinished := stream.IsFinished()
 		stream.Cancel(ctx.Err())
-		if !finished {
+		if !isFinished {
 			drpcdebug.Log(func() string { return fmt.Sprintf("MAN[%p][%p]: unfinished", m, stream) })
 			m.term.Set(ctx.Err())
 		}

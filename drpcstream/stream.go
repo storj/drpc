@@ -104,9 +104,13 @@ func (s *Stream) Context() context.Context { return s.ctx }
 // Terminated returns a channel that is closed when the stream has been terminated.
 func (s *Stream) Terminated() <-chan struct{} { return s.sigs.term.Signal() }
 
-// Finished returns true if the stream is fully finished and will no longer
+// Finished returns a channel that is closed when the stream is fully finished
+// and will no longer issue any writes or reads.
+func (s *Stream) Finished() <-chan struct{} { return s.sigs.fin.Signal() }
+
+// IsFinished returns true if the stream is fully finished and will no longer
 // issue any writes or reads.
-func (s *Stream) Finished() bool { return s.sigs.fin.IsSet() }
+func (s *Stream) IsFinished() bool { return s.sigs.fin.IsSet() }
 
 //
 // packet handler

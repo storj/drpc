@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 
@@ -73,5 +74,32 @@ func TestSimple(t *testing.T) {
 		_, err := cli.Method1(ctx, &In{In: 5})
 		assert.Error(t, err)
 		assert.Equal(t, drpcerr.Code(err), 5)
+	}
+}
+
+func TestConcurrent(t *testing.T) {
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	cli, close := createConnection(standardImpl)
+	defer close()
+
+	const N = 1000
+	errs := make(chan error)
+	for i := 0; i < N; i++ {
+		ctx.Run(func(ctx context.Context) {
+			out, err := cli.Method1(ctx, &In{In: 1})
+			if err != nil {
+				errs <- err
+			} else if out.Out != 1 {
+				errs <- fmt.Errorf("wrong result %d", out.Out)
+			} else {
+				errs <- nil
+			}
+		})
+	}
+	for i := 0; i < N; i++ {
+		assert.NoError(t, <-errs)
 	}
 }

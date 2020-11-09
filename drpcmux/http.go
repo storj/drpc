@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/zeebo/errs"
+
 	"storj.io/drpc/drpcmetadata"
 )
 

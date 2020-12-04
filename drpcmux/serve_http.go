@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/textproto"
 	"reflect"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -43,7 +44,7 @@ import (
 // where percentEncode is the encoding used for query strings. Only the '%' and '='
 // characters are necessary to be escaped.
 func (m *Mux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	ctx, err := buildContext(req.Context(), req.Header.Values("X-Drpc-Metadata"))
+	ctx, err := buildContext(req.Context(), headerValues(req.Header, "X-Drpc-Metadata"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -99,4 +100,11 @@ func (m *Mux) serveHTTP(ctx context.Context, rpc string, body io.Reader) ([]byte
 		return nil, drpc.InternalError.Wrap(err)
 	}
 	return buf.Bytes(), nil
+}
+
+func headerValues(h http.Header, key string) []string {
+	if h == nil {
+		return nil
+	}
+	return h[textproto.CanonicalMIMEHeaderKey(key)]
 }

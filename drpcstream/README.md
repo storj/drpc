@@ -84,10 +84,10 @@ Stream will no longer issue any writes or reads.
 #### func (*Stream) Finished
 
 ```go
-func (s *Stream) Finished() bool
+func (s *Stream) Finished() <-chan struct{}
 ```
-Finished returns true if the stream is fully finished and will no longer issue
-any writes or reads.
+Finished returns a channel that is closed when the stream is fully finished and
+will no longer issue any writes or reads.
 
 #### func (*Stream) HandlePacket
 
@@ -97,6 +97,14 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error)
 HandlePacket advances the stream state machine by inspecting the packet. It
 returns any major errors that should terminate the transport the stream is
 operating on as well as a boolean indicating if the stream expects more packets.
+
+#### func (*Stream) IsFinished
+
+```go
+func (s *Stream) IsFinished() bool
+```
+IsFinished returns true if the stream is fully finished and will no longer issue
+any writes or reads.
 
 #### func (*Stream) MsgRecv
 

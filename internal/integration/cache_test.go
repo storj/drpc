@@ -25,35 +25,41 @@ func TestCache(t *testing.T) {
 		Method1Fn: func(ctx context.Context, _ *In) (*Out, error) {
 			cache := drpccache.FromContext(ctx)
 			if cache == nil {
-				return nil, errs.New("cache is missing")
+				return nil, errs.New("no cache associated with context")
 			}
-			cache.LoadOrCreate("value", func() interface{} {
-				return 42
-			})
+			cache.LoadOrCreate("value", func() interface{} { return 42 })
 			return &Out{Out: 123}, nil
 		},
 		Method2Fn: func(stream DRPCService_Method2Stream) error {
 			cache := drpccache.FromContext(stream.Context())
 			if cache == nil {
-				return errs.New("no cache associated with stream")
+				return errs.New("no cache associated with context")
 			}
-
-			value := cache.Load("value")
-			if value == nil {
-				return errs.New("expected value to be cached")
-			}
-			return nil
+			value, _ := cache.Load("value").(int)
+			return stream.SendAndClose(&Out{Out: int64(value)})
 		},
 	})
 	defer close()
 
-	_, err := cli.Method1(ctx, in(1))
-	assert.NoError(t, err)
+	{ // value not yet cached
+		stream, err := cli.Method2(ctx)
+		assert.NoError(t, err)
+		out, err := stream.CloseAndRecv()
+		assert.NoError(t, err)
+		assert.DeepEqual(t, out, &Out{Out: 0})
+	}
 
-	stream, err := cli.Method2(ctx)
-	assert.NoError(t, err)
-	assert.NoError(t, stream.Close())
+	{ // store value in the cache
+		out, err := cli.Method1(ctx, in(1))
+		assert.NoError(t, err)
+		assert.DeepEqual(t, out, &Out{Out: 123})
+	}
 
-	// kill the transport from underneath of it
-	assert.NoError(t, cli.DRPCConn().Transport().Close())
+	{ // expected value in the cache
+		stream, err := cli.Method2(ctx)
+		assert.NoError(t, err)
+		out, err := stream.CloseAndRecv()
+		assert.NoError(t, err)
+		assert.DeepEqual(t, out, &Out{Out: 42})
+	}
 }

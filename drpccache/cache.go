@@ -30,16 +30,7 @@ func New() *Cache { return &Cache{} }
 // 	       })
 // 	}
 func FromContext(ctx context.Context) *Cache {
-	value := ctx.Value(cacheKey{})
-	if value == nil {
-		return nil
-	}
-
-	cache, ok := value.(*Cache)
-	if !ok {
-		return nil
-	}
-
+	cache, _ := ctx.Value(cacheKey{}).(*Cache)
 	return cache
 }
 

@@ -11,7 +11,6 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
-	"storj.io/drpc/drpccache"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
 	"storj.io/drpc/drpcmetadata"
@@ -50,7 +49,6 @@ type Manager struct {
 	read  drpcsignal.Signal // set after the goroutine reading from the transport is done
 	tport drpcsignal.Signal // set after the transport has been closed
 	queue chan drpcwire.Packet
-	ctx   context.Context
 	prev  *drpcstream.Stream
 }
 
@@ -71,7 +69,6 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 		// this semaphore controls the number of concurrent streams. it MUST be 1.
 		sem:   make(chan struct{}, 1),
 		queue: make(chan drpcwire.Packet),
-		ctx:   drpcctx.WithTransport(context.Background(), tr),
 	}
 
 	go m.manageTransport()
@@ -178,6 +175,11 @@ func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
 	}
 }
 
+// newStream creates a stream value with the appropriate configuration for this manager.
+func (m *Manager) newStream(ctx context.Context, sid uint64) *drpcstream.Stream {
+	return drpcstream.NewWithOptions(drpcctx.WithTransport(ctx, m.tr), sid, m.wr, m.opts.Stream)
+}
+
 // NewClientStream starts a stream on the managed transport for use by a client.
 func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Stream, err error) {
 	if err := m.acquireSemaphore(ctx); err != nil {
@@ -189,7 +191,7 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 	}
 
 	m.sid++
-	stream = drpcstream.NewWithOptions(m.ctx, m.sid, m.wr, m.opts.Stream)
+	stream = m.newStream(ctx, m.sid)
 	m.prev = stream
 	go m.manageStream(ctx, stream)
 
@@ -202,8 +204,6 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	if err := m.acquireSemaphore(ctx); err != nil {
 		return nil, "", err
 	}
-
-	callerCache := drpccache.FromContext(ctx)
 
 	var metadata drpcwire.Packet
 
@@ -226,25 +226,19 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 				continue
 
 			case drpcwire.KindInvoke:
-				streamCtx := m.ctx
-
-				if callerCache != nil {
-					streamCtx = drpccache.WithContext(streamCtx, callerCache)
-				}
-
 				if metadata.ID.Stream == pkt.ID.Stream {
 					md, err := drpcmetadata.Decode(metadata.Data)
 					if err != nil {
 						return nil, "", err
 					}
-					streamCtx = drpcmetadata.AddPairs(streamCtx, md)
+					ctx = drpcmetadata.AddPairs(ctx, md)
 				}
 
 				if err := m.waitForPreviousStream(ctx); err != nil {
 					return nil, "", err
 				}
 
-				stream = drpcstream.NewWithOptions(streamCtx, pkt.ID.Stream, m.wr, m.opts.Stream)
+				stream = m.newStream(ctx, pkt.ID.Stream)
 				m.prev = stream
 				go m.manageStream(ctx, stream)
 
@@ -268,6 +262,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 // the underlying transport is closed and the error is recorded.
 func (m *Manager) manageTransport() {
 	defer mon.Task()(nil)(nil)
+
 	<-m.term.Signal()
 	m.tport.Set(m.tr.Close())
 }
@@ -309,12 +304,12 @@ func (m *Manager) manageReader() {
 // manageStream watches the context and the stream and returns when the stream is
 // finished, canceling the stream if the context is canceled.
 func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
-	defer mon.Task()(nil)(nil)
+	defer mon.Task()(&ctx)(nil)
 
 	// create a wait group, launch the workers, and wait for them
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
-	go m.manageStreamPackets(wg, stream)
+	go m.manageStreamPackets(ctx, wg, stream)
 	go m.manageStreamContext(ctx, wg, stream)
 	wg.Wait()
 
@@ -327,8 +322,8 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 // be fatal to the manager, so we set term. HandlePacket also returns a bool to
 // indicate that the stream requires no more packets, and so manageStream can
 // just exit. It releases the semaphore whenever it exits.
-func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Stream) {
-	defer mon.Task()(nil)(nil)
+func (m *Manager) manageStreamPackets(ctx context.Context, wg *sync.WaitGroup, stream *drpcstream.Stream) {
+	defer mon.Task()(&ctx)(nil)
 	defer wg.Done()
 
 	for {
@@ -355,7 +350,7 @@ func (m *Manager) manageStreamPackets(wg *sync.WaitGroup, stream *drpcstream.Str
 // manageStreamContext ensures that if the stream context is canceled, we inform the stream and
 // possibly abort the underlying transport if the stream isn't finished.
 func (m *Manager) manageStreamContext(ctx context.Context, wg *sync.WaitGroup, stream *drpcstream.Stream) {
-	defer mon.Task()(nil)(nil)
+	defer mon.Task()(&ctx)(nil)
 	defer wg.Done()
 
 	select {

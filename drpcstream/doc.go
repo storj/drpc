@@ -6,7 +6,11 @@
 // ![Stream state machine diagram](./state.png)
 package drpcstream
 
-//go:generate bash -c "dot -Tpng -o state.png state.dot"
+// This go:generate directive creates the state.png from the state.dot file. Because the
+// generation outputs different binary data each time, it is protected by an if statement
+// to ensure that it only creates the png if the dot file has a newer modification time
+// somewhat like a Makefile.
+//go:generate bash -c "if [ state.dot -nt state.png ]; then dot -Tpng -o state.png state.dot; fi"
 
 import "github.com/spacemonkeygo/monkit/v3"
 

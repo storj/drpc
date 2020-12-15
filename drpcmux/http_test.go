@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
+
 	"storj.io/drpc/drpcmetadata"
 )
 

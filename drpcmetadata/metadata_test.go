@@ -8,6 +8,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/assert"
+
 	"storj.io/drpc/drpcmetadata/invoke"
 )
 

@@ -20,17 +20,6 @@ cat <<EOF >"${TEMPLATE}"
 {{ .EmitUsage }}
 EOF
 
-# build the godocdown tool
-GODOCDOWN=$(
-	SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-	cd "${SCRIPTDIR}"
-	cd "$(pwd -P)"
-
-	IMPORT=github.com/robertkrimen/godocdown/godocdown
-	go install -v "${IMPORT}"
-	go list -f '{{ .Target }}' "${IMPORT}"
-)
-
 # walk all the packages and generate docs
 PACKAGES=$(go list -f '{{ .ImportPath }}|{{ .Dir }}' storj.io/drpc/...)
 for DESC in ${PACKAGES}; do
@@ -39,6 +28,6 @@ for DESC in ${PACKAGES}; do
 
 	if [[ "$PACKAGE" != "storj.io/drpc" ]]; then
 		log "generating docs for ${PACKAGE}..."
-		"${GODOCDOWN}" -template "${TEMPLATE}" "${DIR}" > "${DIR}/README.md"
+		godocdown -template "${TEMPLATE}" "${DIR}" > "${DIR}/README.md"
 	fi
 done

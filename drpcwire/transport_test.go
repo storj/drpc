@@ -5,6 +5,7 @@ package drpcwire
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -13,6 +14,8 @@ import (
 )
 
 func TestWriter(t *testing.T) {
+	ctx := context.Background()
+
 	run := func(size int) func(t *testing.T) {
 		return func(t *testing.T) {
 			var exp []byte
@@ -22,9 +25,9 @@ func TestWriter(t *testing.T) {
 			for i := 0; i < 1000; i++ {
 				fr := RandFrame()
 				exp = AppendFrame(exp, fr)
-				assert.NoError(t, wr.WriteFrame(fr))
+				assert.NoError(t, wr.WriteFrame(ctx, fr))
 			}
-			assert.NoError(t, wr.Flush())
+			assert.NoError(t, wr.Flush(ctx))
 			assert.That(t, bytes.Equal(exp, got.Bytes()))
 		}
 	}

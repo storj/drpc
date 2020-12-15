@@ -261,8 +261,6 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 // manageTransport ensures that if the manager's term signal is ever set, then
 // the underlying transport is closed and the error is recorded.
 func (m *Manager) manageTransport() {
-	defer mon.Task()(nil)(nil)
-
 	<-m.term.Signal()
 	m.tport.Set(m.tr.Close())
 }
@@ -276,7 +274,6 @@ func (m *Manager) manageTransport() {
 // ensure that no one is reading on the reader. It sets the term signal if there is
 // any error reading packets.
 func (m *Manager) manageReader() {
-	defer mon.Task()(nil)(nil)
 	defer m.read.Set(managerClosed)
 
 	for {

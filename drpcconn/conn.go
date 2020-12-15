@@ -93,15 +93,17 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 }
 
 func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, metadata []byte, out drpc.Message) (err error) {
+	ctx := stream.Context()
+
 	if len(metadata) > 0 {
-		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
+		if err := stream.RawWrite(ctx, drpcwire.KindInvokeMetadata, metadata); err != nil {
 			return err
 		}
 	}
-	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
+	if err := stream.RawWrite(ctx, drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}
-	if err := stream.RawWrite(drpcwire.KindMessage, data); err != nil {
+	if err := stream.RawWrite(ctx, drpcwire.KindMessage, data); err != nil {
 		return err
 	}
 	if err := stream.CloseSend(); err != nil {
@@ -141,15 +143,17 @@ func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err er
 }
 
 func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte, metadata []byte) error {
+	ctx := stream.Context()
+
 	if len(metadata) > 0 {
-		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
+		if err := stream.RawWrite(ctx, drpcwire.KindInvokeMetadata, metadata); err != nil {
 			return err
 		}
 	}
-	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
+	if err := stream.RawWrite(ctx, drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}
-	if err := stream.RawFlush(); err != nil {
+	if err := stream.RawFlush(ctx); err != nil {
 		return err
 	}
 	return nil

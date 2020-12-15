@@ -123,21 +123,21 @@ MsgSend marshals the message with protobuf, writes it, and flushes.
 #### func (*Stream) RawFlush
 
 ```go
-func (s *Stream) RawFlush() (err error)
+func (s *Stream) RawFlush(ctx context.Context) (err error)
 ```
 RawFlush flushes any buffers of data.
 
 #### func (*Stream) RawRecv
 
 ```go
-func (s *Stream) RawRecv() (data []byte, err error)
+func (s *Stream) RawRecv(ctx context.Context) (data []byte, err error)
 ```
 RawRecv returns the raw bytes received for a message.
 
 #### func (*Stream) RawWrite
 
 ```go
-func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error)
+func (s *Stream) RawWrite(ctx context.Context, kind drpcwire.Kind, data []byte) (err error)
 ```
 RawWrite sends the data bytes with the given kind.
 

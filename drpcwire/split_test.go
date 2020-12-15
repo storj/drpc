@@ -5,6 +5,7 @@ package drpcwire
 
 import (
 	"bytes"
+	"context"
 	"math/rand"
 	"testing"
 
@@ -12,6 +13,8 @@ import (
 )
 
 func TestSplit(t *testing.T) {
+	ctx := context.Background()
+
 	for i := 0; i < 1000; i++ {
 		pkt, done, n := RandPacket(), false, rand.Intn(10)-1
 		if size := rand.Intn(100); size < len(pkt.Data) {
@@ -19,7 +22,7 @@ func TestSplit(t *testing.T) {
 		}
 
 		var buf []byte
-		assert.NoError(t, SplitN(pkt, n, func(fr Frame) error {
+		assert.NoError(t, SplitN(ctx, pkt, n, func(ctx context.Context, fr Frame) error {
 			assert.That(t, !done)
 			assert.That(t, len(fr.Data) <= n ||
 				(n == -1 && len(pkt.Data) == len(fr.Data)) ||

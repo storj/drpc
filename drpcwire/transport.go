@@ -5,6 +5,7 @@ package drpcwire
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"sync"
 
@@ -39,8 +40,8 @@ func NewWriter(w io.Writer, size int) *Writer {
 
 // WritePacket writes the packet as a single frame, ignoring any size
 // constraints.
-func (b *Writer) WritePacket(pkt Packet) (err error) {
-	return b.WriteFrame(Frame{
+func (b *Writer) WritePacket(ctx context.Context, pkt Packet) (err error) {
+	return b.WriteFrame(ctx, Frame{
 		Data: pkt.Data,
 		ID:   pkt.ID,
 		Kind: pkt.Kind,
@@ -50,7 +51,9 @@ func (b *Writer) WritePacket(pkt Packet) (err error) {
 
 // WriteFrame appends the frame into the buffer, and if the buffer is larger
 // than the configured size, flushes it.
-func (b *Writer) WriteFrame(fr Frame) (err error) {
+func (b *Writer) WriteFrame(ctx context.Context, fr Frame) (err error) {
+	defer mon.Task()(&ctx)(&err)
+
 	b.mu.Lock()
 	b.buf = AppendFrame(b.buf, fr)
 	if len(b.buf) >= b.size {
@@ -63,8 +66,8 @@ func (b *Writer) WriteFrame(fr Frame) (err error) {
 
 // Flush forces a flush of any buffered data to the io.Writer. It is a no-op if
 // there is no data in the buffer.
-func (b *Writer) Flush() (err error) {
-	defer mon.Task()(nil)(&err)
+func (b *Writer) Flush(ctx context.Context) (err error) {
+	defer mon.Task()(&ctx)(&err)
 
 	b.mu.Lock()
 	if len(b.buf) > 0 {
@@ -116,8 +119,6 @@ func NewReader(r io.Reader) *Reader {
 // If the amount of data in the Packet becomes too large, an error is
 // returned.
 func (s *Reader) ReadPacket() (pkt Packet, err error) {
-	defer mon.Task()(nil)(&err)
-
 	for s.buf.Scan() {
 		rem, fr, ok, err := ParseFrame(s.buf.Bytes())
 		switch {

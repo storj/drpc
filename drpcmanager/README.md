@@ -73,6 +73,13 @@ type Options struct {
 
 	// Stream are passed to any streams the manager creates.
 	Stream drpcstream.Options
+
+	// InactivityTimeout is the amount of time the manager will wait when creating
+	// a NewServerStream. It only includes the time it is reading packets from the
+	// remote client. In other words, it only includes the time that the client
+	// could delay before invoking an RPC. If zero, a default timeout of 30s is
+	// used. If negative, no timeout is used.
+	InactivityTimeout time.Duration
 }
 ```
 

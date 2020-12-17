@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/zeebo/errs"
 
@@ -29,6 +30,13 @@ type Options struct {
 
 	// Stream are passed to any streams the manager creates.
 	Stream drpcstream.Options
+
+	// InactivityTimeout is the amount of time the manager will wait when creating
+	// a NewServerStream. It only includes the time it is reading packets from the
+	// remote client. In other words, it only includes the time that the client
+	// could delay before invoking an RPC. If zero, a default timeout of 30s is
+	// used. If negative, no timeout is used.
+	InactivityTimeout time.Duration
 }
 
 // Manager handles the logic of managing a transport for a drpc client or server.
@@ -206,9 +214,24 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	}
 
 	var metadata drpcwire.Packet
+	var timeoutCh <-chan time.Time
+
+	// set up the timeout channel if necessary.
+	if timeout := m.opts.InactivityTimeout; timeout >= 0 {
+		if timeout == 0 {
+			timeout = 30 * time.Second
+		}
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		timeoutCh = timer.C
+	}
 
 	for {
 		select {
+		case <-timeoutCh:
+			<-m.sem
+			return nil, "", context.DeadlineExceeded
+
 		case <-ctx.Done():
 			<-m.sem
 			return nil, "", ctx.Err()

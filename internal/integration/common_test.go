@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"sync"
 
 	"github.com/zeebo/errs"
 
@@ -146,4 +147,71 @@ func (w *transportSignaler) Write(p []byte) (n int, err error) {
 	w.write.Set(nil)
 	<-w.done.Signal()
 	return 0, io.ErrUnexpectedEOF
+}
+
+//
+// drpc.Transport that allows one to control when blocking starts/stops
+//
+
+type transportBlocker struct {
+	cond  *sync.Cond
+	done  bool
+	write bool
+}
+
+func newTransportBlocker() *transportBlocker {
+	return &transportBlocker{
+		cond:  sync.NewCond(new(sync.Mutex)),
+		write: true,
+	}
+}
+
+func (w *transportBlocker) BlockWrites() {
+	w.cond.L.Lock()
+	defer w.cond.L.Unlock()
+
+	w.write = false
+	w.cond.Broadcast()
+}
+
+func (w *transportBlocker) UnblockWrites() {
+	w.cond.L.Lock()
+	defer w.cond.L.Unlock()
+
+	w.write = true
+	w.cond.Broadcast()
+}
+
+func (w *transportBlocker) Read(p []byte) (n int, err error) {
+	w.cond.L.Lock()
+	defer w.cond.L.Unlock()
+
+	for !w.done {
+		w.cond.Wait()
+	}
+
+	return 0, io.EOF
+}
+
+func (w *transportBlocker) Write(p []byte) (n int, err error) {
+	w.cond.L.Lock()
+	defer w.cond.L.Unlock()
+
+	for !w.write && !w.done {
+		w.cond.Wait()
+	}
+
+	if w.done {
+		return 0, io.EOF
+	}
+	return len(p), nil
+}
+
+func (w *transportBlocker) Close() error {
+	w.cond.L.Lock()
+	defer w.cond.L.Unlock()
+
+	w.done = true
+	w.cond.Broadcast()
+	return nil
 }

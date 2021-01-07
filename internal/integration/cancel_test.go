@@ -6,11 +6,13 @@ package integration
 import (
 	"context"
 	"io"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/zeebo/assert"
 
+	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
 )
 
@@ -160,5 +162,46 @@ func TestCancellationPropagation_Stream(t *testing.T) {
 	case <-cancelled:
 	case <-timeout.Done():
 		t.Fatal("did not finish in time")
+	}
+}
+
+func TestCancelWhileWriteBlocked(t *testing.T) {
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	tr := newTransportBlocker()
+	defer func() { _ = tr.Close() }()
+
+	conn := drpcconn.New(tr)
+	cli := NewDRPCServiceClient(conn)
+
+	done := make(chan struct{}, 1)
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+
+	invokeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	allowCancel := make(chan struct{})
+
+	ctx.Run(func(_ context.Context) {
+		<-allowCancel
+		cancel()
+	})
+
+	ctx.Run(func(_ context.Context) {
+		stream, _ := cli.Method2(invokeCtx)
+		tr.BlockWrites()
+		go close(allowCancel)
+		_ = stream.Send(in(2))
+		done <- struct{}{}
+	})
+
+	select {
+	case <-done:
+	case <-timer.C:
+		var buf [1 << 20]byte
+		t.Logf("%s", buf[:runtime.Stack(buf[:], true)])
+		t.Fatal("timeout")
 	}
 }

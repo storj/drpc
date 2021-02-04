@@ -22,12 +22,14 @@ type drpc struct {
 	*generator.Generator
 
 	contextPkg   string
+	errorsPkg    string
 	drpcPkg      string
 	drpcConn     string
 	drpcStream   string
 	drpcReceiver string
 	drpcMessage  string
 	drpcMux      string
+	drpcerrPkg   string
 }
 
 //
@@ -52,12 +54,14 @@ func (d *drpc) Generate(file *generator.FileDescriptor) {
 	}
 
 	d.drpcPkg = string(d.AddImport("storj.io/drpc"))
+	d.drpcerrPkg = string(d.AddImport("storj.io/drpc/drpcerr"))
 	d.drpcConn = d.drpcPkg + ".Conn"
 	d.drpcStream = d.drpcPkg + ".Stream"
 	d.drpcReceiver = d.drpcPkg + ".Receiver"
 	d.drpcMessage = d.drpcPkg + ".Message"
 	d.drpcMux = d.drpcPkg + ".Mux"
 	d.contextPkg = string(d.AddImport("context"))
+	d.errorsPkg = string(d.AddImport("errors"))
 
 	d.P("// --- DRPC BEGIN ---\n")
 	defer d.P("// --- DRPC END ---\n")
@@ -131,6 +135,15 @@ func (d *drpc) generateService(file *generator.FileDescriptor, service *pb.Servi
 		d.P(d.generateServerSignature(servName, method))
 	}
 	d.P("}")
+	d.P()
+
+	// Server Unimplemented struct
+	d.P("type ", servName, "UnimplementedServer struct {}")
+	d.P()
+	for i, method := range service.Method {
+		d.PrintComments(fmt.Sprintf("%s,2,%d", path, i))
+		d.generateUnimplementedServerMethod(servName, method)
+	}
 	d.P()
 
 	// Server description.
@@ -280,6 +293,20 @@ func (d *drpc) generateServerSignature(servName string, method *pb.MethodDescrip
 	}
 
 	return methName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
+}
+
+func (d *drpc) generateUnimplementedServerMethod(servName string, method *pb.MethodDescriptorProto) {
+	methSignature := d.generateServerSignature(servName, method)
+	d.P("func (s *", servName, "UnimplementedServer) ", methSignature, " {")
+
+	if !method.GetServerStreaming() && !method.GetClientStreaming() {
+		d.P("return nil, ", d.drpcerrPkg, ".WithCode(", d.errorsPkg, ".New(\"Unimplemented\"), 12)")
+	} else {
+		d.P("return ", d.drpcerrPkg, ".WithCode(", d.errorsPkg, ".New(\"Unimplemented\"), 12)")
+	}
+
+	d.P("}")
+	d.P()
 }
 
 func (d *drpc) generateServerReceiver(servName string, method *pb.MethodDescriptorProto) {

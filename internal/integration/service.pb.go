@@ -5,10 +5,12 @@ package integration
 
 import (
 	context "context"
+	errors "errors"
 	fmt "fmt"
 	proto "github.com/gogo/protobuf/proto"
 	math "math"
 	drpc "storj.io/drpc"
+	drpcerr "storj.io/drpc/drpcerr"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -251,6 +253,24 @@ type DRPCServiceServer interface {
 	Method2(DRPCService_Method2Stream) error
 	Method3(*In, DRPCService_Method3Stream) error
 	Method4(DRPCService_Method4Stream) error
+}
+
+type DRPCServiceUnimplementedServer struct{}
+
+func (s *DRPCServiceUnimplementedServer) Method1(context.Context, *In) (*Out, error) {
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), 12)
+}
+
+func (s *DRPCServiceUnimplementedServer) Method2(DRPCService_Method2Stream) error {
+	return drpcerr.WithCode(errors.New("Unimplemented"), 12)
+}
+
+func (s *DRPCServiceUnimplementedServer) Method3(*In, DRPCService_Method3Stream) error {
+	return drpcerr.WithCode(errors.New("Unimplemented"), 12)
+}
+
+func (s *DRPCServiceUnimplementedServer) Method4(DRPCService_Method4Stream) error {
+	return drpcerr.WithCode(errors.New("Unimplemented"), 12)
 }
 
 type DRPCServiceDescription struct{}

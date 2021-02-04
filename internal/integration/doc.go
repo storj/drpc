@@ -4,4 +4,5 @@
 // Package integration holds integration tests for drpc.
 package integration
 
-//go:generate bash -c "go install storj.io/drpc/cmd/protoc-gen-drpc && protoc --drpc_out=plugins=drpc:. service.proto"
+//go:generate go install storj.io/drpc/cmd/protoc-gen-drpc
+//go:generate protoc --drpc_out=plugins=drpc:. service.proto

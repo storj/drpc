@@ -8,6 +8,8 @@ import (
 	fmt "fmt"
 	proto "github.com/gogo/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 	drpc "storj.io/drpc"
 )
@@ -21,7 +23,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type In struct {
 	In                   int64    `protobuf:"varint,1,opt,name=in,proto3" json:"in,omitempty"`
@@ -519,6 +521,23 @@ type ServiceServer interface {
 	Method2(Service_Method2Server) error
 	Method3(*In, Service_Method3Server) error
 	Method4(Service_Method4Server) error
+}
+
+// UnimplementedServiceServer can be embedded to have forward compatible implementations.
+type UnimplementedServiceServer struct {
+}
+
+func (*UnimplementedServiceServer) Method1(ctx context.Context, req *In) (*Out, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Method1 not implemented")
+}
+func (*UnimplementedServiceServer) Method2(srv Service_Method2Server) error {
+	return status.Errorf(codes.Unimplemented, "method Method2 not implemented")
+}
+func (*UnimplementedServiceServer) Method3(req *In, srv Service_Method3Server) error {
+	return status.Errorf(codes.Unimplemented, "method Method3 not implemented")
+}
+func (*UnimplementedServiceServer) Method4(srv Service_Method4Server) error {
+	return status.Errorf(codes.Unimplemented, "method Method4 not implemented")
 }
 
 func RegisterServiceServer(s *grpc.Server, srv ServiceServer) {

@@ -3,7 +3,7 @@ module storj.io/drpc/internal/grpccompat
 go 1.13
 
 require (
-	github.com/gogo/protobuf v1.2.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/zeebo/assert v1.1.0
 	github.com/zeebo/errs v1.2.2
 	google.golang.org/grpc v1.25.1

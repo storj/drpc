@@ -4,4 +4,4 @@
 // Package grpccompat holds compatibility tests for grpc.
 package grpccompat
 
-//go:generate bash -c "go install storj.io/drpc/cmd/protoc-gen-drpc && protoc --drpc_out=plugins=drpc+grpc:. service.proto"
+//go:generate protoc --gogo_out=plugins=grpc:. --drpc_out=. service.proto

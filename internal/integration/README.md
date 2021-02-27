@@ -63,6 +63,37 @@ type DRPCServiceServer interface {
 ```
 
 
+#### type DRPCServiceUnimplementedServer
+
+```go
+type DRPCServiceUnimplementedServer struct{}
+```
+
+
+#### func (*DRPCServiceUnimplementedServer) Method1
+
+```go
+func (s *DRPCServiceUnimplementedServer) Method1(context.Context, *In) (*Out, error)
+```
+
+#### func (*DRPCServiceUnimplementedServer) Method2
+
+```go
+func (s *DRPCServiceUnimplementedServer) Method2(DRPCService_Method2Stream) error
+```
+
+#### func (*DRPCServiceUnimplementedServer) Method3
+
+```go
+func (s *DRPCServiceUnimplementedServer) Method3(*In, DRPCService_Method3Stream) error
+```
+
+#### func (*DRPCServiceUnimplementedServer) Method4
+
+```go
+func (s *DRPCServiceUnimplementedServer) Method4(DRPCService_Method4Stream) error
+```
+
 #### type DRPCService_Method1Stream
 
 ```go

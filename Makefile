@@ -1,7 +1,7 @@
 .DEFAULT_GOAL = all
 
 .PHONY: all
-all: download docs generate build lint test tidy
+all: download docs generate lint test tidy
 
 .PHONY: quick
 quick: generate test
@@ -17,10 +17,6 @@ docs:
 .PHONY: generate
 generate:
 	./scripts/run.sh '*' go generate ./...
-
-.PHONY: build
-build:
-	./scripts/run.sh '*' go build ./...
 
 .PHONY: lint
 lint:

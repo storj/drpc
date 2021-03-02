@@ -47,7 +47,7 @@ Closed returns true if the connection is already closed.
 #### func (*Conn) Invoke
 
 ```go
-func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (err error)
+func (c *Conn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, out drpc.Message) (err error)
 ```
 Invoke issues the rpc on the transport serializing in, waits for a response, and
 deserializes it into out. Only one Invoke or Stream may be open at a time.
@@ -55,7 +55,7 @@ deserializes it into out. Only one Invoke or Stream may be open at a time.
 #### func (*Conn) NewStream
 
 ```go
-func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err error)
+func (c *Conn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ drpc.Stream, err error)
 ```
 NewStream begins a streaming rpc on the connection. Only one Invoke or Stream
 may be open at a time.

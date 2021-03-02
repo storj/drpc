@@ -24,13 +24,9 @@ type Transport interface {
 	io.Closer
 }
 
-// Message is a protobuf message, just here so protobuf isn't necessary to
-// import or be exposed in the types.
-type Message interface {
-	Reset()
-	String() string
-	ProtoMessage()
-}
+// Message is a protobuf message. It is expected to be used with an Encoding.
+// This exists so that one can use whatever protobuf library/runtime they want.
+type Message interface{}
 
 // Conn represents a client connection to a server.
 type Conn interface {
@@ -45,11 +41,11 @@ type Conn interface {
 
 	// Invoke issues a unary rpc to the remote. Only one Invoke or Stream may be
 	// open at once.
-	Invoke(ctx context.Context, rpc string, in, out Message) error
+	Invoke(ctx context.Context, rpc string, enc Encoding, in, out Message) error
 
 	// NewStream starts a stream with the remote. Only one Invoke or Stream may be
 	// open at once.
-	NewStream(ctx context.Context, rpc string) (Stream, error)
+	NewStream(ctx context.Context, rpc string, enc Encoding) (Stream, error)
 }
 
 // Stream is a bi-directional stream of messages to some other party.
@@ -60,10 +56,10 @@ type Stream interface {
 	Context() context.Context
 
 	// MsgSend sends the Message to the remote.
-	MsgSend(msg Message) error
+	MsgSend(msg Message, enc Encoding) error
 
 	// MsgRecv receives a Message from the remote.
-	MsgRecv(msg Message) error
+	MsgRecv(msg Message, enc Encoding) error
 
 	// CloseSend signals to the remote that we will no longer send any messages.
 	CloseSend() error
@@ -84,7 +80,7 @@ type Description interface {
 	// Method returns the information about the nth method along with a handler
 	// to invoke it. The method interface that it returns is expected to be
 	// a method expression like `(*Type).HandlerName`.
-	Method(n int) (rpc string, receiver Receiver, method interface{}, ok bool)
+	Method(n int) (rpc string, encoding Encoding, receiver Receiver, method interface{}, ok bool)
 }
 
 // Mux is a type that can have an implementation and a Description registered with it.
@@ -95,4 +91,21 @@ type Mux interface {
 // Handler handles streams and rpcs dispatched to it by a Server.
 type Handler interface {
 	HandleRPC(stream Stream, rpc string) (err error)
+}
+
+// Encoding represents a way to marshal/unmarshal Message types.
+type Encoding interface {
+	// Marshal returns the encoded form of msg.
+	Marshal(msg Message) ([]byte, error)
+
+	// Unmarshal reads the encoded form of some Message into msg.
+	// The buf is expected to contain only a single complete Message.
+	Unmarshal(buf []byte, msg Message) error
+
+	// JSONMarshal returns the json encoded form of msg.
+	JSONMarshal(msg Message) ([]byte, error)
+
+	// JSONUnmarshal reads the json encoded form of some Message into msg.
+	// The buf is expected to contain only a single complete Message.
+	JSONUnmarshal(buf []byte, msg Message) error
 }

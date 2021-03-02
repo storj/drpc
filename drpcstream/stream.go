@@ -9,7 +9,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
@@ -301,12 +300,12 @@ func (s *Stream) RawRecv(ctx context.Context) (data []byte, err error) {
 // msg read/write
 //
 
-// MsgSend marshals the message with protobuf, writes it, and flushes.
-func (s *Stream) MsgSend(msg drpc.Message) (err error) {
+// MsgSend marshals the message with the encoding, writes it, and flushes.
+func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
 	ctx := s.ctx
 	defer mon.Task()(&ctx)(&err)
 
-	data, err := proto.Marshal(msg)
+	data, err := enc.Marshal(msg)
 	if err != nil {
 		return errs.Wrap(err)
 	}
@@ -319,8 +318,8 @@ func (s *Stream) MsgSend(msg drpc.Message) (err error) {
 	return nil
 }
 
-// MsgRecv recives some protobuf data and unmarshals it into msg.
-func (s *Stream) MsgRecv(msg drpc.Message) (err error) {
+// MsgRecv recives some message data and unmarshals it with enc into msg.
+func (s *Stream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error) {
 	ctx := s.ctx
 	defer mon.Task()(&ctx)(&err)
 
@@ -328,7 +327,7 @@ func (s *Stream) MsgRecv(msg drpc.Message) (err error) {
 	if err != nil {
 		return err
 	}
-	return proto.Unmarshal(data, msg)
+	return enc.Unmarshal(data, msg)
 }
 
 //

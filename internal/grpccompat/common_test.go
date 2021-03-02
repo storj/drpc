@@ -386,6 +386,8 @@ func (i *serviceImpl) GRPC() (g *grpcImpl) {
 //
 
 type drpcImpl struct {
+	DRPCServiceUnimplementedServer
+
 	Method1Fn func(ctx context.Context, in *In) (*Out, error)
 	Method2Fn func(stream DRPCService_Method2Stream) error
 	Method3Fn func(in *In, stream DRPCService_Method3Stream) error
@@ -413,6 +415,8 @@ func (d drpcImpl) Method4(stream DRPCService_Method4Stream) error {
 //
 
 type grpcImpl struct {
+	UnimplementedServiceServer
+
 	Method1Fn func(ctx context.Context, in *In) (*Out, error)
 	Method2Fn func(stream Service_Method2Server) error
 	Method3Fn func(in *In, stream Service_Method3Server) error

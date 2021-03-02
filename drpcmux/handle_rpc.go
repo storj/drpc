@@ -24,7 +24,7 @@ func (m *Mux) HandleRPC(stream drpc.Stream, rpc string) (err error) {
 		if !ok {
 			return drpc.InternalError.New("invalid rpc input type")
 		}
-		if err := stream.MsgRecv(msg); err != nil {
+		if err := stream.MsgRecv(msg, data.enc); err != nil {
 			return errs.Wrap(err)
 		}
 		in = msg
@@ -35,7 +35,7 @@ func (m *Mux) HandleRPC(stream drpc.Stream, rpc string) (err error) {
 	case err != nil:
 		return errs.Wrap(err)
 	case out != nil && !reflect.ValueOf(out).IsNil():
-		return stream.MsgSend(out)
+		return stream.MsgSend(out, data.enc)
 	default:
 		return stream.CloseSend()
 	}

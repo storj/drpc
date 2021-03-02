@@ -4,7 +4,6 @@
 package drpcmux
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"net/textproto"
 	"reflect"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
@@ -83,11 +81,19 @@ func (m *Mux) serveHTTP(ctx context.Context, rpc string, body io.Reader) ([]byte
 		return nil, drpc.ProtocolError.New("non-unitary rpc: %q", rpc)
 	}
 
+	const maxSize = 4 << 20
+	bodyData, err := io.ReadAll(io.LimitReader(body, maxSize))
+	if err != nil {
+		return nil, err
+	} else if len(bodyData) >= maxSize {
+		return nil, drpc.ProtocolError.New("incoming message size limit exceeded")
+	}
+
 	in, ok := reflect.New(data.in1.Elem()).Interface().(drpc.Message)
 	if !ok {
 		return nil, drpc.InternalError.New("invalid rpc input type")
 	}
-	if err := jsonpb.Unmarshal(body, in); err != nil {
+	if err := data.enc.JSONUnmarshal(bodyData, in); err != nil {
 		return nil, drpc.ProtocolError.Wrap(err)
 	}
 
@@ -98,11 +104,11 @@ func (m *Mux) serveHTTP(ctx context.Context, rpc string, body io.Reader) ([]byte
 		return nil, nil
 	}
 
-	var buf bytes.Buffer
-	if err := (&jsonpb.Marshaler{Indent: "  "}).Marshal(&buf, out); err != nil {
+	buf, err := data.enc.JSONMarshal(out)
+	if err != nil {
 		return nil, drpc.InternalError.Wrap(err)
 	}
-	return buf.Bytes(), nil
+	return buf, nil
 }
 
 func headerValues(h http.Header, key string) []string {

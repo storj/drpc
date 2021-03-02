@@ -4,4 +4,4 @@
 // Package grpccompat holds compatibility tests for grpc.
 package grpccompat
 
-//go:generate protoc --gogo_out=plugins=grpc:. --drpc_out=. service.proto
+//go:generate protoc --go_out=. --go-grpc_out=. --drpc_out=. service.proto

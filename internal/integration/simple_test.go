@@ -26,7 +26,7 @@ func TestSimple(t *testing.T) {
 	{
 		out, err := cli.Method1(ctx, &In{In: 1})
 		assert.NoError(t, err)
-		assert.DeepEqual(t, out, &Out{Out: 1})
+		assert.True(t, Equal(out, &Out{Out: 1}))
 	}
 
 	{
@@ -36,7 +36,7 @@ func TestSimple(t *testing.T) {
 		assert.NoError(t, stream.Send(&In{In: 2}))
 		out, err := stream.CloseAndRecv()
 		assert.NoError(t, err)
-		assert.DeepEqual(t, out, &Out{Out: 2})
+		assert.True(t, Equal(out, &Out{Out: 2}))
 	}
 
 	{
@@ -48,7 +48,7 @@ func TestSimple(t *testing.T) {
 				break
 			}
 			assert.NoError(t, err)
-			assert.DeepEqual(t, out, &Out{Out: 3})
+			assert.True(t, Equal(out, &Out{Out: 3}))
 		}
 	}
 
@@ -66,7 +66,7 @@ func TestSimple(t *testing.T) {
 				break
 			}
 			assert.NoError(t, err)
-			assert.DeepEqual(t, out, &Out{Out: 4})
+			assert.True(t, Equal(out, &Out{Out: 4}))
 		}
 	}
 

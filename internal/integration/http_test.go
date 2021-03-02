@@ -4,7 +4,6 @@
 package integration
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io/ioutil"
@@ -13,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc/drpcctx"
@@ -55,41 +53,47 @@ func TestHTTP(t *testing.T) {
 		return r
 	}
 
+	assertEqual := func(t *testing.T, a, b response) {
+		assert.True(t, Equal((*Out)(a.Response), (*Out)(b.Response)))
+		a.Response, b.Response = nil, nil
+		assert.DeepEqual(t, a, b)
+	}
+
 	// basic successful request
-	assert.DeepEqual(t, request("/service.Service/Method1", `{"in": 1}`), response{
+	assertEqual(t, request("/service.Service/Method1", `{"in": 1}`), response{
 		Status:   "ok",
 		Response: &jsonOut{Out: 1},
 	})
 
 	// basic erroring request
-	assert.DeepEqual(t, request("/service.Service/Method1", `{"in": 5}`), response{
+	assertEqual(t, request("/service.Service/Method1", `{"in": 5}`), response{
 		Status: "error",
 		Error:  "test",
 		Code:   5,
 	})
 
 	// metadata gets passed through
-	assert.DeepEqual(t, request("/service.Service/Method1", `{"in": 1}`, "inc=10"), response{
+	assertEqual(t, request("/service.Service/Method1", `{"in": 1}`, "inc=10"), response{
 		Status:   "ok",
 		Response: &jsonOut{Out: 11},
 	})
 
 	// non-existing method
-	assert.DeepEqual(t, request("/service.Service/DoesNotExist", `{}`), response{
+	assertEqual(t, request("/service.Service/DoesNotExist", `{}`), response{
 		Status: "error",
 		Error:  `protocol error: unknown rpc: "/service.Service/DoesNotExist"`,
 	})
 
 	// non-unitary methods
-	assert.DeepEqual(t, request("/service.Service/Method2", `{}`), response{
+	assertEqual(t, request("/service.Service/Method2", `{}`), response{
 		Status: "error",
 		Error:  `protocol error: non-unitary rpc: "/service.Service/Method2"`,
 	})
-	assert.DeepEqual(t, request("/service.Service/Method3", `{}`), response{
+	assertEqual(t, request("/service.Service/Method3", `{}`), response{
 		Status: "error",
 		Error:  `protocol error: non-unitary rpc: "/service.Service/Method3"`,
 	})
-	assert.DeepEqual(t, request("/service.Service/Method4", `{}`), response{
+	assertEqual(t, request("/service.Service/Method4", `{}`), response{
 		Status: "error",
 		Error:  `protocol error: non-unitary rpc: "/service.Service/Method4"`,
 	})
@@ -102,5 +106,5 @@ func TestHTTP(t *testing.T) {
 type jsonOut Out
 
 func (o *jsonOut) UnmarshalJSON(v []byte) error {
-	return jsonpb.Unmarshal(bytes.NewReader(v), (*Out)(o))
+	return Encoding.JSONUnmarshal(v, (*Out)(o))
 }

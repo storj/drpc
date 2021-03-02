@@ -46,13 +46,13 @@ func TestCache(t *testing.T) {
 		assert.NoError(t, err)
 		out, err := stream.CloseAndRecv()
 		assert.NoError(t, err)
-		assert.DeepEqual(t, out, &Out{Out: 0})
+		assert.True(t, Equal(out, &Out{Out: 0}))
 	}
 
 	{ // store value in the cache
 		out, err := cli.Method1(ctx, in(1))
 		assert.NoError(t, err)
-		assert.DeepEqual(t, out, &Out{Out: 123})
+		assert.True(t, Equal(out, &Out{Out: 123}))
 	}
 
 	{ // expected value in the cache
@@ -60,6 +60,6 @@ func TestCache(t *testing.T) {
 		assert.NoError(t, err)
 		out, err := stream.CloseAndRecv()
 		assert.NoError(t, err)
-		assert.DeepEqual(t, out, &Out{Out: 42})
+		assert.True(t, Equal(out, &Out{Out: 42}))
 	}
 }

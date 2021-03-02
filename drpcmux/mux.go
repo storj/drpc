@@ -31,6 +31,7 @@ var (
 
 type rpcData struct {
 	srv      interface{}
+	enc      drpc.Encoding
 	receiver drpc.Receiver
 	in1      reflect.Type
 	in2      reflect.Type
@@ -42,11 +43,11 @@ type rpcData struct {
 func (m *Mux) Register(srv interface{}, desc drpc.Description) error {
 	n := desc.NumMethods()
 	for i := 0; i < n; i++ {
-		rpc, receiver, method, ok := desc.Method(i)
+		rpc, enc, receiver, method, ok := desc.Method(i)
 		if !ok {
 			return errs.New("Description returned invalid method for index %d", i)
 		}
-		if err := m.registerOne(srv, rpc, receiver, method); err != nil {
+		if err := m.registerOne(srv, rpc, enc, receiver, method); err != nil {
 			return err
 		}
 	}
@@ -54,8 +55,8 @@ func (m *Mux) Register(srv interface{}, desc drpc.Description) error {
 }
 
 // registerOne does the work to register a single rpc.
-func (m *Mux) registerOne(srv interface{}, rpc string, receiver drpc.Receiver, method interface{}) error {
-	data := rpcData{srv: srv, receiver: receiver}
+func (m *Mux) registerOne(srv interface{}, rpc string, enc drpc.Encoding, receiver drpc.Receiver, method interface{}) error {
+	data := rpcData{srv: srv, enc: enc, receiver: receiver}
 
 	switch mt := reflect.TypeOf(method); {
 	// unitary input, unitary output

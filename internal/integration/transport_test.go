@@ -86,7 +86,7 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	cli, close := createConnection(impl{
 		Method2Fn: func(stream DRPCService_Method2Stream) error {
 			started <- struct{}{}
-			errs <- stream.MsgRecv(nil)
+			errs <- stream.MsgRecv(nil, Encoding)
 			return nil
 		},
 	})
@@ -96,7 +96,7 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	ctx.Run(func(ctx context.Context) {
 		stream, _ := cli.Method2(ctx)
 		started <- struct{}{}
-		errs <- stream.MsgRecv(nil)
+		errs <- stream.MsgRecv(nil, Encoding)
 	})
 
 	// wait for it to be started. it is important to wait for

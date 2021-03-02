@@ -6,7 +6,6 @@ package drpcconn
 import (
 	"context"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
@@ -61,7 +60,7 @@ func (c *Conn) Close() (err error) {
 
 // Invoke issues the rpc on the transport serializing in, waits for a response, and
 // deserializes it into out. Only one Invoke or Stream may be open at a time.
-func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (err error) {
+func (c *Conn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, out drpc.Message) (err error) {
 	defer mon.Task()(&ctx)(&err)
 	defer mon.TaskNamed("invoke" + rpc)(&ctx)(&err)
 	mon.Event("outgoing_requests")
@@ -75,7 +74,7 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 		}
 	}
 
-	data, err := proto.Marshal(in)
+	data, err := enc.Marshal(in)
 	if err != nil {
 		return errs.Wrap(err)
 	}
@@ -86,13 +85,13 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, []byte(rpc), data, metadata, out); err != nil {
+	if err := c.doInvoke(stream, enc, []byte(rpc), data, metadata, out); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, metadata []byte, out drpc.Message) (err error) {
+func (c *Conn) doInvoke(stream *drpcstream.Stream, enc drpc.Encoding, rpc, data []byte, metadata []byte, out drpc.Message) (err error) {
 	ctx := stream.Context()
 
 	if len(metadata) > 0 {
@@ -109,7 +108,7 @@ func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, metadata []
 	if err := stream.CloseSend(); err != nil {
 		return err
 	}
-	if err := stream.MsgRecv(out); err != nil {
+	if err := stream.MsgRecv(out, enc); err != nil {
 		return err
 	}
 	return nil
@@ -117,7 +116,7 @@ func (c *Conn) doInvoke(stream *drpcstream.Stream, rpc, data []byte, metadata []
 
 // NewStream begins a streaming rpc on the connection. Only one Invoke or Stream may
 // be open at a time.
-func (c *Conn) NewStream(ctx context.Context, rpc string) (_ drpc.Stream, err error) {
+func (c *Conn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ drpc.Stream, err error) {
 	defer mon.Task()(&ctx)(&err)
 	defer mon.TaskNamed("stream" + rpc)(&ctx)(&err)
 	mon.Event("outgoing_requests")

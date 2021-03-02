@@ -109,16 +109,16 @@ any writes or reads.
 #### func (*Stream) MsgRecv
 
 ```go
-func (s *Stream) MsgRecv(msg drpc.Message) (err error)
+func (s *Stream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error)
 ```
-MsgRecv recives some protobuf data and unmarshals it into msg.
+MsgRecv recives some message data and unmarshals it with enc into msg.
 
 #### func (*Stream) MsgSend
 
 ```go
-func (s *Stream) MsgSend(msg drpc.Message) (err error)
+func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error)
 ```
-MsgSend marshals the message with protobuf, writes it, and flushes.
+MsgSend marshals the message with the encoding, writes it, and flushes.
 
 #### func (*Stream) RawFlush
 

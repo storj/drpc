@@ -38,7 +38,3 @@ download:
 .PHONY: tidy
 tidy:
 	./scripts/run.sh go mod tidy
-
-.PHONY: tools
-tools:
-	./scripts/install-tools.sh

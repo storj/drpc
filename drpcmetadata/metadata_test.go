@@ -4,13 +4,46 @@
 package drpcmetadata
 
 import (
+	"context"
 	"testing"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/assert"
-
-	"storj.io/drpc/drpcmetadata/invoke"
 )
+
+func TestAddGet(t *testing.T) {
+	ctx := context.Background()
+
+	{
+		metadata, ok := Get(ctx)
+		assert.That(t, !ok)
+		assert.Nil(t, metadata)
+	}
+
+	ctx = Add(ctx, "foo", "bar")
+
+	{
+		metadata, ok := Get(ctx)
+		assert.That(t, ok)
+		assert.Equal(t, metadata, map[string]string{
+			"foo": "bar",
+		})
+	}
+
+	ctx = AddPairs(ctx, map[string]string{
+		"ak": "av",
+		"bk": "bv",
+	})
+
+	{
+		metadata, ok := Get(ctx)
+		assert.That(t, ok)
+		assert.Equal(t, metadata, map[string]string{
+			"foo": "bar",
+			"ak":  "av",
+			"bk":  "bv",
+		})
+	}
+}
 
 func TestEncode(t *testing.T) {
 	t.Run("Empty Metadata", func(t *testing.T) {
@@ -38,13 +71,9 @@ func TestDecode(t *testing.T) {
 	})
 
 	t.Run("With Metadata", func(t *testing.T) {
-		msg := invoke.Metadata{
-			Data: map[string]string{"test": "a"},
-		}
-		data, err := proto.Marshal(&msg)
-		assert.NoError(t, err)
+		data := []byte{0xa, 0x9, 0xa, 0x4, 0x74, 0x65, 0x73, 0x74, 0x12, 0x1, 0x61}
 		metadata, err := Decode(data)
 		assert.NoError(t, err)
-		assert.DeepEqual(t, msg.Data, metadata)
+		assert.DeepEqual(t, metadata, map[string]string{"test": "a"})
 	})
 }

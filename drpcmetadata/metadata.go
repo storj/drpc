@@ -6,9 +6,7 @@ package drpcmetadata
 import (
 	"context"
 
-	"github.com/gogo/protobuf/proto"
-
-	"storj.io/drpc/drpcmetadata/invoke"
+	"github.com/zeebo/errs"
 )
 
 // AddPairs attaches metadata onto a context and return the context.
@@ -20,22 +18,34 @@ func AddPairs(ctx context.Context, metadata map[string]string) context.Context {
 }
 
 // Encode generates byte form of the metadata and appends it onto the passed in buffer.
-func Encode(buffer []byte, metadata map[string]string) ([]byte, error) {
-	data, err := proto.Marshal(&invoke.Metadata{Data: metadata})
-	if err != nil {
-		return buffer, err
+func Encode(buf []byte, metadata map[string]string) ([]byte, error) {
+	for key, value := range metadata {
+		buf = appendEntry(buf, key, value)
 	}
-	return append(buffer, data...), nil
+	return buf, nil
 }
 
 // Decode translate byte form of metadata into key/value metadata.
-func Decode(data []byte) (map[string]string, error) {
-	var md invoke.Metadata
-	err := proto.Unmarshal(data, &md)
-	if err != nil {
-		return nil, err
+func Decode(buf []byte) (map[string]string, error) {
+	var out map[string]string
+	var key, value []byte
+	var ok bool
+	var err error
+
+	for len(buf) > 0 {
+		buf, key, value, ok, err = readEntry(buf)
+		if err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, errs.New("invalid data")
+		}
+		if out == nil {
+			out = make(map[string]string)
+		}
+		out[string(key)] = string(value)
 	}
-	return md.Data, nil
+
+	return out, nil
 }
 
 type metadataKey struct{}

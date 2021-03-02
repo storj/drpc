@@ -24,14 +24,14 @@ AddPairs attaches metadata onto a context and return the context.
 #### func  Decode
 
 ```go
-func Decode(data []byte) (map[string]string, error)
+func Decode(buf []byte) (map[string]string, error)
 ```
 Decode translate byte form of metadata into key/value metadata.
 
 #### func  Encode
 
 ```go
-func Encode(buffer []byte, metadata map[string]string) ([]byte, error)
+func Encode(buf []byte, metadata map[string]string) ([]byte, error)
 ```
 Encode generates byte form of the metadata and appends it onto the passed in
 buffer.

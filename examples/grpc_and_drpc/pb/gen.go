@@ -4,4 +4,4 @@
 // Package pb includes protobufs for this example.
 package pb
 
-//go:generate protoc --go_out=. --go-grpc_out=. --drpc_out=. sesamestreet.proto
+//go:generate protoc --go_out=. --go-grpc_out=. --go-drpc_out=. sesamestreet.proto

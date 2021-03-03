@@ -8,4 +8,4 @@ package backcompat
 // and rename the resulting binary to be `protoc-gen-drpc17`. Then, execute the following
 // command: protoc --drpc17_out=plugins=drpc:oldservicedefs/. servicedefs.proto
 
-//go:generate protoc --go_out=newservicedefs/. --drpc_out=newservicedefs/. servicedefs.proto
+//go:generate protoc --go_out=newservicedefs/. --go-drpc_out=newservicedefs/. servicedefs.proto

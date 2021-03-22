@@ -21,7 +21,7 @@ func main() {
 		ParamFunc: flags.Set,
 	}.Run(func(plugin *protogen.Plugin) error {
 		for _, f := range plugin.Files {
-			if !f.Generate {
+			if !f.Generate || len(f.Services) == 0 {
 				continue
 			}
 			generateFile(plugin, f, *protolib)

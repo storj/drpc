@@ -1,14 +1,10 @@
 .DEFAULT_GOAL = all
 
 .PHONY: all
-all: download docs generate lint test tidy
+all: docs generate lint test tidy
 
 .PHONY: quick
 quick: generate test
-
-.PHONY: download
-download:
-	./scripts/run.sh '*' go mod download
 
 .PHONY: docs
 docs:

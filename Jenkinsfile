@@ -16,10 +16,9 @@ pipeline {
     }
 
     stages {
-        stage('Download') {
+        stage('Checkout') {
             steps {
                 checkout scm
-                sh 'make download'
             }
         }
 

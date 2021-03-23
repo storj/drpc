@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/textproto"
 	"reflect"
@@ -82,7 +83,7 @@ func (m *Mux) serveHTTP(ctx context.Context, rpc string, body io.Reader) ([]byte
 	}
 
 	const maxSize = 4 << 20
-	bodyData, err := io.ReadAll(io.LimitReader(body, maxSize))
+	bodyData, err := ioutil.ReadAll(io.LimitReader(body, maxSize))
 	if err != nil {
 		return nil, err
 	} else if len(bodyData) >= maxSize {

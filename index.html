@@ -75,8 +75,8 @@
             <p>DRPC works with the <code>protoc</code> compiler to generate RPC
               stubs for you.</p>
             <pre><code class="bash">
-$ go get storj.io/drpc/cmd/protoc-gen-drpc
-$ protoc --drpc_out=plugins=drpc:. sesamestreet.proto
+$ go get storj.io/drpc/cmd/protoc-gen-go-drpc
+$ protoc --go_out=. --go-drpc_out=. sesamestreet.proto
             </code></pre>
             <p><a href="./docs.html">Check out the quickstart here.</a></p>
           </div>

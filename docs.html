@@ -80,14 +80,14 @@ service CookieMonster {
         </code></pre>
 
         <p>
-          Place <code>protoc-gen-drpc</code> in your <code>$PATH</code>
+          Place <code>protoc-gen-go-drpc</code> in your <code>$PATH</code>
           and have <code>protoc</code> generate your definitions:
         </p>
         <pre><code class="bash">
-$ go get storj.io/drpc/cmd/protoc-gen-drpc
-$ protoc --drpc_out=plugins=drpc:. sesamestreet.proto
+$ go get storj.io/drpc/cmd/protoc-gen-go-drpc
+$ protoc --go_out=. --go-drpc_out=. sesamestreet.proto
 $ ls
-sesamestreet.pb.go sesamestreet.proto
+sesamestreet_drpc.pb.go sesamestreet.pb.go sesamestreet.proto
         </code></pre>
 
         <p>Next, define your server code:</p>
@@ -138,7 +138,9 @@ func CookieTime(ctx context.Context, address string) error {
 }
         </code></pre>
 
-      <p>You're done! Yum!</p>
+      <p>You're done! Yum! If you'd like to see more examples of usage in different contexts, such
+       as DRPC and gRPC side by side, the HTTP/JSON gateway, or others, make sure to check out
+       <a href="https://github.com/storj/drpc/tree/main/examples">our other examples</a>.</p>
 
       </div>
     </div>

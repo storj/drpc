@@ -1,0 +1,73 @@
+#header {
+  background: linear-gradient(290.91deg, #2582FF 0%, #133E9C 100%);
+}
+body {
+  font-family: 'Inter', sans-serif;
+  font-style: normal;
+  font-weight: normal;
+}
+a.nav-link {
+  font-size: 16px;
+  line-height: 20px;
+  color: #fff !important;
+  margin-left: 14px;
+}
+.header-row {
+  margin-top: 77px;
+  margin-bottom: 116px;
+}
+a.nav-link.boxed {
+  border: 2px solid #fff;
+  border-radius: 4px;
+  font-weight: bold;
+  padding-left: 30px !important;
+  padding-right: 30px !important;
+}
+h2 {
+  font-weight: 800;
+  margin-bottom: 22px;
+}
+h1, h2, h3, h4, h5 {
+  font-family: 'Poppins', sans-serif;
+}
+.header-content {
+  background: #fff;
+  padding: 42px;
+  max-width: 540px;
+}
+.header-lines-container {
+  position: relative;
+  overflow: visible;
+}
+.header-lines {
+  background-image: url("./lines.svg");
+  background-repeat: repeat-x;
+  background-position: left center;
+  overflow: visible;
+  float: left;
+  position: absolute;
+  width: 100vw;
+  height: 100%;
+  left: -40px;
+}
+#content-background {
+  padding-top: 113px;
+  padding-bottom: 113px;
+  background-image: url("./lines2.svg");
+  background-position: center top;
+  background-repeat: repeat;
+}
+#footer {
+  background: #000;
+  padding-top: 25px;
+}
+.footer-links a {
+  color: #fff !important;
+  margin-left: 30px;
+}
+pre code {
+  font-family: 'Source Code Pro', sans-serif;
+  color: #fff;
+  background: #000;
+  padding: 20px 36px !important;
+}

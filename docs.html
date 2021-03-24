@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter&family=Poppins:wght@800&family=Source+Code+Pro&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/tomorrow-night-bright.min.css">
+    <link rel="stylesheet" href="./style.css">
+    <title>DRPC Documentation - Storj Labs</title>
+  </head>
+  <body>
+    <div class="container-fluid" id="header" style="overflow: hidden;">
+      <div class="container">
+        <nav class="navbar navbar-expand-sm navbar-dark">
+          <a class="navbar-brand" href="https://storj.io/" style="margin-right: 6.92px;">
+            <img src="./logo.svg" style="height: 41px;"/>
+          </a>
+          <a class="navbar-brand" href="https://storj.io/" style="margin-right: 15.78px;">
+            <img src="./storj.svg" style="height: 13px;" alt="Storj"/>
+          </a>
+          <img src="./sep.svg" style="height: 25px; margin-right: 15.51px;"/>
+          <a href="./" class="navbar-brand">
+            <img src="./drpc.svg" style="height: 13px;" alt="DRPC"/>
+          </a>
+          <div class="mr-auto"></div>
+
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <a class="nav-link" href="./">Intro</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="./docs.html">Documentation</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link boxed" href="https://github.com/storj/drpc/">GitHub</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+
+    <div class="container-fluid" id="content-background">
+      <div class="container">
+        <h2>Documentation</h2>
+        <p>Make sure to check out <a href="#">our launch blog post</a>.</p>
+        <p>Currently, only Go language bindings exist for the drpc wire protocol,
+        though bindings for other languages should be exceptionally straightforward.</p>
+        <ul>
+          <li><a href="https://pkg.go.dev/storj.io/drpc">Go module documentation</a></li>
+          <li><a href="https://pkg.go.dev/storj.io/drpc?tab=subdirectories">Go module subpackages</a></li>
+        </ul>
+        <br/>
+        <h3>Go Quickstart</h3>
+
+        <p>First, make sure your protocol buffer file is defined:</p>
+
+        <pre><code class="protobuf">
+syntax = "proto3";
+
+package sesamestreet;
+
+message Cookie {
+  enum Type {
+    Sugar = 0;
+    Oatmeal = 1;
+    Chocolate = 2;
+  }
+
+  Type type = 1;
+}
+
+message Crumbs {
+  Cookie cookie = 1;
+}
+
+service CookieMonster {
+  rpc EatCookie(Cookie) returns (Crumbs) {}
+}
+        </code></pre>
+
+        <p>
+          Place <code>protoc-gen-drpc</code> in your <code>$PATH</code>
+          and have <code>protoc</code> generate your definitions:
+        </p>
+        <pre><code class="bash">
+$ go get storj.io/drpc/cmd/protoc-gen-drpc
+$ protoc --drpc_out=plugins=drpc:. sesamestreet.proto
+$ ls
+sesamestreet.pb.go sesamestreet.proto
+        </code></pre>
+
+        <p>Next, define your server code:</p>
+        <pre><code class="golang">
+type CookieServer struct {
+  ...
+}
+
+func (c *CookieServer) EatCookie(ctx context.Context, cookie *sesamestreet.Cookie) (
+  crumbs *sesamestreet.Crumbs, err error) {
+  log.Println("nom nom nom")
+  return &sesamestreet.Crumbs{
+    Cookie: cookie,
+  }, nil
+}
+
+func Serve(ctx context.Context, address string) error {
+  m := drpcmux.New()
+  lis, err := net.Listen("tcp", address)
+  if err != nil {
+    return err
+  }
+  defer lis.Close()
+  err = sesamestreet.DRPCRegisterCookieMonster(m, &CookieServer{})
+  if err != nil {
+    return err
+  }
+  return drpcserver.New(m).Serve(ctx, lis)
+}
+        </code></pre>
+
+        <p>Last, define your client code:</p>
+        <pre><code class="golang">
+func CookieTime(ctx context.Context, address string) error {
+  rawconn, err := net.Dial("tcp", address)
+  if err != nil {
+    return err
+  }
+  conn := drpcconn.New(rawconn)
+  defer conn.Close()
+
+  client := sesamestreet.NewDRPCCookieMonsterClient(conn)
+  crumbs, err := client.EatCookie(ctx, &sesamestreet.Cookie{
+    Type: sesamestreet.Cookie_Oatmeal,
+  })
+  log.Println(crumbs.Cookie.Type)
+  return err
+}
+        </code></pre>
+
+      <p>You're done! Yum!</p>
+
+      </div>
+    </div>
+
+    <div class="container-fluid" id="footer">
+      <div class="container">
+        <div class="row">
+          <div class="col-sm">
+            <a href="https://storj.io/" style="margin-right: 6.92px;">
+              <img src="./logo.svg" style="height: 41px;"/>
+            </a>
+            <a href="https://storj.io/" style="margin-right: 15.78px;">
+              <img src="./storj.svg" style="height: 13px;" alt="Storj"/>
+            </a>
+            <img src="./sep.svg" style="height: 25px; margin-right: 15.51px;"/>
+            <a href="./">
+              <img src="./drpc.svg" style="height: 13px;" alt="DRPC"/>
+            </a>
+          </div>
+          <div class="col-sm footer-links" style="text-align: right;">
+            <a href="https://github.com/storj/">GitHub</a>
+            <a href="https://twitter.com/storjproject">Twitter</a>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-sm" style="text-align: center; font-size: 13px; color: #fff; opacity: 0.5; padding-top: 23px;">
+            <p>&copy; 2021 Storj Labs Inc. - 3423 Piedmont Road NE, Suite 475, Atlanta, Georgia, 30305, United States</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+  </body>
+</html>

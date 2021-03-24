@@ -2,7 +2,7 @@
 // See LICENSE for copying information.
 
 syntax = "proto3";
-option go_package = ".;pb";
+option go_package = "storj.io/drpc/examples/drpc_and_http/pb";
 
 package sesamestreet;
 

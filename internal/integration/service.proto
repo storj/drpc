@@ -2,7 +2,7 @@
 // See LICENSE for copying information.
 
 syntax = "proto3";
-option go_package = ".;service";
+option go_package = "storj.io/drpc/internal/integration/service";
 
 package service;
 

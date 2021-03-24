@@ -2,7 +2,7 @@
 // See LICENSE for copying information.
 
 syntax = "proto3";
-option go_package = ".;servicedefs";
+option go_package = "storj.io/drpc/internal/backcompat/servicedefs";
 
 package servicedefs;
 

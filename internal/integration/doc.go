@@ -4,6 +4,6 @@
 // Package integration holds integration tests for drpc.
 package integration
 
-//go:generate protoc --go_out=service/. --go-drpc_out=service/. service.proto
-//go:generate protoc --gogo_out=gogoservice/. --go-drpc_out=protolib=github.com/gogo/protobuf:gogoservice/. service.proto
-//go:generate protoc --go_out=customservice/. --go-drpc_out=protolib=storj.io/drpc/internal/integration/customencoding:customservice/. service.proto
+//go:generate protoc --go_out=paths=source_relative:service/. --go-drpc_out=paths=source_relative:service/. service.proto
+//go:generate protoc --gogo_out=paths=source_relative:gogoservice/. --go-drpc_out=paths=source_relative,protolib=github.com/gogo/protobuf:gogoservice/. service.proto
+//go:generate protoc --go_out=paths=source_relative:customservice/. --go-drpc_out=paths=source_relative,protolib=storj.io/drpc/internal/integration/customencoding:customservice/. service.proto

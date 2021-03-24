@@ -1,4 +1,4 @@
-module storj.io/drpc/internal/backcompat/servicedefs
+module storj.io/drpc/internal/backcompat/oldservicedefs
 
 go 1.16
 

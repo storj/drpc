@@ -5,7 +5,9 @@ package drpcmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -302,7 +304,11 @@ func (m *Manager) manageReader() {
 	for {
 		pkt, err := m.rd.ReadPacket()
 		if err != nil {
-			m.term.Set(errs.Wrap(err))
+			if errors.Is(err, io.EOF) {
+				m.term.Set(drpc.ClosedError.New("end of stream"))
+			} else {
+				m.term.Set(errs.Wrap(err))
+			}
 			return
 		}
 

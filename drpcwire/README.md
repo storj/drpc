@@ -46,7 +46,7 @@ SplitFrame is used by bufio.Scanner to split frames out of a stream of bytes.
 #### func  SplitN
 
 ```go
-func SplitN(ctx context.Context, pkt Packet, n int, cb func(ctx context.Context, fr Frame) error) error
+func SplitN(pkt Packet, n int, cb func(fr Frame) error) error
 ```
 SplitN splits the marshaled form of the Packet into a number of frames such that
 each frame is at most n bytes. It calls the callback with every such frame. If n
@@ -137,7 +137,7 @@ const (
 	// KindInvoke is used to invoke an rpc. The body is the name of the rpc.
 	KindInvoke Kind = 1
 
-	// KindMessage is used to send messages. The body is a protobuf.
+	// KindMessage is used to send messages. The body is an encoded message.
 	KindMessage Kind = 2
 
 	// KindError is used to inform that an error happened. The body is an error
@@ -232,15 +232,22 @@ it to the io.Writer.
 #### func (*Writer) Flush
 
 ```go
-func (b *Writer) Flush(ctx context.Context) (err error)
+func (b *Writer) Flush() (err error)
 ```
 Flush forces a flush of any buffered data to the io.Writer. It is a no-op if
 there is no data in the buffer.
 
+#### func (*Writer) Reset
+
+```go
+func (b *Writer) Reset() *Writer
+```
+Reset clears any pending data in the buffer.
+
 #### func (*Writer) WriteFrame
 
 ```go
-func (b *Writer) WriteFrame(ctx context.Context, fr Frame) (err error)
+func (b *Writer) WriteFrame(fr Frame) (err error)
 ```
 WriteFrame appends the frame into the buffer, and if the buffer is larger than
 the configured size, flushes it.
@@ -248,6 +255,6 @@ the configured size, flushes it.
 #### func (*Writer) WritePacket
 
 ```go
-func (b *Writer) WritePacket(ctx context.Context, pkt Packet) (err error)
+func (b *Writer) WritePacket(pkt Packet) (err error)
 ```
 WritePacket writes the packet as a single frame, ignoring any size constraints.

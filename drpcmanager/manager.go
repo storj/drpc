@@ -186,7 +186,7 @@ func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
 
 // newStream creates a stream value with the appropriate configuration for this manager.
 func (m *Manager) newStream(ctx context.Context, sid uint64) *drpcstream.Stream {
-	return drpcstream.NewWithOptions(drpcctx.WithTransport(ctx, m.tr), sid, m.wr, m.opts.Stream)
+	return drpcstream.NewWithOptions(drpcctx.WithTransport(ctx, m.tr), sid, m.wr.Reset(), m.opts.Stream)
 }
 
 // NewClientStream starts a stream on the managed transport for use by a client.
@@ -326,8 +326,6 @@ func (m *Manager) manageReader() {
 // manageStream watches the context and the stream and returns when the stream is
 // finished, canceling the stream if the context is canceled.
 func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
-	defer mon.Task()(&ctx)(nil)
-
 	// create a wait group, launch the workers, and wait for them
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
@@ -345,7 +343,6 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 // indicate that the stream requires no more packets, and so manageStream can
 // just exit. It releases the semaphore whenever it exits.
 func (m *Manager) manageStreamPackets(ctx context.Context, wg *sync.WaitGroup, stream *drpcstream.Stream) {
-	defer mon.Task()(&ctx)(nil)
 	defer wg.Done()
 
 	for {
@@ -372,7 +369,6 @@ func (m *Manager) manageStreamPackets(ctx context.Context, wg *sync.WaitGroup, s
 // manageStreamContext ensures that if the stream context is canceled, we inform the stream and
 // possibly abort the underlying transport if the stream isn't finished.
 func (m *Manager) manageStreamContext(ctx context.Context, wg *sync.WaitGroup, stream *drpcstream.Stream) {
-	defer mon.Task()(&ctx)(nil)
 	defer wg.Done()
 
 	select {

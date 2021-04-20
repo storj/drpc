@@ -3,7 +3,3 @@
 
 // Package drpcwire provides low level helpers for the drpc wire protocol.
 package drpcwire
-
-import "github.com/spacemonkeygo/monkit/v3"
-
-var mon = monkit.Package()

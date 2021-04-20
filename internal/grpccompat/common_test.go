@@ -164,7 +164,7 @@ func checkGoroutines(t *testing.T) {
 
 	start := time.Now()
 	for {
-		if cg := runtime.NumGoroutine(); cg == 3 { // 1 goroutine for monkit
+		if cg := runtime.NumGoroutine(); cg == 2 {
 			return
 		} else if time.Since(start) > 10*time.Second {
 			t.Fatalf("goroutine leak:\n%s", stackTrace())

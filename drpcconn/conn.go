@@ -61,11 +61,6 @@ func (c *Conn) Close() (err error) {
 // Invoke issues the rpc on the transport serializing in, waits for a response, and
 // deserializes it into out. Only one Invoke or Stream may be open at a time.
 func (c *Conn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, out drpc.Message) (err error) {
-	defer mon.Task()(&ctx)(&err)
-	defer mon.TaskNamed("invoke" + rpc)(&ctx)(&err)
-	mon.Event("outgoing_requests")
-	mon.Event("outgoing_invokes")
-
 	var metadata []byte
 	if md, ok := drpcmetadata.Get(ctx); ok {
 		metadata, err = drpcmetadata.Encode(metadata, md)
@@ -92,17 +87,15 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, ou
 }
 
 func (c *Conn) doInvoke(stream *drpcstream.Stream, enc drpc.Encoding, rpc, data []byte, metadata []byte, out drpc.Message) (err error) {
-	ctx := stream.Context()
-
 	if len(metadata) > 0 {
-		if err := stream.RawWrite(ctx, drpcwire.KindInvokeMetadata, metadata); err != nil {
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
 			return err
 		}
 	}
-	if err := stream.RawWrite(ctx, drpcwire.KindInvoke, rpc); err != nil {
+	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}
-	if err := stream.RawWrite(ctx, drpcwire.KindMessage, data); err != nil {
+	if err := stream.RawWrite(drpcwire.KindMessage, data); err != nil {
 		return err
 	}
 	if err := stream.CloseSend(); err != nil {
@@ -117,11 +110,6 @@ func (c *Conn) doInvoke(stream *drpcstream.Stream, enc drpc.Encoding, rpc, data 
 // NewStream begins a streaming rpc on the connection. Only one Invoke or Stream may
 // be open at a time.
 func (c *Conn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ drpc.Stream, err error) {
-	defer mon.Task()(&ctx)(&err)
-	defer mon.TaskNamed("stream" + rpc)(&ctx)(&err)
-	mon.Event("outgoing_requests")
-	mon.Event("outgoing_streams")
-
 	var metadata []byte
 	if md, ok := drpcmetadata.Get(ctx); ok {
 		metadata, err = drpcmetadata.Encode(metadata, md)
@@ -142,17 +130,15 @@ func (c *Conn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ 
 }
 
 func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte, metadata []byte) error {
-	ctx := stream.Context()
-
 	if len(metadata) > 0 {
-		if err := stream.RawWrite(ctx, drpcwire.KindInvokeMetadata, metadata); err != nil {
+		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
 			return err
 		}
 	}
-	if err := stream.RawWrite(ctx, drpcwire.KindInvoke, rpc); err != nil {
+	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
 		return err
 	}
-	if err := stream.RawFlush(ctx); err != nil {
+	if err := stream.RawFlush(); err != nil {
 		return err
 	}
 	return nil

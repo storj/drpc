@@ -5,7 +5,6 @@ package drpcwire
 
 import (
 	"bufio"
-	"context"
 	"io"
 	"sync"
 
@@ -40,8 +39,8 @@ func NewWriter(w io.Writer, size int) *Writer {
 
 // WritePacket writes the packet as a single frame, ignoring any size
 // constraints.
-func (b *Writer) WritePacket(ctx context.Context, pkt Packet) (err error) {
-	return b.WriteFrame(ctx, Frame{
+func (b *Writer) WritePacket(pkt Packet) (err error) {
+	return b.WriteFrame(Frame{
 		Data: pkt.Data,
 		ID:   pkt.ID,
 		Kind: pkt.Kind,
@@ -49,11 +48,17 @@ func (b *Writer) WritePacket(ctx context.Context, pkt Packet) (err error) {
 	})
 }
 
+// Reset clears any pending data in the buffer.
+func (b *Writer) Reset() *Writer {
+	b.mu.Lock()
+	b.buf = b.buf[:0]
+	b.mu.Unlock()
+	return b
+}
+
 // WriteFrame appends the frame into the buffer, and if the buffer is larger
 // than the configured size, flushes it.
-func (b *Writer) WriteFrame(ctx context.Context, fr Frame) (err error) {
-	defer mon.Task()(&ctx)(&err)
-
+func (b *Writer) WriteFrame(fr Frame) (err error) {
 	b.mu.Lock()
 	b.buf = AppendFrame(b.buf, fr)
 	if len(b.buf) >= b.size {
@@ -66,9 +71,7 @@ func (b *Writer) WriteFrame(ctx context.Context, fr Frame) (err error) {
 
 // Flush forces a flush of any buffered data to the io.Writer. It is a no-op if
 // there is no data in the buffer.
-func (b *Writer) Flush(ctx context.Context) (err error) {
-	defer mon.Task()(&ctx)(&err)
-
+func (b *Writer) Flush() (err error) {
 	b.mu.Lock()
 	if len(b.buf) > 0 {
 		_, err = b.w.Write(b.buf)

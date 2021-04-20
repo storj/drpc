@@ -20,7 +20,7 @@ const (
 	// KindInvoke is used to invoke an rpc. The body is the name of the rpc.
 	KindInvoke Kind = 1
 
-	// KindMessage is used to send messages. The body is a protobuf.
+	// KindMessage is used to send messages. The body is an encoded message.
 	KindMessage Kind = 2
 
 	// KindError is used to inform that an error happened. The body is an error

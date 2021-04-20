@@ -11,7 +11,3 @@ package drpcstream
 // to ensure that it only creates the png if the dot file has a newer modification time
 // somewhat like a Makefile.
 //go:generate bash -c "if [ state.dot -nt state.png ]; then dot -Tpng -o state.png state.dot; fi"
-
-import "github.com/spacemonkeygo/monkit/v3"
-
-var mon = monkit.Package()

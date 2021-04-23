@@ -34,3 +34,16 @@ test:
 .PHONY: tidy
 tidy:
 	./scripts/run.sh '*' go mod tidy
+
+.PHONY: loc
+loc:
+	find . -name '*.go' \
+		! -name '*.pb.go' \
+		! -path './examples/*' \
+		! -path './internal/backcompat/*' \
+		! -path './internal/fuzz-drpcwire/*' \
+		! -path './internal/grpccompat/*' \
+		! -path './internal/integration/*' \
+		! -name 'doc.go' \
+		! -name '_test.go' \
+		| xargs cloc

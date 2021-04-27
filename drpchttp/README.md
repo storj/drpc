@@ -25,7 +25,7 @@ exists. Otherwise, it does a normal message marshal before doing a JSON marshal.
 #### func  JSONUnmarshal
 
 ```go
-func JSONUnmarshal(msg drpc.Message, enc drpc.Encoding, buf []byte) error
+func JSONUnmarshal(buf []byte, msg drpc.Message, enc drpc.Encoding) error
 ```
 JSONUnmarshal looks for a JSONUnmarshal method on the encoding and calls that if
 it exists. Otherwise, it JSON unmarshals the buf before doing a normal message
@@ -40,23 +40,21 @@ New returns a net/http.Handler that dispatches to the passed in drpc.Handler.
 
 The returned value handles unitary RPCs over an http request. The RPCs are
 hosted at a path based on their name, like `/service.Server/Method` and accept
-the request message in JSON. The response will either be of the form
+the request message in JSON or protobuf, depending on if the requested
+Content-Type is equal to "application/json" or "application/protobuf",
+respectively. If the response was a success, the HTTP status code will be 200
+OK, and the body contains the message encoded the same way as the request. If
+there was an error, the HTTP status code will not be 200 OK, the response body
+is always JSON, and will look something like
 
     {
-      "status": "ok",
-      "response": ...
+      "code": "...",
+      "msg": "..."
     }
 
-if the request was successful, or
-
-    {
-      "status": "error",
-      "error": ...,
-      "code": ...
-    }
-
-where error is a textual description of the error, and code is the numeric code
-that was set with drpcerr, if any.
+where msg is a textual description of the error, and code is a short string that
+describes the kind of error that happened, if possible. If nothing could be
+detected, then the string "unknown" is used for the code.
 
 Metadata can be attached by adding the "X-Drpc-Metadata" header to the request
 possibly multiple times. The format is

@@ -4,38 +4,10 @@
 package drpchttp
 
 import (
-	"context"
 	"encoding/json"
-	"io"
 
 	"storj.io/drpc"
 )
-
-type unitaryStream struct {
-	ctx context.Context
-	in  []byte
-	out []byte
-}
-
-func (us *unitaryStream) Context() context.Context { return us.ctx }
-func (us *unitaryStream) CloseSend() error         { return nil }
-func (us *unitaryStream) Close() error             { return nil }
-
-func (us *unitaryStream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
-	if us.out != nil {
-		return io.EOF
-	}
-	us.out, err = JSONMarshal(msg, enc)
-	return err
-}
-
-func (us *unitaryStream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error) {
-	if us.in == nil {
-		return io.EOF
-	}
-	us.in, err = nil, JSONUnmarshal(msg, enc, us.in)
-	return err
-}
 
 // JSONMarshal looks for a JSONMarshal method on the encoding and calls that if it
 // exists. Otherwise, it does a normal message marshal before doing a JSON marshal.
@@ -57,7 +29,7 @@ func JSONMarshal(msg drpc.Message, enc drpc.Encoding) ([]byte, error) {
 // JSONUnmarshal looks for a JSONUnmarshal method on the encoding and calls that
 // if it exists. Otherwise, it JSON unmarshals the buf before doing a normal
 // message unmarshal.
-func JSONUnmarshal(msg drpc.Message, enc drpc.Encoding, buf []byte) error {
+func JSONUnmarshal(buf []byte, msg drpc.Message, enc drpc.Encoding) error {
 	if enc, ok := enc.(interface {
 		JSONUnmarshal(buf []byte, msg drpc.Message) error
 	}); ok {

@@ -31,10 +31,10 @@ func TestHTTP(t *testing.T) {
 	defer server.Close()
 
 	type response struct {
-		Status   string
-		Code     int
-		Error    string
-		Response *jsonOut
+		StatusCode int
+		Code       string
+		Msg        string
+		Response   *jsonOut
 	}
 
 	request := func(method, body string, metadata ...string) (r response) {
@@ -50,7 +50,13 @@ func TestHTTP(t *testing.T) {
 		assert.NoError(t, resp.Body.Close())
 		assert.NoError(t, err)
 
-		assert.NoError(t, json.Unmarshal(data, &r))
+		if resp.StatusCode == http.StatusOK {
+			assert.NoError(t, json.Unmarshal(data, &r.Response))
+		} else {
+			assert.NoError(t, json.Unmarshal(data, &r))
+		}
+		r.StatusCode = resp.StatusCode
+
 		return r
 	}
 
@@ -63,27 +69,28 @@ func TestHTTP(t *testing.T) {
 
 	// basic successful request
 	assertEqual(t, request("/service.Service/Method1", `{"in": 1}`), response{
-		Status:   "ok",
-		Response: &jsonOut{Out: 1},
+		StatusCode: http.StatusOK,
+		Response:   &jsonOut{Out: 1},
 	})
 
 	// basic erroring request
 	assertEqual(t, request("/service.Service/Method1", `{"in": 5}`), response{
-		Status: "error",
-		Error:  "test",
-		Code:   5,
+		StatusCode: http.StatusInternalServerError,
+		Code:       "drpcerr(5)",
+		Msg:        "test",
 	})
 
 	// metadata gets passed through
 	assertEqual(t, request("/service.Service/Method1", `{"in": 1}`, "inc=10"), response{
-		Status:   "ok",
-		Response: &jsonOut{Out: 11},
+		StatusCode: http.StatusOK,
+		Response:   &jsonOut{Out: 11},
 	})
 
 	// non-existing method
 	assertEqual(t, request("/service.Service/DoesNotExist", `{}`), response{
-		Status: "error",
-		Error:  `protocol error: unknown rpc: "/service.Service/DoesNotExist"`,
+		StatusCode: http.StatusInternalServerError,
+		Code:       "unknown",
+		Msg:        `protocol error: unknown rpc: "/service.Service/DoesNotExist"`,
 	})
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpchttp"
 	"storj.io/drpc/drpcmux"
 )
 
@@ -26,7 +27,7 @@ func TestHTTP(t *testing.T) {
 	mux := drpcmux.New()
 	assert.NoError(t, DRPCRegisterService(mux, standardImpl))
 
-	server := httptest.NewServer(mux)
+	server := httptest.NewServer(drpchttp.New(mux))
 	defer server.Close()
 
 	type response struct {
@@ -54,6 +55,7 @@ func TestHTTP(t *testing.T) {
 	}
 
 	assertEqual := func(t *testing.T, a, b response) {
+		t.Helper()
 		assert.True(t, Equal((*Out)(a.Response), (*Out)(b.Response)))
 		a.Response, b.Response = nil, nil
 		assert.DeepEqual(t, a, b)
@@ -82,20 +84,6 @@ func TestHTTP(t *testing.T) {
 	assertEqual(t, request("/service.Service/DoesNotExist", `{}`), response{
 		Status: "error",
 		Error:  `protocol error: unknown rpc: "/service.Service/DoesNotExist"`,
-	})
-
-	// non-unitary methods
-	assertEqual(t, request("/service.Service/Method2", `{}`), response{
-		Status: "error",
-		Error:  `protocol error: non-unitary rpc: "/service.Service/Method2"`,
-	})
-	assertEqual(t, request("/service.Service/Method3", `{}`), response{
-		Status: "error",
-		Error:  `protocol error: non-unitary rpc: "/service.Service/Method3"`,
-	})
-	assertEqual(t, request("/service.Service/Method4", `{}`), response{
-		Status: "error",
-		Error:  `protocol error: non-unitary rpc: "/service.Service/Method4"`,
 	})
 }
 

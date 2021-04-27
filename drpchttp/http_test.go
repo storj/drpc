@@ -1,7 +1,7 @@
-// Copyright (C) 2020 Storj Labs, Inc.
+// Copyright (C) 2021 Storj Labs, Inc.
 // See LICENSE for copying information.
 
-package drpcmux
+package drpchttp
 
 import (
 	"context"

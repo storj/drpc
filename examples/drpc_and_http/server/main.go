@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"golang.org/x/sync/errgroup"
+	"storj.io/drpc/drpchttp"
 	"storj.io/drpc/drpcmigrate"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
@@ -77,8 +78,8 @@ func Main(ctx context.Context) error {
 
 	// http handling
 	group.Go(func() error {
-		// create an http server using the drpc mux
-		s := http.Server{Handler: m}
+		// create an http server using the drpc mux wrapped in a handler
+		s := http.Server{Handler: drpchttp.New(m)}
 
 		// run the server
 		return s.Serve(lisMux.Default())

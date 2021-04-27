@@ -1,10 +1,11 @@
-// Copyright (C) 2020 Storj Labs, Inc.
+// Copyright (C) 2021 Storj Labs, Inc.
 // See LICENSE for copying information.
 
-package drpcmux
+package drpchttp
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"github.com/zeebo/errs"
@@ -15,6 +16,13 @@ import (
 //
 // code to unescape and build the request context metadata
 //
+
+// Context returns the context.Context from the http.Request with any metadata
+// sent using the X-Drpc-Metadata header set as values.
+func Context(req *http.Request) (context.Context, error) {
+	// header string we look up must already be canonicalized
+	return buildContext(req.Context(), req.Header["X-Drpc-Metadata"])
+}
 
 // buildContext adds key/value pairs in entries that are of the form
 // `urlencode(key)=urlencode(value)` to the passed in context.

@@ -18,7 +18,7 @@ import (
 	"storj.io/drpc/drpcerr"
 )
 
-// ServeHTTP handles unitary rpcs over an http request. The rpcs are hosted at a
+// ServeHTTP handles unitary RPCs over an http request. The RPCs are hosted at a
 // path based on their name, like `/service.Server/Method` and accept the request
 // protobuf in json. The response will either be of the form
 //
@@ -94,7 +94,7 @@ func (m *Mux) serveHTTP(ctx context.Context, rpc string, body io.Reader) ([]byte
 	if !ok {
 		return nil, drpc.InternalError.New("invalid rpc input type")
 	}
-	if err := data.enc.JSONUnmarshal(bodyData, in); err != nil {
+	if err := unmarshal(data.enc, bodyData, in); err != nil {
 		return nil, drpc.ProtocolError.Wrap(err)
 	}
 
@@ -105,11 +105,41 @@ func (m *Mux) serveHTTP(ctx context.Context, rpc string, body io.Reader) ([]byte
 		return nil, nil
 	}
 
-	buf, err := data.enc.JSONMarshal(out)
+	buf, err := marshal(data.enc, out)
 	if err != nil {
 		return nil, drpc.InternalError.Wrap(err)
 	}
 	return buf, nil
+}
+
+func marshal(enc drpc.Encoding, msg drpc.Message) ([]byte, error) {
+	if enc, ok := enc.(interface {
+		JSONMarshal(msg drpc.Message) ([]byte, error)
+	}); ok {
+		return enc.JSONMarshal(msg)
+	}
+
+	// fallback to normal Marshal + JSON Marshal
+	buf, err := enc.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(buf)
+}
+
+func unmarshal(enc drpc.Encoding, buf []byte, msg drpc.Message) error {
+	if enc, ok := enc.(interface {
+		JSONUnmarshal(buf []byte, msg drpc.Message) error
+	}); ok {
+		return enc.JSONUnmarshal(buf, msg)
+	}
+
+	// fallback to JSON Unmarshal + normal Unmarshal
+	var data []byte
+	if err := json.Unmarshal(buf, &data); err != nil {
+		return err
+	}
+	return enc.Unmarshal(data, msg)
 }
 
 func headerValues(h http.Header, key string) []string {

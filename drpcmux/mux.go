@@ -38,7 +38,7 @@ type rpcData struct {
 	unitary  bool
 }
 
-// Register associates the rpcs described by the description in the server.
+// Register associates the RPCs described by the description in the server.
 // It returns an error if there was a problem registering it.
 func (m *Mux) Register(srv interface{}, desc drpc.Description) error {
 	n := desc.NumMethods()

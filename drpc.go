@@ -40,7 +40,7 @@ type Conn interface {
 	// Transport returns the transport the connection is using.
 	Transport() Transport
 
-	// Invoke issues a unary rpc to the remote. Only one Invoke or Stream may be
+	// Invoke issues a unary RPC to the remote. Only one Invoke or Stream may be
 	// open at once.
 	Invoke(ctx context.Context, rpc string, enc Encoding, in, out Message) error
 
@@ -69,7 +69,7 @@ type Stream interface {
 	Close() error
 }
 
-// Receiver is invoked by a server for a given rpc.
+// Receiver is invoked by a server for a given RPC.
 type Receiver = func(srv interface{}, ctx context.Context, in1, in2 interface{}) (out Message, err error)
 
 // Description is the interface implemented by things that can be registered by
@@ -84,13 +84,17 @@ type Description interface {
 	Method(n int) (rpc string, encoding Encoding, receiver Receiver, method interface{}, ok bool)
 }
 
-// Mux is a type that can have an implementation and a Description registered with it.
-type Mux interface {
+// Registry is a type that can have an implementation and a Description registered with it.
+type Registry interface {
+	// Register marks that the description should dispatch RPCs that it describes to
+	// the provided srv.
 	Register(srv interface{}, desc Description) error
 }
 
-// Handler handles streams and rpcs dispatched to it by a Server.
+// Handler handles streams and RPCs dispatched to it by a Server.
 type Handler interface {
+	// HandleRPC executes the RPC identified by the rpc string using the stream to
+	// communicate with the remote.
 	HandleRPC(stream Stream, rpc string) (err error)
 }
 
@@ -102,11 +106,4 @@ type Encoding interface {
 	// Unmarshal reads the encoded form of some Message into msg.
 	// The buf is expected to contain only a single complete Message.
 	Unmarshal(buf []byte, msg Message) error
-
-	// JSONMarshal returns the json encoded form of msg.
-	JSONMarshal(msg Message) ([]byte, error)
-
-	// JSONUnmarshal reads the json encoded form of some Message into msg.
-	// The buf is expected to contain only a single complete Message.
-	JSONUnmarshal(buf []byte, msg Message) error
 }

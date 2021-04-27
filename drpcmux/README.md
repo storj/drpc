@@ -35,7 +35,7 @@ HandleRPC handles the rpc that has been requested by the stream.
 ```go
 func (m *Mux) Register(srv interface{}, desc drpc.Description) error
 ```
-Register associates the rpcs described by the description in the server. It
+Register associates the RPCs described by the description in the server. It
 returns an error if there was a problem registering it.
 
 #### func (*Mux) ServeHTTP
@@ -43,7 +43,7 @@ returns an error if there was a problem registering it.
 ```go
 func (m *Mux) ServeHTTP(w http.ResponseWriter, req *http.Request)
 ```
-ServeHTTP handles unitary rpcs over an http request. The rpcs are hosted at a
+ServeHTTP handles unitary RPCs over an http request. The RPCs are hosted at a
 path based on their name, like `/service.Server/Method` and accept the request
 protobuf in json. The response will either be of the form
 

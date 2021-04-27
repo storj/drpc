@@ -14,4 +14,4 @@ import (
 func Equal(a, b drpc.Message) bool { return reflect.DeepEqual(a, b) }
 
 // Encoding is the drpc.Encoding used for this service.
-var Encoding drpc.Encoding = drpcEncoding_File_service_proto{}
+var Encoding drpcEncoding_File_service_proto

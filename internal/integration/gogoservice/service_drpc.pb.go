@@ -232,8 +232,8 @@ func (DRPCServiceDescription) Method(n int) (string, drpc.Encoding, drpc.Receive
 	}
 }
 
-func DRPCRegisterService(reg drpc.Registry, impl DRPCServiceServer) error {
-	return reg.Register(impl, DRPCServiceDescription{})
+func DRPCRegisterService(mux drpc.Mux, impl DRPCServiceServer) error {
+	return mux.Register(impl, DRPCServiceDescription{})
 }
 
 type DRPCService_Method1Stream interface {

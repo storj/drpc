@@ -86,8 +86,8 @@ func (DRPCCookieMonsterDescription) Method(n int) (string, drpc.Encoding, drpc.R
 	}
 }
 
-func DRPCRegisterCookieMonster(reg drpc.Registry, impl DRPCCookieMonsterServer) error {
-	return reg.Register(impl, DRPCCookieMonsterDescription{})
+func DRPCRegisterCookieMonster(mux drpc.Mux, impl DRPCCookieMonsterServer) error {
+	return mux.Register(impl, DRPCCookieMonsterDescription{})
 }
 
 type DRPCCookieMonster_EatCookieStream interface {

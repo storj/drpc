@@ -84,8 +84,8 @@ type Description interface {
 	Method(n int) (rpc string, encoding Encoding, receiver Receiver, method interface{}, ok bool)
 }
 
-// Registry is a type that can have an implementation and a Description registered with it.
-type Registry interface {
+// Mux is a type that can have an implementation and a Description registered with it.
+type Mux interface {
 	// Register marks that the description should dispatch RPCs that it describes to
 	// the provided srv.
 	Register(srv interface{}, desc Description) error

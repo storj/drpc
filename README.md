@@ -1,4 +1,4 @@
-# ![DRPC](logo.png)
+# [![DRPC](logo.png)](https://storj.github.io/drpc/)
 
 A drop-in, lightweight gRPC replacement.
 
@@ -6,9 +6,14 @@ A drop-in, lightweight gRPC replacement.
 [![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://pkg.go.dev/storj.io/drpc)
 ![Beta](https://img.shields.io/badge/version-beta-green.svg)
 
+Please see our:
+
+ * [DRPC website](https://storj.github.io/drpc/)
+ * [Quickstart documentation](https://storj.github.io/drpc/docs.html)
+ * [Launch blog post](https://www.storj.io/blog/introducing-drpc-our-replacement-for-grpc)
+
 DRPC is:
 
-* Compatible with your existing gRPC protocol buffer definitions
 * Simple, at just a few thousands lines of code!
 * Compatible. Works for many gRPC use-cases as-is!
 * Fast. DRPC has a lightning quick wire format

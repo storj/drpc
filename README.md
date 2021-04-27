@@ -6,11 +6,12 @@ A drop-in, lightweight gRPC replacement.
 [![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://pkg.go.dev/storj.io/drpc)
 ![Beta](https://img.shields.io/badge/version-beta-green.svg)
 
-Please see our:
+Please see:
 
  * [DRPC website](https://storj.github.io/drpc/)
  * [Quickstart documentation](https://storj.github.io/drpc/docs.html)
  * [Launch blog post](https://www.storj.io/blog/introducing-drpc-our-replacement-for-grpc)
+ * [Examples](https://github.com/storj/drpc/tree/main/examples)
 
 DRPC is:
 

@@ -19,6 +19,7 @@ DRPC is:
 * Compatible. Works for many gRPC use-cases as-is!
 * Fast. DRPC has a lightning quick wire format
 * Extensible. DRPC is transport agnostic, supports middleware, and is designed around interfaces.
+* Battle Tested. Already used in production for years across tens of thousands of servers.
 
 Compare with gRPC:
 

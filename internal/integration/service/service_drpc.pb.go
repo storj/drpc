@@ -19,6 +19,10 @@ func (drpcEncoding_File_service_proto) Marshal(msg drpc.Message) ([]byte, error)
 	return proto.Marshal(msg.(proto.Message))
 }
 
+func (drpcEncoding_File_service_proto) MarshalAppend(buf []byte, msg drpc.Message) ([]byte, error) {
+	return proto.MarshalOptions{}.MarshalAppend(buf, msg.(proto.Message))
+}
+
 func (drpcEncoding_File_service_proto) Unmarshal(buf []byte, msg drpc.Message) error {
 	return proto.Unmarshal(buf, msg.(proto.Message))
 }

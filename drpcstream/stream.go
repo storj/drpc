@@ -13,6 +13,7 @@ import (
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcdebug"
+	"storj.io/drpc/drpcenc"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcwire"
 )
@@ -25,9 +26,8 @@ type Options struct {
 
 // Stream represents an rpc actively happening on a transport.
 type Stream struct {
-	ctx    context.Context
-	cancel func()
-	opts   Options
+	ctx  streamCtx
+	opts Options
 
 	write chMutex
 	read  chMutex
@@ -44,9 +44,7 @@ type Stream struct {
 		cancel drpcsignal.Signal // set when externally canceled
 	}
 	queue chan drpcwire.Packet
-
-	// avoids allocations of closures
-	pollWriteFn func(drpcwire.Frame) error
+	wbuf  []byte
 }
 
 var _ drpc.Stream = (*Stream)(nil)
@@ -63,31 +61,33 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 // stream ids within a single transport. The options are used to control details of how
 // the Stream operates.
 func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
-	ctx, cancel := context.WithCancel(ctx)
-
-	s := &Stream{
-		ctx:    ctx,
-		cancel: cancel,
-		opts:   opts,
+	return &Stream{
+		ctx:  streamCtx{Context: ctx},
+		opts: opts,
 
 		wr: wr,
 
 		id:    drpcwire.ID{Stream: sid},
 		queue: make(chan drpcwire.Packet),
 	}
-
-	s.pollWriteFn = s.pollWrite
-
-	return s
 }
 
 //
 // accessors
 //
 
+// streamCtx avoids having to allocate a Done channel until it is requested.
+type streamCtx struct {
+	context.Context
+	ch drpcsignal.Chan
+}
+
+// Done returns the stored channel instead of the parent Done channel.
+func (s *streamCtx) Done() <-chan struct{} { return s.ch.Get() }
+
 // Context returns the context associated with the stream. It is closed when
 // the Stream will no longer issue any writes or reads.
-func (s *Stream) Context() context.Context { return s.ctx }
+func (s *Stream) Context() context.Context { return &s.ctx }
 
 // Terminated returns a channel that is closed when the stream has been terminated.
 func (s *Stream) Terminated() <-chan struct{} { return s.sigs.term.Signal() }
@@ -176,7 +176,9 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
 // the stream becomes terminated.
 func (s *Stream) checkFinished() {
 	if s.sigs.term.IsSet() && s.write.Unlocked() && s.read.Unlocked() {
-		s.sigs.fin.Set(nil)
+		if s.sigs.fin.Set(nil) {
+			s.ctx.ch.Close()
+		}
 	}
 }
 
@@ -241,7 +243,6 @@ func (s *Stream) terminate(err error) {
 	s.sigs.send.Set(err)
 	s.sigs.recv.Set(err)
 	s.sigs.term.Set(err)
-	s.cancel()
 	s.checkFinished()
 }
 
@@ -255,7 +256,11 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error) {
 	s.write.Lock()
 	defer s.write.Unlock()
 
-	return drpcwire.SplitN(s.newPacket(kind, data), s.opts.SplitSize, s.pollWriteFn)
+	return s.rawWriteLocked(kind, data)
+}
+
+func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
+	return drpcwire.SplitN(s.newPacket(kind, data), s.opts.SplitSize, s.pollWrite)
 }
 
 // RawFlush flushes any buffers of data.
@@ -264,6 +269,10 @@ func (s *Stream) RawFlush() (err error) {
 	s.write.Lock()
 	defer s.write.Unlock()
 
+	return s.rawFlushLocked()
+}
+
+func (s *Stream) rawFlushLocked() (err error) {
 	return s.checkCancelError(errs.Wrap(s.wr.Flush()))
 }
 
@@ -291,16 +300,21 @@ func (s *Stream) RawRecv() (data []byte, err error) {
 
 // MsgSend marshals the message with the encoding, writes it, and flushes.
 func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
-	data, err := enc.Marshal(msg)
+	defer s.checkFinished()
+	s.write.Lock()
+	defer s.write.Unlock()
+
+	s.wbuf, err = drpcenc.MarshalAppend(msg, enc, s.wbuf[:0])
 	if err != nil {
 		return errs.Wrap(err)
 	}
-	if err := s.RawWrite(drpcwire.KindMessage, data); err != nil {
+	if err := s.rawWriteLocked(drpcwire.KindMessage, s.wbuf); err != nil {
 		return err
 	}
-	if err := s.RawFlush(); err != nil {
+	if err := s.rawFlushLocked(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -327,6 +341,8 @@ var (
 // SendError terminates the stream and sends the error to the remote. It is a no-op if
 // the stream is already terminated.
 func (s *Stream) SendError(serr error) (err error) {
+	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: SendError(%v)", s, s.id.Stream, serr) })
+
 	s.mu.Lock()
 	if s.sigs.term.IsSet() {
 		s.mu.Unlock()
@@ -347,6 +363,8 @@ func (s *Stream) SendError(serr error) (err error) {
 // Close terminates the stream and sends that the stream has been closed to the remote.
 // It is a no-op if the stream is already terminated.
 func (s *Stream) Close() (err error) {
+	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: Close()", s, s.id.Stream) })
+
 	s.mu.Lock()
 	if s.sigs.term.IsSet() {
 		s.mu.Unlock()
@@ -367,6 +385,8 @@ func (s *Stream) Close() (err error) {
 // also already issued a CloseSend, the stream is terminated. It is a no-op if the
 // stream already has sent a CloseSend or if it is terminated.
 func (s *Stream) CloseSend() (err error) {
+	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: CloseSend()", s, s.id.Stream) })
+
 	s.mu.Lock()
 	if s.sigs.send.IsSet() || s.sigs.term.IsSet() {
 		s.mu.Unlock()
@@ -388,6 +408,8 @@ func (s *Stream) CloseSend() (err error) {
 // the provided error, and terminates the stream. It is a no-op if the stream is already
 // terminated.
 func (s *Stream) Cancel(err error) {
+	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: Cancel(%v)", s, s.id.Stream, err) })
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

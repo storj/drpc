@@ -9,6 +9,7 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpcenc"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcstream"
@@ -23,8 +24,9 @@ type Options struct {
 
 // Conn is a drpc client connection.
 type Conn struct {
-	tr  drpc.Transport
-	man *drpcmanager.Manager
+	tr   drpc.Transport
+	man  *drpcmanager.Manager
+	wbuf []byte
 }
 
 var _ drpc.Conn = (*Conn)(nil)
@@ -69,18 +71,18 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, ou
 		}
 	}
 
-	data, err := enc.Marshal(in)
-	if err != nil {
-		return errs.Wrap(err)
-	}
-
 	stream, err := c.man.NewClientStream(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, enc, []byte(rpc), data, metadata, out); err != nil {
+	c.wbuf, err = drpcenc.MarshalAppend(in, enc, c.wbuf[:0])
+	if err != nil {
+		return err
+	}
+
+	if err := c.doInvoke(stream, enc, []byte(rpc), c.wbuf, metadata, out); err != nil {
 		return err
 	}
 	return nil

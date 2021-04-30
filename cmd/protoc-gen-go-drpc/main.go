@@ -145,6 +145,11 @@ func (d *drpc) generateEncoding(protolib string) {
 		d.P("}")
 		d.P()
 
+		d.P("func (", d.EncodingName(), ") MarshalAppend(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
+		d.P("return ", d.Ident("google.golang.org/protobuf/proto", "MarshalOptions"), "{}.MarshalAppend(buf, msg.(", d.Ident("google.golang.org/protobuf/proto", "Message"), "))")
+		d.P("}")
+		d.P()
+
 		d.P("func (", d.EncodingName(), ") Unmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
 		d.P("return ", d.Ident("google.golang.org/protobuf/proto", "Unmarshal"), "(buf, msg.(", d.Ident("google.golang.org/protobuf/proto", "Message"), "))")
 		d.P("}")

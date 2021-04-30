@@ -3,29 +3,28 @@
 
 package drpcstream
 
-import "sync"
+import (
+	"sync"
+
+	"storj.io/drpc/drpcsignal"
+)
 
 type chMutex struct {
-	ch   chan struct{}
-	once sync.Once
+	on sync.Once
+	ch drpcsignal.Chan
 }
 
-func (m *chMutex) init() { m.ch = make(chan struct{}, 1) }
-
-func (m *chMutex) Chan() chan struct{} {
-	m.once.Do(m.init)
-	return m.ch
-}
+func (m *chMutex) init() { m.ch.Make(1) }
 
 func (m *chMutex) Lock() {
-	m.once.Do(m.init)
-	m.ch <- struct{}{}
+	m.on.Do(m.init)
+	m.ch.Send()
 }
 
 func (m *chMutex) TryLock() bool {
-	m.once.Do(m.init)
+	m.on.Do(m.init)
 	select {
-	case m.ch <- struct{}{}:
+	case m.ch.Get() <- struct{}{}:
 		return true
 	default:
 		return false
@@ -33,17 +32,11 @@ func (m *chMutex) TryLock() bool {
 }
 
 func (m *chMutex) Unlock() {
-	m.once.Do(m.init)
-	<-m.ch
+	m.on.Do(m.init)
+	m.ch.Recv()
 }
 
 func (m *chMutex) Unlocked() bool {
-	m.once.Do(m.init)
-	select {
-	case m.ch <- struct{}{}:
-		<-m.ch
-		return true
-	default:
-		return false
-	}
+	m.on.Do(m.init)
+	return !m.ch.Full()
 }

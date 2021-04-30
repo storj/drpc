@@ -53,7 +53,7 @@ type Manager struct {
 	once sync.Once
 
 	sid   uint64
-	sem   chan struct{}
+	sem   drpcsignal.Chan
 	term  drpcsignal.Signal // set when the manager should start terminating
 	read  drpcsignal.Signal // set after the goroutine reading from the transport is done
 	tport drpcsignal.Signal // set after the transport has been closed
@@ -75,10 +75,11 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 		rd:   drpcwire.NewReader(tr),
 		opts: opts,
 
-		// this semaphore controls the number of concurrent streams. it MUST be 1.
-		sem:   make(chan struct{}, 1),
 		queue: make(chan drpcwire.Packet),
 	}
+
+	// this semaphore controls the number of concurrent streams. it MUST be 1.
+	m.sem.Make(1)
 
 	go m.manageTransport()
 	go m.manageReader()
@@ -127,7 +128,7 @@ func (m *Manager) acquireSemaphore(ctx context.Context) error {
 	case <-m.term.Signal():
 		return m.term.Err()
 
-	case m.sem <- struct{}{}:
+	case m.sem.Get() <- struct{}{}:
 		return nil
 	}
 }
@@ -151,9 +152,9 @@ func (m *Manager) Close() error {
 
 	m.once.Do(func() {
 		m.term.Set(managerClosed)
-		<-m.tport.Signal()
-		m.sem <- struct{}{}
-		<-m.read.Signal()
+		m.tport.Wait()
+		m.sem.Send()
+		m.read.Wait()
 	})
 
 	return m.tport.Err()
@@ -227,15 +228,15 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	for {
 		select {
 		case <-timeoutCh:
-			<-m.sem
+			m.sem.Recv()
 			return nil, "", context.DeadlineExceeded
 
 		case <-ctx.Done():
-			<-m.sem
+			m.sem.Recv()
 			return nil, "", ctx.Err()
 
 		case <-m.term.Signal():
-			<-m.sem
+			m.sem.Recv()
 			return nil, "", m.term.Err()
 
 		case pkt := <-m.queue:
@@ -282,7 +283,8 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 // manageTransport ensures that if the manager's term signal is ever set, then
 // the underlying transport is closed and the error is recorded.
 func (m *Manager) manageTransport() {
-	<-m.term.Signal()
+	m.term.Wait()
+	drpcdebug.Log(func() string { return fmt.Sprintf("MAN[%p]: term: %v", m, m.term.Err()) })
 	m.tport.Set(m.tr.Close())
 }
 
@@ -334,7 +336,7 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	wg.Wait()
 
 	// release semaphore
-	<-m.sem
+	m.sem.Recv()
 }
 
 // manageStreamPackets repeatedly reads from the queue of packets and asks the stream to

@@ -43,8 +43,9 @@ type Stream struct {
 		fin    drpcsignal.Signal // set when the stream is finished and all ops are complete
 		cancel drpcsignal.Signal // set when externally canceled
 	}
-	queue chan drpcwire.Packet
-	wbuf  []byte
+	queue   chan drpcwire.Packet
+	pktdone drpcsignal.Chan
+	wbuf    []byte
 }
 
 var _ drpc.Stream = (*Stream)(nil)
@@ -61,7 +62,7 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 // stream ids within a single transport. The options are used to control details of how
 // the Stream operates.
 func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
-	return &Stream{
+	s := &Stream{
 		ctx:  streamCtx{Context: ctx},
 		opts: opts,
 
@@ -70,6 +71,11 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 		id:    drpcwire.ID{Stream: sid},
 		queue: make(chan drpcwire.Packet),
 	}
+
+	// allow the packet consumers to write ahead of the reader by 1
+	s.pktdone.Make(1)
+
+	return s
 }
 
 //
@@ -140,6 +146,10 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
 		case <-s.sigs.recv.Signal():
 		case <-s.sigs.term.Signal():
 		case s.queue <- pkt:
+			// wait for whoever received the packet to signal that they are done
+			// with the data to maintain the contract that HandlePacket does not
+			// alias the data slice after it returns.
+			s.pktdone.Recv()
 		}
 
 		return true, nil
@@ -259,6 +269,8 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error) {
 	return s.rawWriteLocked(kind, data)
 }
 
+// rawWriteLocked does the body of RawWrite assuming the caller is holding the
+// appropriate locks.
 func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
 	return drpcwire.SplitN(s.newPacket(kind, data), s.opts.SplitSize, s.pollWrite)
 }
@@ -272,12 +284,27 @@ func (s *Stream) RawFlush() (err error) {
 	return s.rawFlushLocked()
 }
 
+// rawFlushLocked does the body of RawFlush assuming the caller is holding the
+// appropriate locks.
 func (s *Stream) rawFlushLocked() (err error) {
 	return s.checkCancelError(errs.Wrap(s.wr.Flush()))
 }
 
 // RawRecv returns the raw bytes received for a message.
 func (s *Stream) RawRecv() (data []byte, err error) {
+	data, err = s.rawRecv()
+	if err != nil {
+		return nil, err
+	}
+	data = append([]byte(nil), data...)
+	s.pktdone.Send() // done reading the packet data
+	return data, nil
+}
+
+// rawRecv returns the raw bytes received for a message. It does not make a
+// copy of the bytes and so care must be taken to signal when HandlePacket
+// is allowed to return.
+func (s *Stream) rawRecv() (data []byte, err error) {
 	defer s.checkFinished()
 	s.read.Lock()
 	defer s.read.Unlock()
@@ -320,11 +347,13 @@ func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
 
 // MsgRecv recives some message data and unmarshals it with enc into msg.
 func (s *Stream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error) {
-	data, err := s.RawRecv()
+	data, err := s.rawRecv()
 	if err != nil {
 		return err
 	}
-	return enc.Unmarshal(data, msg)
+	err = enc.Unmarshal(data, msg)
+	s.pktdone.Send() // done reading the packet data
+	return err
 }
 
 //

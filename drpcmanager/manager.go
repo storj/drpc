@@ -52,13 +52,14 @@ type Manager struct {
 
 	once sync.Once
 
-	sid   uint64
-	sem   drpcsignal.Chan
-	term  drpcsignal.Signal // set when the manager should start terminating
-	read  drpcsignal.Signal // set after the goroutine reading from the transport is done
-	tport drpcsignal.Signal // set after the transport has been closed
-	queue chan drpcwire.Packet
-	prev  *drpcstream.Stream
+	sid     uint64
+	sem     drpcsignal.Chan
+	term    drpcsignal.Signal // set when the manager should start terminating
+	read    drpcsignal.Signal // set after the goroutine reading from the transport is done
+	tport   drpcsignal.Signal // set after the transport has been closed
+	queue   chan drpcwire.Packet
+	pktdone drpcsignal.Chan
+	prev    *drpcstream.Stream
 }
 
 // New returns a new Manager for the transport.
@@ -80,6 +81,10 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 
 	// this semaphore controls the number of concurrent streams. it MUST be 1.
 	m.sem.Make(1)
+
+	// a buffer of size 1 allows the consumer of the packet to signal it is done
+	// without having to coordinate with the sender of the packet.
+	m.pktdone.Make(1)
 
 	go m.manageTransport()
 	go m.manageReader()
@@ -129,7 +134,36 @@ func (m *Manager) acquireSemaphore(ctx context.Context) error {
 		return m.term.Err()
 
 	case m.sem.Get() <- struct{}{}:
+		if err := m.waitForPreviousStream(ctx); err != nil {
+			m.sem.Recv()
+			return err
+		}
 		return nil
+	}
+}
+
+// waitForPreviousStream will, if there was a previous stream, ensure it is Closed and
+// then wait until it is in the Finished state, where it will no longer make any
+// reads or writes on the transport. It exits early if the context is canceled or
+// the manager is terminated.
+func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
+	if m.prev == nil {
+		return nil
+	}
+
+	if err := m.prev.Close(); err != nil {
+		return err
+	}
+
+	select {
+	case <-m.prev.Finished():
+		return nil
+
+	case <-m.term.Signal():
+		return m.term.Err()
+
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -160,34 +194,13 @@ func (m *Manager) Close() error {
 	return m.tport.Err()
 }
 
-// waitForPreviousStream will, if there was a previous stream, ensure it is Closed and
-// then wait until it is in the Finished state, where it will no longer make any
-// reads or writes on the transport. It exits early if the context is canceled or
-// the manager is terminated.
-func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
-	if m.prev == nil {
-		return nil
-	}
-
-	if err := m.prev.Close(); err != nil {
-		return err
-	}
-
-	select {
-	case <-m.prev.Finished():
-		return nil
-
-	case <-m.term.Signal():
-		return m.term.Err()
-
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 // newStream creates a stream value with the appropriate configuration for this manager.
 func (m *Manager) newStream(ctx context.Context, sid uint64) *drpcstream.Stream {
-	return drpcstream.NewWithOptions(drpcctx.WithTransport(ctx, m.tr), sid, m.wr.Reset(), m.opts.Stream)
+	ctx = drpcctx.WithTransport(ctx, m.tr)
+	stream := drpcstream.NewWithOptions(ctx, sid, m.wr.Reset(), m.opts.Stream)
+	m.prev = stream
+	go m.manageStream(ctx, stream)
+	return stream
 }
 
 // NewClientStream starts a stream on the managed transport for use by a client.
@@ -196,16 +209,9 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 		return nil, err
 	}
 
-	if err := m.waitForPreviousStream(ctx); err != nil {
-		return nil, err
-	}
-
 	m.sid++
-	stream = m.newStream(ctx, m.sid)
-	m.prev = stream
-	go m.manageStream(ctx, stream)
 
-	return stream, nil
+	return m.newStream(ctx, m.sid), nil
 }
 
 // NewServerStream starts a stream on the managed transport for use by a server. It does
@@ -214,8 +220,14 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	if err := m.acquireSemaphore(ctx); err != nil {
 		return nil, "", err
 	}
+	defer func() {
+		if err != nil {
+			m.sem.Recv()
+		}
+	}()
 
-	var metadata drpcwire.Packet
+	var meta map[string]string
+	var metaID uint64
 	var timeoutCh <-chan time.Time
 
 	// set up the timeout channel if necessary.
@@ -228,49 +240,42 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 	for {
 		select {
 		case <-timeoutCh:
-			m.sem.Recv()
 			return nil, "", context.DeadlineExceeded
 
 		case <-ctx.Done():
-			m.sem.Recv()
 			return nil, "", ctx.Err()
 
 		case <-m.term.Signal():
-			m.sem.Recv()
 			return nil, "", m.term.Err()
 
 		case pkt := <-m.queue:
 			switch pkt.Kind {
+			// keep track of any metadata being sent before an invoke so that we can
+			// include it if the stream id matches the eventual invoke.
 			case drpcwire.KindInvokeMetadata:
-				// keep track of any metadata being sent before an invoke so that we can
-				// include it if the stream id matches the eventual invoke.
-				metadata = pkt
-				continue
+				meta, err = drpcmetadata.Decode(pkt.Data)
+				m.pktdone.Send()
 
-			case drpcwire.KindInvoke:
-				if metadata.ID.Stream == pkt.ID.Stream {
-					md, err := drpcmetadata.Decode(metadata.Data)
-					if err != nil {
-						return nil, "", err
-					}
-					ctx = drpcmetadata.AddPairs(ctx, md)
-				}
-
-				if err := m.waitForPreviousStream(ctx); err != nil {
+				if err != nil {
 					return nil, "", err
 				}
+				metaID = pkt.ID.Stream
 
-				stream = m.newStream(ctx, pkt.ID.Stream)
-				m.prev = stream
-				go m.manageStream(ctx, stream)
+			case drpcwire.KindInvoke:
+				rpc = string(pkt.Data)
+				m.pktdone.Send()
 
-				return stream, string(pkt.Data), nil
+				if metaID == pkt.ID.Stream {
+					ctx = drpcmetadata.AddPairs(ctx, meta)
+				}
+
+				return m.newStream(ctx, pkt.ID.Stream), rpc, nil
 
 			default:
 				// we ignore packets that aren't invokes because perhaps older streams have
 				// messages in the queue sent concurrently with our notification to them
 				// that the stream they were sent for is done.
-				continue
+				m.pktdone.Send()
 			}
 		}
 	}
@@ -299,8 +304,10 @@ func (m *Manager) manageTransport() {
 func (m *Manager) manageReader() {
 	defer m.read.Set(managerClosed)
 
+	var buf []byte
+
 	for {
-		pkt, err := m.rd.ReadPacket()
+		pkt, err := m.rd.ReadPacketUsing(buf[:0])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				m.term.Set(drpc.ClosedError.New("end of stream"))
@@ -317,6 +324,8 @@ func (m *Manager) manageReader() {
 			return
 
 		case m.queue <- pkt:
+			m.pktdone.Recv()
+			buf = pkt.Data
 		}
 	}
 }
@@ -358,6 +367,8 @@ func (m *Manager) manageStreamPackets(ctx context.Context, wg *sync.WaitGroup, s
 
 		case pkt := <-m.queue:
 			ok, err := stream.HandlePacket(pkt)
+			m.pktdone.Send() // done reading the packet data
+
 			if err != nil {
 				m.term.Set(errs.Wrap(err))
 				return

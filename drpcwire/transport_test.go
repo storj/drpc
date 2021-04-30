@@ -96,7 +96,7 @@ func TestReader(t *testing.T) {
 
 		{ // a single frame that's too large
 			Packets: []Packet{},
-			Frames:  []Frame{f(KindMessage, 1, strings.Repeat("X", 2<<20), true, false)},
+			Frames:  []Frame{f(KindMessage, 1, strings.Repeat("X", 4<<20+22), true, false)},
 			Error:   "token too long",
 		},
 

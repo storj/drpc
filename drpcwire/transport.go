@@ -110,18 +110,31 @@ type Reader struct {
 
 // NewReader constructs a Reader to read Packets from the io.Reader.
 func NewReader(r io.Reader) *Reader {
+	// we don't allow packet payloads over 4MiB. the maximum frame header
+	// size can be 1 header byte, and 9 bytes for each of the varint
+	// encoded stream id, message id, and data length.
+	const maximumFrameSize = 4<<20 + 1 + 9 + 9 + 9
+
 	buf := bufio.NewScanner(r)
-	buf.Buffer(make([]byte, 4<<10), 1<<20)
+	buf.Buffer(make([]byte, 4<<10), maximumFrameSize)
 	buf.Split(SplitFrame)
 	return &Reader{buf: buf}
 }
 
-// ReadPacket reads a packet from the io.Reader. IDs read from frames
-// must be monotonically increasing. When a new ID is read, the old
-// data is discarded. This allows for easier asynchronous interrupts.
-// If the amount of data in the Packet becomes too large, an error is
-// returned.
+// ReadPacket reads a packet from the io.Reader. It is equivalent to
+// calling ReadPacketUsing(nil).
 func (s *Reader) ReadPacket() (pkt Packet, err error) {
+	return s.ReadPacketUsing(nil)
+}
+
+// ReadPacketUsing reads a packet from the io.Reader. IDs read from
+// frames must be monotonically increasing. When a new ID is read, the
+// old data is discarded. This allows for easier asynchronous interrupts.
+// If the amount of data in the Packet becomes too large, an error is
+// returned. The returned packet's Data field is constructed by appending
+// to the provided buf after it has been resliced to be zero length.
+func (s *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
+	pkt.Data = buf[:0]
 	for s.buf.Scan() {
 		rem, fr, ok, err := ParseFrame(s.buf.Bytes())
 		switch {

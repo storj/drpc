@@ -207,10 +207,20 @@ NewReader constructs a Reader to read Packets from the io.Reader.
 ```go
 func (s *Reader) ReadPacket() (pkt Packet, err error)
 ```
-ReadPacket reads a packet from the io.Reader. IDs read from frames must be
+ReadPacket reads a packet from the io.Reader. It is equivalent to calling
+ReadPacketUsing(nil).
+
+#### func (*Reader) ReadPacketUsing
+
+```go
+func (s *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error)
+```
+ReadPacketUsing reads a packet from the io.Reader. IDs read from frames must be
 monotonically increasing. When a new ID is read, the old data is discarded. This
 allows for easier asynchronous interrupts. If the amount of data in the Packet
-becomes too large, an error is returned.
+becomes too large, an error is returned. The returned packet's Data field is
+constructed by appending to the provided buf after it has been resliced to be
+zero length.
 
 #### type Writer
 

@@ -32,8 +32,10 @@ type Stream struct {
 	write chMutex
 	read  chMutex
 
-	id drpcwire.ID
-	wr *drpcwire.Writer
+	id   drpcwire.ID
+	wr   *drpcwire.Writer
+	pbuf *packetBuffer
+	wbuf []byte
 
 	mu   sync.Mutex // protects state transitions
 	sigs struct {
@@ -43,9 +45,6 @@ type Stream struct {
 		fin    drpcsignal.Signal // set when the stream is finished and all ops are complete
 		cancel drpcsignal.Signal // set when externally canceled
 	}
-	queue   chan drpcwire.Packet
-	pktdone drpcsignal.Chan
-	wbuf    []byte
 }
 
 var _ drpc.Stream = (*Stream)(nil)
@@ -62,20 +61,14 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 // stream ids within a single transport. The options are used to control details of how
 // the Stream operates.
 func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
-	s := &Stream{
+	return &Stream{
 		ctx:  streamCtx{Context: ctx},
 		opts: opts,
 
-		wr: wr,
-
-		id:    drpcwire.ID{Stream: sid},
-		queue: make(chan drpcwire.Packet),
+		id:   drpcwire.ID{Stream: sid},
+		wr:   wr,
+		pbuf: newPacketBuffer(),
 	}
-
-	// allow the packet consumers to write ahead of the reader by 1
-	s.pktdone.Make(1)
-
-	return s
 }
 
 //
@@ -130,10 +123,6 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
 		return false, err
 
 	case drpcwire.KindMessage:
-		if s.sigs.recv.IsSet() || s.sigs.term.IsSet() {
-			return true, nil
-		}
-
 		// drop the mutex while we either send into the queue or we're told that
 		// receiving is done. we don't handle any more packets until the message
 		// is delivered, so the only way it can become set is from some of the
@@ -142,16 +131,7 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
 		s.mu.Unlock()
 		defer s.mu.Lock()
 
-		select {
-		case <-s.sigs.recv.Signal():
-		case <-s.sigs.term.Signal():
-		case s.queue <- pkt:
-			// wait for whoever received the packet to signal that they are done
-			// with the data to maintain the contract that HandlePacket does not
-			// alias the data slice after it returns.
-			s.pktdone.Recv()
-		}
-
+		s.pbuf.Put(pkt.Data)
 		return true, nil
 
 	case drpcwire.KindError:
@@ -162,11 +142,13 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
 
 	case drpcwire.KindClose:
 		s.sigs.recv.Set(io.EOF)
+		s.pbuf.Close(io.EOF)
 		s.terminate(drpc.Error.New("remote closed the stream"))
 		return false, nil
 
 	case drpcwire.KindCloseSend:
 		s.sigs.recv.Set(io.EOF)
+		s.pbuf.Close(io.EOF)
 		s.terminateIfBothClosed()
 		return false, nil
 
@@ -253,6 +235,7 @@ func (s *Stream) terminate(err error) {
 	s.sigs.send.Set(err)
 	s.sigs.recv.Set(err)
 	s.sigs.term.Set(err)
+	s.pbuf.Close(err)
 	s.checkFinished()
 }
 
@@ -297,7 +280,7 @@ func (s *Stream) RawRecv() (data []byte, err error) {
 		return nil, err
 	}
 	data = append([]byte(nil), data...)
-	s.pktdone.Send() // done reading the packet data
+	s.pbuf.Done()
 	return data, nil
 }
 
@@ -309,16 +292,7 @@ func (s *Stream) rawRecv() (data []byte, err error) {
 	s.read.Lock()
 	defer s.read.Unlock()
 
-	if err, ok := s.sigs.recv.Get(); ok {
-		return nil, err
-	}
-
-	select {
-	case <-s.sigs.recv.Signal():
-		return nil, s.sigs.recv.Err()
-	case pkt := <-s.queue:
-		return pkt.Data, nil
-	}
+	return s.pbuf.Get()
 }
 
 //
@@ -352,7 +326,7 @@ func (s *Stream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error) {
 		return err
 	}
 	err = enc.Unmarshal(data, msg)
-	s.pktdone.Send() // done reading the packet data
+	s.pbuf.Done()
 	return err
 }
 

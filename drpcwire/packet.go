@@ -5,17 +5,17 @@ package drpcwire
 
 import "fmt"
 
-//go:generate stringer -type=Kind -trimprefix=Kind_ -output=packet_string.go
+//go:generate stringer -type=Kind -trimprefix=Kind -output=packet_string.go
 
 // Kind is the enumeration of all the different kinds of messages drpc sends.
 type Kind uint8
 
 const (
 	// kindReserved is saved for the future in case we need to extend.
-	kindReserved Kind = 0
+	// kindReserved Kind = 0
 
 	// kindCancelDeprecated is a reminder that we once used this kind value.
-	kindCancelDeprecated Kind = 4
+	// kindCancelDeprecated Kind = 4
 
 	// KindInvoke is used to invoke an rpc. The body is the name of the rpc.
 	KindInvoke Kind = 1

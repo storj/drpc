@@ -13,9 +13,16 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
+type config struct {
+	protolib string
+	json     bool
+}
+
 func main() {
 	var flags flag.FlagSet
-	protolib := flags.String("protolib", "google.golang.org/protobuf", "which protobuf library to use for encoding")
+	var conf config
+	flags.StringVar(&conf.protolib, "protolib", "google.golang.org/protobuf", "which protobuf library to use for encoding")
+	flags.BoolVar(&conf.json, "json", true, "generate encoders with json support")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
@@ -24,13 +31,13 @@ func main() {
 			if !f.Generate || len(f.Services) == 0 {
 				continue
 			}
-			generateFile(plugin, f, *protolib)
+			generateFile(plugin, f, conf)
 		}
 		return nil
 	})
 }
 
-func generateFile(plugin *protogen.Plugin, file *protogen.File, protolib string) {
+func generateFile(plugin *protogen.Plugin, file *protogen.File, conf config) {
 	gf := plugin.NewGeneratedFile(file.GeneratedFilenamePrefix+"_drpc.pb.go", file.GoImportPath)
 	d := &drpc{gf, file}
 
@@ -43,7 +50,7 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File, protolib string)
 	d.P("package ", file.GoPackageName)
 	d.P()
 
-	d.generateEncoding(protolib)
+	d.generateEncoding(conf)
 	for _, service := range file.Services {
 		d.generateService(service)
 	}
@@ -134,11 +141,11 @@ func (d *drpc) ServerStreamImpl(method *protogen.Method) string {
 // encoding generation
 //
 
-func (d *drpc) generateEncoding(protolib string) {
+func (d *drpc) generateEncoding(conf config) {
 	d.P("type ", d.EncodingName(), " struct{}")
 	d.P()
 
-	switch protolib {
+	switch conf.protolib {
 	case "google.golang.org/protobuf":
 		d.P("func (", d.EncodingName(), ") Marshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
 		d.P("return ", d.Ident("google.golang.org/protobuf/proto", "Marshal"), "(msg.(", d.Ident("google.golang.org/protobuf/proto", "Message"), "))")
@@ -155,15 +162,17 @@ func (d *drpc) generateEncoding(protolib string) {
 		d.P("}")
 		d.P()
 
-		d.P("func (", d.EncodingName(), ") JSONMarshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
-		d.P("return ", d.Ident("google.golang.org/protobuf/encoding/protojson", "Marshal"), "(msg.(", d.Ident("google.golang.org/protobuf/proto", "Message"), "))")
-		d.P("}")
-		d.P()
+		if conf.json {
+			d.P("func (", d.EncodingName(), ") JSONMarshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
+			d.P("return ", d.Ident("google.golang.org/protobuf/encoding/protojson", "Marshal"), "(msg.(", d.Ident("google.golang.org/protobuf/proto", "Message"), "))")
+			d.P("}")
+			d.P()
 
-		d.P("func (", d.EncodingName(), ") JSONUnmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
-		d.P("return ", d.Ident("google.golang.org/protobuf/encoding/protojson", "Unmarshal"), "(buf, msg.(", d.Ident("google.golang.org/protobuf/proto", "Message"), "))")
-		d.P("}")
-		d.P()
+			d.P("func (", d.EncodingName(), ") JSONUnmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
+			d.P("return ", d.Ident("google.golang.org/protobuf/encoding/protojson", "Unmarshal"), "(buf, msg.(", d.Ident("google.golang.org/protobuf/proto", "Message"), "))")
+			d.P("}")
+			d.P()
+		}
 
 	case "github.com/gogo/protobuf":
 		d.P("func (", d.EncodingName(), ") Marshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
@@ -176,41 +185,45 @@ func (d *drpc) generateEncoding(protolib string) {
 		d.P("}")
 		d.P()
 
-		d.P("func (", d.EncodingName(), ") JSONMarshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
-		d.P("var buf ", d.Ident("bytes", "Buffer"))
-		d.P("err := new(", d.Ident("github.com/gogo/protobuf/jsonpb", "Marshaler"), ").Marshal(&buf, msg.(", d.Ident("github.com/gogo/protobuf/proto", "Message"), "))")
-		d.P("if err != nil {")
-		d.P("return nil, err")
-		d.P("}")
-		d.P("return buf.Bytes(), nil")
-		d.P("}")
-		d.P()
+		if conf.json {
+			d.P("func (", d.EncodingName(), ") JSONMarshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
+			d.P("var buf ", d.Ident("bytes", "Buffer"))
+			d.P("err := new(", d.Ident("github.com/gogo/protobuf/jsonpb", "Marshaler"), ").Marshal(&buf, msg.(", d.Ident("github.com/gogo/protobuf/proto", "Message"), "))")
+			d.P("if err != nil {")
+			d.P("return nil, err")
+			d.P("}")
+			d.P("return buf.Bytes(), nil")
+			d.P("}")
+			d.P()
 
-		d.P("func (", d.EncodingName(), ") JSONUnmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
-		d.P("return ", d.Ident("github.com/gogo/protobuf/jsonpb", "Unmarshal"), "(", d.Ident("bytes", "NewReader"), "(buf), msg.(", d.Ident("github.com/gogo/protobuf/proto", "Message"), "))")
-		d.P("}")
-		d.P()
+			d.P("func (", d.EncodingName(), ") JSONUnmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
+			d.P("return ", d.Ident("github.com/gogo/protobuf/jsonpb", "Unmarshal"), "(", d.Ident("bytes", "NewReader"), "(buf), msg.(", d.Ident("github.com/gogo/protobuf/proto", "Message"), "))")
+			d.P("}")
+			d.P()
+		}
 
 	default:
 		d.P("func (", d.EncodingName(), ") Marshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
-		d.P("return ", d.Ident(protolib, "Marshal"), "(msg)")
+		d.P("return ", d.Ident(conf.protolib, "Marshal"), "(msg)")
 		d.P("}")
 		d.P()
 
 		d.P("func (", d.EncodingName(), ") Unmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
-		d.P("return ", d.Ident(protolib, "Unmarshal"), "(buf, msg)")
+		d.P("return ", d.Ident(conf.protolib, "Unmarshal"), "(buf, msg)")
 		d.P("}")
 		d.P()
 
-		d.P("func (", d.EncodingName(), ") JSONMarshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
-		d.P("return ", d.Ident(protolib, "JSONMarshal"), "(msg)")
-		d.P("}")
-		d.P()
+		if conf.json {
+			d.P("func (", d.EncodingName(), ") JSONMarshal(msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
+			d.P("return ", d.Ident(conf.protolib, "JSONMarshal"), "(msg)")
+			d.P("}")
+			d.P()
 
-		d.P("func (", d.EncodingName(), ") JSONUnmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
-		d.P("return ", d.Ident(protolib, "JSONUnmarshal"), "(buf, msg)")
-		d.P("}")
-		d.P()
+			d.P("func (", d.EncodingName(), ") JSONUnmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
+			d.P("return ", d.Ident(conf.protolib, "JSONUnmarshal"), "(buf, msg)")
+			d.P("}")
+			d.P()
+		}
 
 	}
 }

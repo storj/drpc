@@ -12,10 +12,10 @@ type Kind uint8
 
 const (
 	// kindReserved is saved for the future in case we need to extend.
-	// kindReserved Kind = 0
+	//   kindReserved Kind = 0
 
 	// kindCancelDeprecated is a reminder that we once used this kind value.
-	// kindCancelDeprecated Kind = 4
+	//   kindCancelDeprecated Kind = 4
 
 	// KindInvoke is used to invoke an rpc. The body is the name of the rpc.
 	KindInvoke Kind = 1

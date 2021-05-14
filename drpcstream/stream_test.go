@@ -31,7 +31,7 @@ func TestStream_StateTransitions(t *testing.T) {
 	checkErrs := func(t *testing.T, exp, got error) {
 		t.Helper()
 
-		switch exp {
+		switch exp { //nolint: errorlint // testing for specific errors
 		case any:
 			assert.Error(t, got)
 		case nil:

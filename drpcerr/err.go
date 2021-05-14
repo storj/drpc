@@ -9,7 +9,7 @@ import "unsafe"
 func Code(err error) uint64 {
 	for i := 0; i < 100; i++ {
 		prev := err
-		switch v := err.(type) {
+		switch v := err.(type) { //nolint: errorlint // this is a custom unwrap loop
 		case interface{ Code() uint64 }:
 			return v.Code()
 		case interface{ Cause() error }:

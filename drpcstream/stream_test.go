@@ -159,3 +159,15 @@ func TestStream_Unblocks(t *testing.T) {
 		ctx.Wait()
 	}
 }
+
+func TestStream_ContextCancel(t *testing.T) {
+	ctx := context.Background()
+	st := New(ctx, 0, drpcwire.NewWriter(ioutil.Discard, 0))
+
+	child, cancel := context.WithCancel(st.Context())
+	defer cancel()
+
+	assert.NoError(t, st.Close())
+	<-st.Context().Done()
+	<-child.Done()
+}

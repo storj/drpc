@@ -78,11 +78,14 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 // streamCtx avoids having to allocate a Done channel until it is requested.
 type streamCtx struct {
 	context.Context
-	ch drpcsignal.Chan
+	sig drpcsignal.Signal
 }
 
 // Done returns the stored channel instead of the parent Done channel.
-func (s *streamCtx) Done() <-chan struct{} { return s.ch.Get() }
+func (s *streamCtx) Done() <-chan struct{} { return s.sig.Signal() }
+
+// Err returns the error that has been set when the done channel is closed.
+func (s *streamCtx) Err() error { return s.sig.Err() }
 
 // Context returns the context associated with the stream. It is closed when
 // the Stream will no longer issue any writes or reads.
@@ -169,7 +172,7 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
 func (s *Stream) checkFinished() {
 	if s.sigs.term.IsSet() && s.write.Unlocked() && s.read.Unlocked() {
 		if s.sigs.fin.Set(nil) {
-			s.ctx.ch.Close()
+			s.ctx.sig.Set(context.Canceled)
 		}
 	}
 }

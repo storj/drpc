@@ -25,6 +25,14 @@ import (
 // helpers
 //
 
+func data(n int64) []byte {
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = byte(int(n) + i)
+	}
+	return out
+}
+
 func in(n int64) *In { return &In{In: n} }
 
 func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
@@ -87,7 +95,7 @@ var standardImpl = impl{
 			out += v
 		}
 
-		return &Out{Out: out}, nil
+		return &Out{Out: out, Data: in.Data}, nil
 	},
 
 	Method2Fn: func(stream DRPCService_Method2Stream) error {

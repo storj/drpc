@@ -15,8 +15,10 @@ service Service {
 
 message In {
     int64 in = 1;
+    bytes data = 2;
 }
 
 message Out {
     int64 out = 1;
+    bytes data = 2;
 }

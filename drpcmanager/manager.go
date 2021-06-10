@@ -171,9 +171,9 @@ func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
 // exported interface
 //
 
-// Closed returns if the manager has been closed.
-func (m *Manager) Closed() bool {
-	return m.term.IsSet()
+// Closed returns a channel that is closed once the manager is closed.
+func (m *Manager) Closed() <-chan struct{} {
+	return m.term.Signal()
 }
 
 // Close closes the transport the manager is using.

@@ -50,8 +50,8 @@ func (c *Conn) Transport() drpc.Transport {
 	return c.tr
 }
 
-// Closed returns true if the connection is already closed.
-func (c *Conn) Closed() bool {
+// Closed returns a channel that is closed once the connection is closed.
+func (c *Conn) Closed() <-chan struct{} {
 	return c.man.Closed()
 }
 

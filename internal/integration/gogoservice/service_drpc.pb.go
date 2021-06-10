@@ -99,6 +99,13 @@ func (x *drpcService_Method2Client) CloseAndRecv() (*Out, error) {
 	return m, nil
 }
 
+func (x *drpcService_Method2Client) CloseAndRecvMsg(m *Out) error {
+	if err := x.CloseSend(); err != nil {
+		return err
+	}
+	return x.MsgRecv(m, drpcEncoding_File_service_proto{})
+}
+
 func (c *drpcServiceClient) Method3(ctx context.Context, in *In) (DRPCService_Method3Client, error) {
 	stream, err := c.cc.NewStream(ctx, "/service.Service/Method3", drpcEncoding_File_service_proto{})
 	if err != nil {
@@ -131,6 +138,10 @@ func (x *drpcService_Method3Client) Recv() (*Out, error) {
 	return m, nil
 }
 
+func (x *drpcService_Method3Client) RecvMsg(m *Out) error {
+	return x.MsgRecv(m, drpcEncoding_File_service_proto{})
+}
+
 func (c *drpcServiceClient) Method4(ctx context.Context) (DRPCService_Method4Client, error) {
 	stream, err := c.cc.NewStream(ctx, "/service.Service/Method4", drpcEncoding_File_service_proto{})
 	if err != nil {
@@ -160,6 +171,10 @@ func (x *drpcService_Method4Client) Recv() (*Out, error) {
 		return nil, err
 	}
 	return m, nil
+}
+
+func (x *drpcService_Method4Client) RecvMsg(m *Out) error {
+	return x.MsgRecv(m, drpcEncoding_File_service_proto{})
 }
 
 type DRPCServiceServer interface {
@@ -277,6 +292,10 @@ func (x *drpcService_Method2Stream) Recv() (*In, error) {
 	return m, nil
 }
 
+func (x *drpcService_Method2Stream) RecvMsg(m *In) error {
+	return x.MsgRecv(m, drpcEncoding_File_service_proto{})
+}
+
 type DRPCService_Method3Stream interface {
 	drpc.Stream
 	Send(*Out) error
@@ -310,4 +329,8 @@ func (x *drpcService_Method4Stream) Recv() (*In, error) {
 		return nil, err
 	}
 	return m, nil
+}
+
+func (x *drpcService_Method4Stream) RecvMsg(m *In) error {
+	return x.MsgRecv(m, drpcEncoding_File_service_proto{})
 }

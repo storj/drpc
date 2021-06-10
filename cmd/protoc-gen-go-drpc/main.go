@@ -388,6 +388,11 @@ func (d *drpc) generateClientMethod(method *protogen.Method) {
 		d.P("return m, nil")
 		d.P("}")
 		d.P()
+
+		d.P("func (x *", d.ClientStreamImpl(method), ") RecvMsg(m *", outType, ") error {")
+		d.P("return x.MsgRecv(m, ", d.EncodingName(), "{})")
+		d.P("}")
+		d.P()
 	}
 	if genCloseAndRecv {
 		d.P("func (x *", d.ClientStreamImpl(method), ") CloseAndRecv() (*", outType, ", error) {")
@@ -395,6 +400,12 @@ func (d *drpc) generateClientMethod(method *protogen.Method) {
 		d.P("m := new(", outType, ")")
 		d.P("if err := x.MsgRecv(m, ", d.EncodingName(), "{}); err != nil { return nil, err }")
 		d.P("return m, nil")
+		d.P("}")
+		d.P()
+
+		d.P("func (x *", d.ClientStreamImpl(method), ") CloseAndRecvMsg(m *", outType, ") error {")
+		d.P("if err := x.CloseSend(); err != nil { return err }")
+		d.P("return x.MsgRecv(m, ", d.EncodingName(), "{})")
 		d.P("}")
 		d.P()
 	}
@@ -499,6 +510,11 @@ func (d *drpc) generateServerMethod(method *protogen.Method) {
 		d.P("m := new(", d.InputType(method), ")")
 		d.P("if err := x.MsgRecv(m, ", d.EncodingName(), "{}); err != nil { return nil, err }")
 		d.P("return m, nil")
+		d.P("}")
+		d.P()
+
+		d.P("func (x *", d.ServerStreamImpl(method), ") RecvMsg(m *", d.InputType(method), ") error {")
+		d.P("return x.MsgRecv(m, ", d.EncodingName(), "{})")
 		d.P("}")
 		d.P()
 	}

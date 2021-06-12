@@ -40,9 +40,9 @@ Close closes the connection.
 #### func (*Conn) Closed
 
 ```go
-func (c *Conn) Closed() bool
+func (c *Conn) Closed() <-chan struct{}
 ```
-Closed returns true if the connection is already closed.
+Closed returns a channel that is closed once the connection is closed.
 
 #### func (*Conn) Invoke
 

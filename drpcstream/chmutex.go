@@ -5,38 +5,24 @@ package drpcstream
 
 import (
 	"sync"
-
-	"storj.io/drpc/drpcsignal"
+	"sync/atomic"
 )
 
-type chMutex struct {
-	on sync.Once
-	ch drpcsignal.Chan
+type inspectMutex struct {
+	held uint32
+	mu   sync.Mutex
 }
 
-func (m *chMutex) init() { m.ch.Make(1) }
-
-func (m *chMutex) Lock() {
-	m.on.Do(m.init)
-	m.ch.Send()
+func (m *inspectMutex) Lock() {
+	m.mu.Lock()
+	atomic.StoreUint32(&m.held, 1)
 }
 
-func (m *chMutex) TryLock() bool {
-	m.on.Do(m.init)
-	select {
-	case m.ch.Get() <- struct{}{}:
-		return true
-	default:
-		return false
-	}
+func (m *inspectMutex) Unlock() {
+	atomic.StoreUint32(&m.held, 0)
+	m.mu.Unlock()
 }
 
-func (m *chMutex) Unlock() {
-	m.on.Do(m.init)
-	m.ch.Recv()
-}
-
-func (m *chMutex) Unlocked() bool {
-	m.on.Do(m.init)
-	return !m.ch.Full()
+func (m *inspectMutex) Unlocked() bool {
+	return atomic.LoadUint32(&m.held) == 0
 }

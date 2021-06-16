@@ -45,7 +45,7 @@ Close closes the transport the manager is using.
 ```go
 func (m *Manager) Closed() <-chan struct{}
 ```
-Closed returns a channel that is closed once the manager is closed
+Closed returns a channel that is closed once the manager is closed.
 
 #### func (*Manager) NewClientStream
 

@@ -20,8 +20,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"storj.io/drpc"
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 )
@@ -175,15 +177,19 @@ func checkGoroutines(t *testing.T) {
 func in(n int64) *In   { return &In{In: n} }
 func out(n int64) *Out { return &Out{Out: n} }
 
-func createDRPCConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
+func createDRPCConnectionWithOptions(server DRPCServiceServer, opts drpcmanager.Options) (DRPCServiceClient, func()) {
 	ctx := drpcctx.NewTracker(context.Background())
-	c1, c2 := net.Pipe()
+	c1, c2 := pipe()
 
 	mux := drpcmux.New()
 	_ = DRPCRegisterService(mux, server)
-	srv := drpcserver.New(mux)
+	srv := drpcserver.NewWithOptions(mux, drpcserver.Options{
+		Manager: opts,
+	})
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
-	conn := drpcconn.New(c2)
+	conn := drpcconn.NewWithOptions(c2, drpcconn.Options{
+		Manager: opts,
+	})
 
 	return NewDRPCServiceClient(conn), func() {
 		_ = conn.Close()
@@ -192,9 +198,13 @@ func createDRPCConnection(server DRPCServiceServer) (DRPCServiceClient, func()) 
 	}
 }
 
+func createDRPCConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
+	return createDRPCConnectionWithOptions(server, drpcmanager.Options{})
+}
+
 func createGRPCConnection(server ServiceServer) (ServiceClient, func()) {
 	ctx := drpcctx.NewTracker(context.Background())
-	c1, c2 := net.Pipe()
+	c1, c2 := pipe()
 
 	srv := grpc.NewServer()
 	RegisterServiceServer(srv, server)
@@ -217,20 +227,33 @@ func createGRPCConnection(server ServiceServer) (ServiceClient, func()) {
 // connection helpers
 //
 
-func makeDialer(conn net.Conn) func(context.Context, string) (net.Conn, error) {
-	return func(context.Context, string) (net.Conn, error) { return conn, nil }
+func pipe() (drpc.Transport, drpc.Transport) {
+	type rwc struct {
+		io.Reader
+		io.Writer
+		io.Closer
+	}
+
+	c1r, c1w := io.Pipe()
+	c2r, c2w := io.Pipe()
+
+	return rwc{c1r, c2w, c2w}, rwc{c2r, c1w, c1w}
+}
+
+func makeDialer(tr drpc.Transport) func(context.Context, string) (net.Conn, error) {
+	return func(context.Context, string) (net.Conn, error) { return transportConn{tr}, nil }
 }
 
 type listenOne struct {
-	conn   net.Conn
+	tr     drpc.Transport
 	done   <-chan struct{}
 	cancel func()
 }
 
-func makeListener(ctx context.Context, conn net.Conn) *listenOne {
+func makeListener(ctx context.Context, tr drpc.Transport) *listenOne {
 	ctx, cancel := context.WithCancel(ctx)
 	return &listenOne{
-		conn:   conn,
+		tr:     tr,
 		done:   ctx.Done(),
 		cancel: cancel,
 	}
@@ -239,13 +262,23 @@ func makeListener(ctx context.Context, conn net.Conn) *listenOne {
 func (l *listenOne) Close() error   { l.cancel(); return nil }
 func (l *listenOne) Addr() net.Addr { return nil }
 func (l *listenOne) Accept() (conn net.Conn, err error) {
-	if l.conn != nil {
-		conn, l.conn = l.conn, nil
+	if l.tr != nil {
+		conn, l.tr = transportConn{l.tr}, nil
 		return conn, nil
 	}
 	<-l.done
 	return nil, errs.New("listener closed")
 }
+
+type transportConn struct {
+	drpc.Transport
+}
+
+func (transportConn) LocalAddr() net.Addr                { return nil }
+func (transportConn) RemoteAddr() net.Addr               { return nil }
+func (transportConn) SetDeadline(t time.Time) error      { return nil }
+func (transportConn) SetReadDeadline(t time.Time) error  { return nil }
+func (transportConn) SetWriteDeadline(t time.Time) error { return nil }
 
 //
 // agnostic client impl

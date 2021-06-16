@@ -10,6 +10,9 @@ import (
 
 	"github.com/zeebo/assert"
 	"google.golang.org/protobuf/proto"
+
+	"storj.io/drpc/drpcmanager"
+	"storj.io/drpc/drpcstream"
 )
 
 func asOut(in *In) *Out {
@@ -36,8 +39,11 @@ var benchmarkImpl = &serviceImpl{
 	},
 
 	Method3Fn: func(in *In, stream ServerMethod3Stream) error {
+		out := asOut(in)
+		out.Out = 1
+
 		for i := int64(0); i < in.In; i++ {
-			err := stream.Send(asOut(in))
+			err := stream.Send(out)
 			if err != nil {
 				return err
 			}
@@ -62,6 +68,12 @@ var benchmarkImpl = &serviceImpl{
 }
 
 func benchmarkBoth(b *testing.B, fn func(b *testing.B, in *In, client Client)) {
+	options := drpcmanager.Options{
+		Stream: drpcstream.Options{
+			ManualFlush: true,
+		},
+	}
+
 	for _, size := range []struct {
 		Name  string
 		Value *In
@@ -79,7 +91,7 @@ func benchmarkBoth(b *testing.B, fn func(b *testing.B, in *In, client Client)) {
 				fn(b, size.Value, grpcWrapper{conn})
 			})
 			b.Run("DRPC", func(b *testing.B) {
-				conn, close := createDRPCConnection(benchmarkImpl.DRPC())
+				conn, close := createDRPCConnectionWithOptions(benchmarkImpl.DRPC(), options)
 				defer close()
 				fn(b, size.Value, drpcWrapper{conn})
 			})
@@ -131,14 +143,15 @@ func BenchmarkOutputStream(b *testing.B) {
 		stream, err := client.Method3(ctx, in)
 		assert.NoError(b, err)
 
-		b.SetBytes(int64(proto.Size(in)))
 		b.ReportAllocs()
 		b.ResetTimer()
 
+		var out *Out
 		for i := 0; i < b.N; i++ {
-			_, err = stream.Recv()
+			out, err = stream.Recv()
 			assert.NoError(b, err)
 		}
+		b.SetBytes(int64(proto.Size(out)))
 	})
 }
 

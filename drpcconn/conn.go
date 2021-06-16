@@ -106,7 +106,6 @@ func (c *Conn) doInvoke(stream *drpcstream.Stream, enc drpc.Encoding, rpc, data 
 	if err := stream.MsgRecv(out, enc); err != nil {
 		return err
 	}
-	<-stream.Finished()
 	return nil
 }
 

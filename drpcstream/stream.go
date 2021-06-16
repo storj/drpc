@@ -22,6 +22,12 @@ import (
 type Options struct {
 	// SplitSize controls the default size we split packets into frames.
 	SplitSize int
+
+	// ManualFlush controls if the stream will automatically flush after every
+	// message send. Note that flushing is not part of the drpc.Stream
+	// interface, so if you use this you must be ready to type assert and
+	// call RawFlush dynamically.
+	ManualFlush bool
 }
 
 // Stream represents an rpc actively happening on a transport.
@@ -29,12 +35,12 @@ type Stream struct {
 	ctx  streamCtx
 	opts Options
 
-	write chMutex
-	read  chMutex
+	write inspectMutex
+	read  inspectMutex
 
 	id   drpcwire.ID
 	wr   *drpcwire.Writer
-	pbuf *packetBuffer
+	pbuf packetBuffer
 	wbuf []byte
 
 	mu   sync.Mutex // protects state transitions
@@ -87,12 +93,23 @@ func (s *streamCtx) Done() <-chan struct{} { return s.sig.Signal() }
 // Err returns the error that has been set when the done channel is closed.
 func (s *streamCtx) Err() error { return s.sig.Err() }
 
+// ID returns the stream id.
+func (s *Stream) ID() uint64 {
+	if s == nil {
+		return 0
+	}
+	return s.id.Stream
+}
+
 // Context returns the context associated with the stream. It is closed when
 // the Stream will no longer issue any writes or reads.
 func (s *Stream) Context() context.Context { return &s.ctx }
 
 // Terminated returns a channel that is closed when the stream has been terminated.
 func (s *Stream) Terminated() <-chan struct{} { return s.sigs.term.Signal() }
+
+// IsTerminated returns true if the stream has been terminated.
+func (s *Stream) IsTerminated() bool { return s.sigs.term.IsSet() }
 
 // Finished returns a channel that is closed when the stream is fully finished
 // and will no longer issue any writes or reads.
@@ -109,56 +126,49 @@ func (s *Stream) IsFinished() bool { return s.sigs.fin.IsSet() }
 // HandlePacket advances the stream state machine by inspecting the packet. It returns
 // any major errors that should terminate the transport the stream is operating on as
 // well as a boolean indicating if the stream expects more packets.
-func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
+	if s.sigs.term.IsSet() || pkt.ID.Stream != s.id.Stream {
+		return nil
+	}
 
 	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: %v", s, s.id.Stream, pkt) })
 
-	if pkt.ID.Stream != s.id.Stream {
-		return true, nil
+	if pkt.Kind == drpcwire.KindMessage {
+		s.pbuf.Put(pkt.Data)
+		return nil
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	switch pkt.Kind {
 	case drpcwire.KindInvoke:
 		err := drpc.ProtocolError.New("invoke on existing stream")
 		s.terminate(err)
-		return false, err
-
-	case drpcwire.KindMessage:
-		// drop the mutex while we either send into the queue or we're told that
-		// receiving is done. we don't handle any more packets until the message
-		// is delivered, so the only way it can become set is from some of the
-		// stream terminating calls, in which case, shutting down the stream is
-		// racing with the message being received, so dropping it is valid.
-		s.mu.Unlock()
-		defer s.mu.Lock()
-
-		s.pbuf.Put(pkt.Data)
-		return true, nil
+		return err
 
 	case drpcwire.KindError:
 		err := drpcwire.UnmarshalError(pkt.Data)
 		s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 		s.terminate(err)
-		return false, nil
+		return nil
 
 	case drpcwire.KindClose:
 		s.sigs.recv.Set(io.EOF)
 		s.pbuf.Close(io.EOF)
 		s.terminate(drpc.Error.New("remote closed the stream"))
-		return false, nil
+		return nil
 
 	case drpcwire.KindCloseSend:
 		s.sigs.recv.Set(io.EOF)
 		s.pbuf.Close(io.EOF)
 		s.terminateIfBothClosed()
-		return false, nil
+		return nil
 
 	default:
 		err := drpc.InternalError.New("unknown packet kind: %s", pkt.Kind)
 		s.terminate(err)
-		return false, err
+		return err
 	}
 }
 
@@ -270,9 +280,20 @@ func (s *Stream) RawFlush() (err error) {
 	return s.rawFlushLocked()
 }
 
-// rawFlushLocked does the body of RawFlush assuming the caller is holding the
-// appropriate locks.
+// rawFlushLocked checks for any conditions that should cause a flush to not happen
+// and then issues the flush. It assumes the caller is holding the appropriate locks.
 func (s *Stream) rawFlushLocked() (err error) {
+	if s.wr.Empty() {
+		return nil
+	}
+
+	switch {
+	case s.sigs.send.IsSet():
+		return s.sigs.send.Err()
+	case s.sigs.term.IsSet():
+		return s.sigs.term.Err()
+	}
+
 	return s.checkCancelError(errs.Wrap(s.wr.Flush()))
 }
 
@@ -291,6 +312,12 @@ func (s *Stream) RawRecv() (data []byte, err error) {
 // copy of the bytes and so care must be taken to signal when HandlePacket
 // is allowed to return.
 func (s *Stream) rawRecv() (data []byte, err error) {
+	if s.opts.ManualFlush && !s.wr.Empty() {
+		if err := s.RawFlush(); err != nil {
+			return nil, err
+		}
+	}
+
 	defer s.checkFinished()
 	s.read.Lock()
 	defer s.read.Unlock()
@@ -315,8 +342,10 @@ func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
 	if err := s.rawWriteLocked(drpcwire.KindMessage, s.wbuf); err != nil {
 		return err
 	}
-	if err := s.rawFlushLocked(); err != nil {
-		return err
+	if !s.opts.ManualFlush {
+		if err := s.rawFlushLocked(); err != nil {
+			return err
+		}
 	}
 
 	return nil

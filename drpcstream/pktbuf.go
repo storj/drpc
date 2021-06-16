@@ -8,64 +8,43 @@ import (
 )
 
 type packetBuffer struct {
-	mu   sync.Mutex
-	cond sync.Cond
-	data []byte
-	set  bool
 	err  error
+	mu   sync.Mutex
+	data chan []byte
 }
 
-func newPacketBuffer() *packetBuffer {
-	pb := new(packetBuffer)
-	pb.cond.L = &pb.mu
-	return pb
-}
-
-func (p *packetBuffer) Close(err error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.err == nil {
-		p.data = nil
-		p.set = false
-		p.err = err
-		p.cond.Broadcast()
+func newPacketBuffer() packetBuffer {
+	return packetBuffer{
+		data: make(chan []byte),
 	}
 }
 
-func (p *packetBuffer) Put(data []byte) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (pb *packetBuffer) Close(err error) {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
 
-	if p.err != nil {
-		return
-	}
-
-	p.data = data
-	p.set = true
-	p.cond.Broadcast()
-
-	for p.err == nil && p.set {
-		p.cond.Wait()
+	if pb.err == nil {
+		pb.err = err
+		close(pb.data)
 	}
 }
 
-func (p *packetBuffer) Get() ([]byte, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (pb *packetBuffer) Put(data []byte) {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
 
-	for p.err == nil && !p.set {
-		p.cond.Wait()
-	}
-
-	return p.data, p.err
+	pb.data <- data
+	<-pb.data
 }
 
-func (p *packetBuffer) Done() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (pb *packetBuffer) Get() ([]byte, error) {
+	data, ok := <-pb.data
+	if !ok {
+		return nil, pb.err
+	}
+	return data, nil
+}
 
-	p.data = nil
-	p.set = false
-	p.cond.Broadcast()
+func (pb *packetBuffer) Done() {
+	pb.data <- nil
 }

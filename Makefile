@@ -44,6 +44,7 @@ loc:
 		! -path './internal/fuzz-drpcwire/*' \
 		! -path './internal/grpccompat/*' \
 		! -path './internal/integration/*' \
+		! -path './scripts/*' \
 		! -name 'doc.go' \
-		! -name '_test.go' \
+		! -name '*_test.go' \
 		| xargs cloc

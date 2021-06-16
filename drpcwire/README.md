@@ -239,6 +239,13 @@ func NewWriter(w io.Writer, size int) *Writer
 NewWriter returns a Writer that will attempt to buffer size data before sending
 it to the io.Writer.
 
+#### func (*Writer) Empty
+
+```go
+func (b *Writer) Empty() bool
+```
+Empty returns true if there are no bytes buffered in the writer.
+
 #### func (*Writer) Flush
 
 ```go

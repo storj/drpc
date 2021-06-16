@@ -89,13 +89,18 @@ func TestConcurrent(t *testing.T) {
 	errs := make(chan error)
 	for i := 0; i < N; i++ {
 		ctx.Run(func(ctx context.Context) {
-			out, err := cli.Method1(ctx, &In{In: 1})
-			if err != nil {
-				errs <- err
-			} else if out.Out != 1 {
-				errs <- fmt.Errorf("wrong result %d", out.Out)
-			} else {
-				errs <- nil
+			select {
+			case <-ctx.Done():
+			case errs <- func() error {
+				out, err := cli.Method1(ctx, &In{In: 1})
+				if err != nil {
+					return err
+				} else if out.Out != 1 {
+					return fmt.Errorf("wrong result %d", out.Out)
+				} else {
+					return nil
+				}
+			}():
 			}
 		})
 	}

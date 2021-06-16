@@ -23,12 +23,12 @@ A drop-in, lightweight gRPC replacement.
 
 ## Benchmarks
 
-These microbenchmarks attempt to provide a comparison and come with some caveats. First, gRPC and DRPC have different flushing semantics when sending messages. Specifically, gRPC will buffer for some period whereas DRPC always immediately flushes. This difference is most apparent in the Input/Output Stream benchmarks under the Small and Medium sizes. Second, all microbenchmarks are flawed. These, in particular, do not even send data over a network connection. Third, no attempt was made to do the benchmarks in a controlled environment (CPU scaling disabled, noiseless, etc.).
+These microbenchmarks attempt to provide a comparison and come with some caveats. First, it does not send data over a network connection which is expected to be the bottleneck almost all of the time. Second, no attempt was made to do the benchmarks in a controlled environment (CPU scaling disabled, noiseless, etc.). Third, no tuning was done to ensure they're both performing optimally, so there is an inherent advantage for DRPC because the author is familiar with how it works.
 
 <table>
     <tr>
-        <td rowspan=2>Benchmark</td>
-        <td rowspan=2>Measure</td><td rowspan=2></td>
+        <td rowspan=2>Measure</td>
+        <td rowspan=2>Benchmark</td><td rowspan=2></td>
         <td colspan=3>Small</td><td rowspan=2></td>
         <td colspan=3>Medium</td><td rowspan=2></td>
         <td colspan=3>Large</td>
@@ -40,107 +40,107 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
-        <td rowspan=4>Unitary</td>
-        <td>time/op</td><td rowspan=4>
-        <td>39.5µs</td><td>17.1µs</td><td><font color=green>-56.64%</font></td><td rowspan=4></td>
-        <td>39.7µs</td><td>21.5µs</td><td><font color=green>-45.83%</font></td><td rowspan=4></td>
-        <td>1.35ms</td><td>0.65ms</td><td><font color=green>-52.07%</font>
+        <td rowspan=4>time/op</td>
+        <td>Unitary</td><td rowspan=4></td>
+        <td>30.5µs</td><td>9.7µs</td><td>-68.10%</td><td rowspan=4></td>
+        <td>38.5µs</td><td>12.3µs</td><td>-68.07%</td><td rowspan=4></td>
+        <td>1.39ms</td><td>0.64ms</td><td>-53.89%</td>
     </tr>
     <tr>
-        <td>speed</td>
-        <td>53.8kB/s</td><td>120.0kB/s</td><td><font color=green>+123.26%</font></td>
-        <td>51.7MB/s</td><td>95.4MB/s</td><td><font color=green>+84.48%</font></td>
-        <td>775MB/s</td><td>1618MB/s</td><td><font color=green>+108.64%</font>
+        <td>Input Stream</td>
+        <td>862ns</td><td>835ns</td><td>~</td>
+        <td>2.99µs</td><td>2.58µs</td><td>-13.68%</td>
+        <td>504µs</td><td>259µs</td><td>-48.53%</td>
     </tr>
     <tr>
-        <td>mem/op</td>
-        <td>8.43kB</td><td>2.05kB</td><td><font color=green>-75.65%</font></td>
-        <td>21.9kB</td><td>8.5kB</td><td><font color=green>-61.43%</font></td>
-        <td>6.51MB</td><td>3.22MB</td><td><font color=green>-50.44%</font>
+        <td>Output Stream</td>
+        <td>851ns</td><td>849ns</td><td>~</td>
+        <td>2.82µs</td><td>2.53µs</td><td>-10.28%</td>
+        <td>494µs</td><td>245µs</td><td>-50.43%</td>
     </tr>
     <tr>
-        <td>allocs/op</td>
-        <td>169</td><td>20</td><td><font color=green>-88.17%</font></td>
-        <td>171</td><td>22</td><td><font color=green>-87.13%</font></td>
-        <td>422</td><td>23</td><td><font color=green>-94.64%</font></td>
-    </tr>
-    <tr><td colspan=14></td></tr>
-    <tr>
-        <td rowspan=4>Input Stream</td>
-        <td>time/op</td><td rowspan=4></td>
-        <td>856ns</td><td>2501ns</td><td><font color=red>+192.29%</font></td><td rowspan=4></td>
-        <td>2.95µs</td><td>3.37µs</td><td><font color=red>+14.09%</font></td><td rowspan=4></td>
-        <td>544µs</td><td>263µs</td><td><font color=green>-51.73%</font></td>
-    </tr>
-    <tr>
-        <td>speed</td>
-        <td>2.28MB/s</td><td>0.80MB/s</td><td><font color=red>-64.91%</font></td>
-        <td>696MB/s</td><td>610MB/s</td><td><font color=red>-12.35%</font></td>
-        <td>1.93GB/s</td><td>3.99GB/s</td><td><font color=green>+107.18%</font></td>
-    </tr>
-    <tr>
-        <td>mem/op</td>
-        <td>409B</td><td>80B</td><td><font color=green>-80.46%</font></td>
-        <td>7.09kB</td><td>2.13kB</td><td><font color=green>-69.99%</font></td>
-        <td>3.22MB</td><td>1.08MB</td><td><font color=green>-66.39%</font></td>
-    </tr>
-    <tr>
-        <td>allocs/op</td>
-        <td>11</td><td>1</td><td><font color=green>-90.91%</font></td>
-        <td>12</td><td>2</td><td><font color=green>-83.33%</font></td>
-        <td>128</td><td>2</td><td><font color=green>-98.44%</font></td>
+        <td>Bidir Stream</td>
+        <td>9.84µs</td><td>3.68µs</td><td>-62.58%</td>
+        <td>14.9µs</td><td>5.4µs</td><td>-63.91%</td>
+        <td>1.34ms</td><td>0.56ms</td><td>-58.14%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
-        <td rowspan=4>Output Stream</td>
-        <td>time/op</td><td rowspan=4></td>
-        <td>953ns</td><td>2585µs</td><td><font color=red>+171.35%</font></td><td rowspan=4></td>
-        <td>2.87µs</td><td>3.49µs</td><td><font color=red>+21.56%</font></td><td rowspan=4></td>
-        <td>532µs</td><td>247µs</td><td><font color=green>-53.50%</font></td>
+        <td rowspan=4>speed</td>
+        <td>Unitary</td><td rowspan=4></td>
+        <td>70.0kB/s</td><td>207.5kB/s</td><td>+196.43%</td><td rowspan=4></td>
+        <td>53.4MB/s</td><td>167.2MB/s</td><td>+213.23%</td><td rowspan=4></td>
+        <td>753MB/s</td><td>1631MB/s</td><td>+116.64%</td>
     </tr>
     <tr>
-        <td>speed</td>
-        <td>4.20MB/s</td><td>1.55MB/s</td><td><font color=red>-63.15%</font></td>
-        <td>716MB/s</td><td>589MB/s</td><td><font color=red>-17.74%</font></td>
-        <td>1.97GB/s</td><td>4.24GB/s</td><td><font color=green>+115.02%</font></td>
+        <td>Input Stream</td>
+        <td>2.32MB/s</td><td>2.40MB/s</td><td>~</td>
+        <td>679MB/s</td><td>795MB/s</td><td>+17.06%</td>
+        <td>2.08GB/s</td><td>4.04GB/s</td><td>+94.23%</td>
     </tr>
     <tr>
-        <td>mem/op</td>
-        <td>371B</td><td>160B</td><td><font color=green>-56.89%</font></td>
-        <td>7.06kB</td><td>2.21kB</td><td><font color=green>-68.75%</font></td>
-        <td>3.21MB</td><td>1.06MB</td><td><font color=green>-66.98%</font></td>
+        <td>Output Stream</td>
+        <td>2.35MB/s</td><td>2.36MB/s</td><td>~</td>
+        <td>729MB/s</td><td>812MB/s</td><td>+11.43%</td>
+        <td>2.12GB/s</td><td>4.28GB/s</td><td>+101.68%</td>
     </tr>
     <tr>
-        <td>allocs/op</td>
-        <td>11</td><td>2</td><td><font color=green>-80.00%</font></td>
-        <td>11</td><td>3</td><td><font color=green>-72.73%</font></td>
-        <td>131</td><td>3</td><td><font color=green>-97.70%</font></td>
+        <td>Bidir Stream</td>
+        <td>200kB/s</td><td>540kB/s</td><td>+170.00%</td>
+        <td>138MB/s</td><td>380MB/s</td><td>+176.07%</td>
+        <td>785MB/s</td><td>1875MB/s</td><td>+138.88%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
-        <td rowspan=4>Bidir Stream</td>
-        <td>time/op</td><td rowspan=4></td>
-        <td>10.7µs</td><td>5.3µs</td><td><font color=green>-50.67</font></td><td rowspan=4></td>
-        <td>15.9µs</td><td>7.2µs</td><td><font color=green>-54.36%</font></td><td rowspan=4></td>
-        <td>1.38ms</td><td>0.61ms</td><td><font color=green>-55.79%</font></td>
+        <td rowspan=4>mem/op</td>
+        <td>Unitary</td><td rowspan=4></td>
+        <td>8.37kB</td><td>1.54kB</td><td>-81.63%</td><td rowspan=4></td>
+        <td>21.8kB</td><td>7.9kB</td><td>-63.67%</td><td rowspan=4></td>
+        <td>6.51MB</td><td>3.16MB</td><td>-51.42%</td>
     </tr>
     <tr>
-        <td>speed</td>
-        <td>185kB/s</td><td>379kB/s</td><td><font color=green>+104.63%</font></td>
-        <td>129MB/s</td><td>284MB/s</td><td><font color=green>+119.11%</font></td>
-        <td>761MB/s</td><td>1659MB/s</td><td><font color=green>+117.91%</font></td>
+        <td>Input Stream</td>
+        <td>398B</td><td>80B</td><td>-79.89%</td>
+        <td>7.09kB</td><td>2.13kB</td><td>-70.01%</td>
+        <td>3.20MB</td><td>1.05MB</td><td>-67.16%</td>
     </tr>
     <tr>
-        <td>mem/op</td>
-        <td>1.02kB</td><td>0.24kB</td><td><font color=green>-76.44%</font></td>
-        <td>14.5kB</td><td>4.3kB</td><td><font color=green>-69.99%</font></td>
-        <td>6.52MB</td><td>2.17MB</td><td><font color=green>-66.66%</font></td>
+        <td>Output Stream</td>
+        <td>315B</td><td>80B</td><td>-74.61%</td>
+        <td>6.99kB</td><td>2.13kB</td><td>-69.53%</td>
+        <td>3.20MB</td><td>1.05MB</td><td>-67.16%</td>
     </tr>
     <tr>
-        <td>allocs/op</td>
-        <td>41</td><td>3</td><td><font color=green>-92.68%</font></td>
-        <td>44</td><td>5</td><td><font color=green>-88.64%</font></td>
-        <td>291</td><td>6</td><td><font color=green>-98.07%</font></td>
+        <td>Bidir Stream</td>
+        <td>1.02kB</td><td>0.24kB</td><td>-76.40%</td>
+        <td>14.4kB</td><td>4.3kB</td><td>-69.99%</td>
+        <td>6.52MB</td><td>2.10MB</td><td>-67.74%</td>
+    </tr>
+    <tr><td colspan=14></td></tr>
+    <tr>
+        <td rowspan=4>allocs/op</td>
+        <td>Unitary</td><td rowspan=4></td>
+        <td>169</td><td>14</td><td>-91.72%</td><td rowspan=4></td>
+        <td>171</td><td>16</td><td>-90.64%</td><td rowspan=4></td>
+        <td>402</td><td>16</td><td>-96.02%</td>
+    </tr>
+    <tr>
+        <td>Input Stream</td>
+        <td>11</td><td>1</td><td>-90.91%</td>
+        <td>12</td><td>2</td><td>-83.33%</td>
+        <td>119</td><td>2</td><td>-98.32%</td>
+    </tr>
+    <tr>
+        <td>Output Stream</td>
+        <td>9</td><td>1</td><td>-88.89%</td>
+        <td>10</td><td>2</td><td>-80.00%</td>
+        <td>118</td><td>2</td><td>-98.31%</td>
+    </tr>
+    <tr>
+        <td>Bidir Stream</td>
+        <td>41</td><td>3</td><td>-92.68%</td>
+        <td>44</td><td>5</td><td>-88.64%</td>
+        <td>280</td><td>5</td><td>-98.21%</td>
     </tr>
 </table>
 

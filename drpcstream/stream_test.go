@@ -24,8 +24,7 @@ func TestStream_StateTransitions(t *testing.T) {
 	any := errors.New("any sentinel error")
 
 	handlePacket := func(st *Stream, kind drpcwire.Kind) error {
-		_, err := st.HandlePacket(drpcwire.Packet{Kind: kind})
-		return err
+		return st.HandlePacket(drpcwire.Packet{Kind: kind})
 	}
 
 	checkErrs := func(t *testing.T, exp, got error) {
@@ -115,8 +114,7 @@ func TestStream_Unblocks(t *testing.T) {
 	defer ctx.Cancel()
 
 	handlePacket := func(st *Stream, kind drpcwire.Kind) error {
-		_, err := st.HandlePacket(drpcwire.Packet{Kind: kind})
-		return err
+		return st.HandlePacket(drpcwire.Packet{Kind: kind})
 	}
 
 	cases := []struct {

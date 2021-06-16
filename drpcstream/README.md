@@ -14,6 +14,12 @@ Package drpcstream sends protobufs using the dprc wire protocol.
 type Options struct {
 	// SplitSize controls the default size we split packets into frames.
 	SplitSize int
+
+	// ManualFlush controls if the stream will automatically flush after every
+	// message send. Note that flushing is not part of the drpc.Stream
+	// interface, so if you use this you must be ready to type assert and
+	// call RawFlush dynamically.
+	ManualFlush bool
 }
 ```
 
@@ -92,11 +98,18 @@ will no longer issue any writes or reads.
 #### func (*Stream) HandlePacket
 
 ```go
-func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error)
+func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error)
 ```
 HandlePacket advances the stream state machine by inspecting the packet. It
 returns any major errors that should terminate the transport the stream is
 operating on as well as a boolean indicating if the stream expects more packets.
+
+#### func (*Stream) ID
+
+```go
+func (s *Stream) ID() uint64
+```
+ID returns the stream id.
 
 #### func (*Stream) IsFinished
 
@@ -105,6 +118,13 @@ func (s *Stream) IsFinished() bool
 ```
 IsFinished returns true if the stream is fully finished and will no longer issue
 any writes or reads.
+
+#### func (*Stream) IsTerminated
+
+```go
+func (s *Stream) IsTerminated() bool
+```
+IsTerminated returns true if the stream has been terminated.
 
 #### func (*Stream) MsgRecv
 

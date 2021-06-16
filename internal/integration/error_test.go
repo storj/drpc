@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -69,4 +70,22 @@ func TestError_UnitaryNilResponse(t *testing.T) {
 	out, err := cli.Method1(ctx, in(1))
 	assert.Equal(t, err, io.EOF)
 	assert.Nil(t, out)
+}
+
+func TestError_Message(t *testing.T) {
+	ctx := drpcctx.NewTracker(context.Background())
+	defer ctx.Wait()
+	defer ctx.Cancel()
+
+	cli, close := createConnection(impl{
+		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
+			return nil, errors.New("some unique error message")
+		},
+	})
+	defer close()
+
+	out, err := cli.Method1(ctx, in(1))
+	assert.Nil(t, out)
+	assert.Error(t, err)
+	assert.Equal(t, err.Error(), "some unique error message")
 }

@@ -6,6 +6,14 @@ Package drpcerr lets one associate error codes with errors.
 
 ## Usage
 
+```go
+const (
+	// Unimplemented is the code used by the generated unimplemented
+	// servers when returning errors.
+	Unimplemented = 12
+)
+```
+
 #### func  Code
 
 ```go

@@ -187,19 +187,19 @@ type DRPCServiceServer interface {
 type DRPCServiceUnimplementedServer struct{}
 
 func (s *DRPCServiceUnimplementedServer) Method1(context.Context, *In) (*Out, error) {
-	return nil, drpcerr.WithCode(errors.New("Unimplemented"), 12)
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
 func (s *DRPCServiceUnimplementedServer) Method2(DRPCService_Method2Stream) error {
-	return drpcerr.WithCode(errors.New("Unimplemented"), 12)
+	return drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
 func (s *DRPCServiceUnimplementedServer) Method3(*In, DRPCService_Method3Stream) error {
-	return drpcerr.WithCode(errors.New("Unimplemented"), 12)
+	return drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
 func (s *DRPCServiceUnimplementedServer) Method4(DRPCService_Method4Stream) error {
-	return drpcerr.WithCode(errors.New("Unimplemented"), 12)
+	return drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
 type DRPCServiceDescription struct{}

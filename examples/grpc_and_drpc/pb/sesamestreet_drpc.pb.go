@@ -67,7 +67,7 @@ type DRPCCookieMonsterServer interface {
 type DRPCCookieMonsterUnimplementedServer struct{}
 
 func (s *DRPCCookieMonsterUnimplementedServer) EatCookie(context.Context, *Cookie) (*Crumbs, error) {
-	return nil, drpcerr.WithCode(errors.New("Unimplemented"), 12)
+	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
 type DRPCCookieMonsterDescription struct{}

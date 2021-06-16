@@ -434,9 +434,9 @@ func (d *drpc) generateServerSignature(method *protogen.Method) string {
 func (d *drpc) generateUnimplementedServerMethod(method *protogen.Method) {
 	d.P("func (s *", d.ServerUnimpl(method.Parent), ") ", d.generateServerSignature(method), " {")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
-		d.P("return nil, ", d.Ident("storj.io/drpc/drpcerr", "WithCode"), "(", d.Ident("errors", "New"), "(\"Unimplemented\"), 12)")
+		d.P("return nil, ", d.Ident("storj.io/drpc/drpcerr", "WithCode"), "(", d.Ident("errors", "New"), "(\"Unimplemented\"), ", d.Ident("storj.io/drpc/drpcerr", "Unimplemented"), ")")
 	} else {
-		d.P("return ", d.Ident("storj.io/drpc/drpcerr", "WithCode"), "(", d.Ident("errors", "New"), "(\"Unimplemented\"), 12)")
+		d.P("return ", d.Ident("storj.io/drpc/drpcerr", "WithCode"), "(", d.Ident("errors", "New"), "(\"Unimplemented\"), ", d.Ident("storj.io/drpc/drpcerr", "Unimplemented"), ")")
 	}
 	d.P("}")
 	d.P()

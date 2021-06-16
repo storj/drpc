@@ -5,6 +5,12 @@ package drpcerr
 
 import "unsafe"
 
+const (
+	// Unimplemented is the code used by the generated unimplemented
+	// servers when returning errors.
+	Unimplemented = 12
+)
+
 // Code returns the error code associated with the error or 0 if none is.
 func Code(err error) uint64 {
 	for i := 0; i < 100; i++ {

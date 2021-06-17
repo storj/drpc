@@ -48,9 +48,9 @@ type Manager struct {
 	opts Options
 
 	sem   drpcsignal.Chan      // held by the active stream
-	sbuf  *streamBuffer        // largest stream id created
+	sbuf  streamBuffer         // largest stream id created
 	pkts  chan drpcwire.Packet // channel for invoke packets
-	pdone drpcsignal.Chan      // signal for when packet is done
+	pdone drpcsignal.Chan      // signals when a packets buffers can be reused
 
 	sigs struct {
 		term  drpcsignal.Signal // set when the manager should start terminating
@@ -73,9 +73,11 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 		rd:   drpcwire.NewReader(tr),
 		opts: opts,
 
-		sbuf: newStreamBuffer(),
 		pkts: make(chan drpcwire.Packet),
 	}
+
+	// initialize the stream buffer
+	m.sbuf.init()
 
 	// this semaphore controls the number of concurrent streams. it MUST be 1.
 	m.sem.Make(1)
@@ -96,9 +98,9 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 // acquireSemaphore attempts to acquire the semaphore protecting streams. If the
 // context is canceled or the manager is terminated, it returns an error.
 func (m *Manager) acquireSemaphore(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
+	if err, ok := m.sigs.term.Get(); ok {
 		return err
-	} else if err, ok := m.sigs.term.Get(); ok {
+	} else if err := ctx.Err(); err != nil {
 		return err
 	}
 
@@ -180,18 +182,18 @@ func (m *Manager) manageReader() {
 
 	again:
 		switch curr := m.sbuf.Get(); {
-		// if the packet is for the current stream, deliver it
+		// if the packet is for the current stream, deliver it.
 		case curr != nil && pkt.ID.Stream == curr.ID():
 			if err := curr.HandlePacket(pkt); err != nil {
 				m.terminate(managerClosed.Wrap(err))
 				return
 			}
 
-		// if an old message has been sent, just ignore it
+		// if an old message has been sent, just ignore it.
 		case curr != nil && pkt.ID.Stream < curr.ID():
 
 		// if any invoke sequence is being sent, close any old
-		// unterminated stream and forward it to be handled
+		// unterminated stream and forward it to be handled.
 		case pkt.Kind == drpcwire.KindInvoke || pkt.Kind == drpcwire.KindInvokeMetadata:
 			if curr != nil && !curr.IsTerminated() {
 				curr.Cancel(context.Canceled)
@@ -206,8 +208,13 @@ func (m *Manager) manageReader() {
 			}
 
 		// a non-invoke packet should be delivered to some stream
-		// so we wait for a new stream to be created and try again
+		// so we wait for a new stream to be created and try again.
+		// like an invoke, we implicitly close any previous stream.
 		default:
+			if curr != nil && !curr.IsTerminated() {
+				curr.Cancel(context.Canceled)
+			}
+
 			if !m.sbuf.Wait(curr.ID()) {
 				return
 			}
@@ -266,8 +273,14 @@ func (m *Manager) Closed() <-chan struct{} {
 // Close closes the transport the manager is using.
 func (m *Manager) Close() error {
 	m.terminate(managerClosed.New("Close called"))
+
 	m.sigs.read.Wait()
 	m.sigs.tport.Wait()
+
+	// wait for any active streams to exit
+	m.sem.Send()
+	m.sem.Recv()
+
 	return m.sigs.tport.Err()
 }
 

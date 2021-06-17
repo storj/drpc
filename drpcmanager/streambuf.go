@@ -17,10 +17,8 @@ type streamBuffer struct {
 	closed bool
 }
 
-func newStreamBuffer() *streamBuffer {
-	ib := new(streamBuffer)
-	ib.cond.L = &ib.mu
-	return ib
+func (sb *streamBuffer) init() {
+	sb.cond.L = &sb.mu
 }
 
 func (sb *streamBuffer) Close() {

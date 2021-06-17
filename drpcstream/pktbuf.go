@@ -8,15 +8,15 @@ import (
 )
 
 type packetBuffer struct {
-	err  error
 	mu   sync.Mutex
-	data chan []byte
+	cond sync.Cond
+	err  error
+	data []byte
+	set  bool
 }
 
-func newPacketBuffer() packetBuffer {
-	return packetBuffer{
-		data: make(chan []byte),
-	}
+func (pb *packetBuffer) init() {
+	pb.cond.L = &pb.mu
 }
 
 func (pb *packetBuffer) Close(err error) {
@@ -25,7 +25,9 @@ func (pb *packetBuffer) Close(err error) {
 
 	if pb.err == nil {
 		pb.err = err
-		close(pb.data)
+		pb.data = nil
+		pb.set = false
+		pb.cond.Broadcast()
 	}
 }
 
@@ -33,18 +35,31 @@ func (pb *packetBuffer) Put(data []byte) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	pb.data <- data
-	<-pb.data
+	pb.data = data
+	pb.set = true
+	pb.cond.Broadcast()
+
+	for pb.set && pb.err == nil {
+		pb.cond.Wait()
+	}
 }
 
 func (pb *packetBuffer) Get() ([]byte, error) {
-	data, ok := <-pb.data
-	if !ok {
-		return nil, pb.err
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
+	for !pb.set && pb.err == nil {
+		pb.cond.Wait()
 	}
-	return data, nil
+
+	return pb.data, pb.err
 }
 
 func (pb *packetBuffer) Done() {
-	pb.data <- nil
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
+	pb.data = nil
+	pb.set = false
+	pb.cond.Broadcast()
 }

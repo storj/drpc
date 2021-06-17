@@ -67,14 +67,18 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 // stream ids within a single transport. The options are used to control details of how
 // the Stream operates.
 func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
-	return &Stream{
+	st := &Stream{
 		ctx:  streamCtx{Context: ctx},
 		opts: opts,
 
-		id:   drpcwire.ID{Stream: sid},
-		wr:   wr,
-		pbuf: newPacketBuffer(),
+		id: drpcwire.ID{Stream: sid},
+		wr: wr,
 	}
+
+	// initialize the packet buffer
+	st.pbuf.init()
+
+	return st
 }
 
 //

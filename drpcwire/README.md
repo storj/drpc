@@ -36,6 +36,14 @@ ReadVarint reads a varint encoded integer from the front of buf, returning the
 remaining bytes, the value, and if there was a success. if ok is false, the
 returned buffer is the same as the passed in buffer.
 
+#### func  SplitData
+
+```go
+func SplitData(buf []byte, n int) (prefix, suffix []byte)
+```
+SplitData is used to split a buffer if it is larger than n bytes. If n is zero,
+a reasonable default is used. If n is less than zero then it does not split.
+
 #### func  SplitFrame
 
 ```go

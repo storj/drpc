@@ -58,3 +58,11 @@ Run starts a goroutine running the callback with the tracker as the context.
 func (t *Tracker) Wait()
 ```
 Wait blocks until all callbacks started with Run have exited.
+
+#### type TransportKey
+
+```go
+type TransportKey struct{}
+```
+
+TransportKey is used to store the drpc.Transport with the context.

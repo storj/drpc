@@ -8,13 +8,6 @@ package drpcwire
 // the callback with every such frame. If n is zero, a reasonable
 // default is used.
 func SplitN(pkt Packet, n int, cb func(fr Frame) error) error {
-	switch {
-	case n == 0:
-		n = 64 * 1024
-	case n < 0:
-		n = 0
-	}
-
 	for {
 		fr := Frame{
 			Data: pkt.Data,
@@ -22,10 +15,10 @@ func SplitN(pkt Packet, n int, cb func(fr Frame) error) error {
 			Kind: pkt.Kind,
 			Done: true,
 		}
-		if len(pkt.Data) > n && n > 0 {
-			fr.Data, pkt.Data = pkt.Data[:n], pkt.Data[n:]
-			fr.Done = false
-		}
+
+		fr.Data, pkt.Data = SplitData(pkt.Data, n)
+		fr.Done = len(pkt.Data) == 0
+
 		if err := cb(fr); err != nil {
 			return err
 		}
@@ -33,4 +26,21 @@ func SplitN(pkt Packet, n int, cb func(fr Frame) error) error {
 			return nil
 		}
 	}
+}
+
+// SplitData is used to split a buffer if it is larger than n bytes.
+// If n is zero, a reasonable default is used. If n is less than zero
+// then it does not split.
+func SplitData(buf []byte, n int) (prefix, suffix []byte) {
+	switch {
+	case n == 0:
+		n = 64 * 1024
+	case n < 0:
+		n = 0
+	}
+
+	if len(buf) > n && n > 0 {
+		return buf[:n], buf[n:]
+	}
+	return buf, nil
 }

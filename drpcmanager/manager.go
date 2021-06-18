@@ -11,12 +11,12 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
-	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
 	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal/drpcopts"
 )
 
 var managerClosed = errs.Class("manager closed")
@@ -51,6 +51,7 @@ type Manager struct {
 	sbuf  streamBuffer         // largest stream id created
 	pkts  chan drpcwire.Packet // channel for invoke packets
 	pdone drpcsignal.Chan      // signals when a packets buffers can be reused
+	sterm chan struct{}        // shared signal for stream terminated
 
 	sigs struct {
 		term  drpcsignal.Signal // set when the manager should start terminating
@@ -73,7 +74,8 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 		rd:   drpcwire.NewReader(tr),
 		opts: opts,
 
-		pkts: make(chan drpcwire.Packet),
+		pkts:  make(chan drpcwire.Packet),
+		sterm: make(chan struct{}, 1),
 	}
 
 	// initialize the stream buffer
@@ -85,6 +87,10 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 	// a buffer of size 1 allows the consumer of the packet to signal it is done
 	// without having to coordinate with the sender of the packet.
 	m.pdone.Make(1)
+
+	// set the internal stream options
+	drpcopts.SetStreamTransport(&m.opts.Stream.Internal, m.tr)
+	drpcopts.SetStreamTerm(&m.opts.Stream.Internal, m.sterm)
 
 	go m.manageReader()
 
@@ -229,8 +235,7 @@ func (m *Manager) manageReader() {
 
 // newStream creates a stream value with the appropriate configuration for this manager.
 func (m *Manager) newStream(ctx context.Context, sid uint64) *drpcstream.Stream {
-	ctx = drpcctx.WithTransport(ctx, m.tr)
-	stream := drpcstream.NewWithOptions(ctx, sid, m.wr.Reset(), m.opts.Stream)
+	stream := drpcstream.NewWithOptions(ctx, sid, m.wr, m.opts.Stream)
 	m.sbuf.Set(stream)
 	go m.manageStream(ctx, stream)
 	return stream
@@ -244,9 +249,10 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	select {
 	case <-m.sigs.term.Signal():
 		stream.Cancel(context.Canceled)
+		<-m.sterm
 		return
 
-	case <-stream.Terminated():
+	case <-m.sterm:
 		return
 
 	case <-ctx.Done():
@@ -258,6 +264,7 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 			drpcdebug.Log(func() string { return fmt.Sprintf("MAN[%p][%p]: unfinished", m, stream) })
 			m.terminate(ctx.Err())
 		}
+		<-m.sterm
 	}
 }
 

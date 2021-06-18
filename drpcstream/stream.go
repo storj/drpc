@@ -12,10 +12,12 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcdebug"
 	"storj.io/drpc/drpcenc"
 	"storj.io/drpc/drpcsignal"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal/drpcopts"
 )
 
 // Options controls configuration settings for a stream.
@@ -28,12 +30,16 @@ type Options struct {
 	// interface, so if you use this you must be ready to type assert and
 	// call RawFlush dynamically.
 	ManualFlush bool
+
+	// Internal contains options that are for internal use only.
+	Internal drpcopts.Stream
 }
 
 // Stream represents an rpc actively happening on a transport.
 type Stream struct {
 	ctx  streamCtx
 	opts Options
+	term chan<- struct{}
 
 	write inspectMutex
 	read  inspectMutex
@@ -67,28 +73,43 @@ func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 // stream ids within a single transport. The options are used to control details of how
 // the Stream operates.
 func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
-	st := &Stream{
-		ctx:  streamCtx{Context: ctx},
+	s := &Stream{
+		ctx: streamCtx{
+			Context: ctx,
+			tr:      drpcopts.GetStreamTransport(&opts.Internal),
+		},
 		opts: opts,
+		term: drpcopts.GetStreamTerm(&opts.Internal),
 
 		id: drpcwire.ID{Stream: sid},
-		wr: wr,
+		wr: wr.Reset(),
 	}
 
 	// initialize the packet buffer
-	st.pbuf.init()
+	s.pbuf.init()
 
-	return st
+	return s
 }
 
 //
-// accessors
+// context
 //
 
 // streamCtx avoids having to allocate a Done channel until it is requested.
 type streamCtx struct {
 	context.Context
+	tr  drpc.Transport
 	sig drpcsignal.Signal
+}
+
+// Value checks for the drpc.Transport key and forwards if necessary.
+// We do this because using drpcctx to make a new context would cause
+// an extra allocation.
+func (s *streamCtx) Value(key interface{}) interface{} {
+	if s.tr != nil && key == (drpcctx.TransportKey{}) {
+		return s.tr
+	}
+	return s.Context.Value(key)
 }
 
 // Done returns the stored channel instead of the parent Done channel.
@@ -97,6 +118,14 @@ func (s *streamCtx) Done() <-chan struct{} { return s.sig.Signal() }
 // Err returns the error that has been set when the done channel is closed.
 func (s *streamCtx) Err() error { return s.sig.Err() }
 
+// Context returns the context associated with the stream. It is closed when
+// the Stream will no longer issue any writes or reads.
+func (s *Stream) Context() context.Context { return &s.ctx }
+
+//
+// accessors
+//
+
 // ID returns the stream id.
 func (s *Stream) ID() uint64 {
 	if s == nil {
@@ -104,10 +133,6 @@ func (s *Stream) ID() uint64 {
 	}
 	return s.id.Stream
 }
-
-// Context returns the context associated with the stream. It is closed when
-// the Stream will no longer issue any writes or reads.
-func (s *Stream) Context() context.Context { return &s.ctx }
 
 // Terminated returns a channel that is closed when the stream has been terminated.
 func (s *Stream) Terminated() <-chan struct{} { return s.sigs.term.Signal() }
@@ -195,41 +220,28 @@ func (s *Stream) checkFinished() {
 // set. This is to prevent errors from reads/writes to a transport after it has been
 // asynchronously closed due to context cancelation.
 func (s *Stream) checkCancelError(err error) error {
-	if sigErr, ok := s.sigs.cancel.Get(); ok {
-		return sigErr
+	if s.sigs.cancel.IsSet() {
+		return s.sigs.cancel.Err()
 	}
 	return err
 }
 
-// newPackage bumps the internal message id and returns a packet. It must be called
+// newFrame bumps the internal message id and returns a frame. It must be called
 // under a mutex.
-func (s *Stream) newPacket(kind drpcwire.Kind, data []byte) drpcwire.Packet {
+func (s *Stream) newFrame(kind drpcwire.Kind) drpcwire.Frame {
 	s.id.Message++
-	return drpcwire.Packet{
-		Data: data,
-		ID:   s.id,
-		Kind: kind,
-	}
-}
-
-// pollWrite checks for any conditions that should cause a write to not happen and
-// then issues the write of the frame.
-func (s *Stream) pollWrite(fr drpcwire.Frame) (err error) {
-	switch {
-	case s.sigs.send.IsSet():
-		return s.sigs.send.Err()
-	case s.sigs.term.IsSet():
-		return s.sigs.term.Err()
-	}
-
-	return s.checkCancelError(errs.Wrap(s.wr.WriteFrame(fr)))
+	return drpcwire.Frame{ID: s.id, Kind: kind}
 }
 
 // sendPacket sends the packet in a single write and flushes. It does not check for
 // any conditions to stop it from writing and is meant for internal stream use to
 // do things like signal errors or closes to the remote side.
 func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) (err error) {
-	if err := s.wr.WritePacket(s.newPacket(kind, data)); err != nil {
+	fr := s.newFrame(kind)
+	fr.Data = data
+	fr.Done = true
+
+	if err := s.wr.WriteFrame(fr); err != nil {
 		return errs.Wrap(err)
 	}
 	if err := s.wr.Flush(); err != nil {
@@ -251,7 +263,9 @@ func (s *Stream) terminateIfBothClosed() {
 func (s *Stream) terminate(err error) {
 	s.sigs.send.Set(err)
 	s.sigs.recv.Set(err)
-	s.sigs.term.Set(err)
+	if s.sigs.term.Set(err) && s.term != nil {
+		s.term <- struct{}{}
+	}
 	s.pbuf.Close(err)
 	s.checkFinished()
 }
@@ -272,7 +286,26 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error) {
 // rawWriteLocked does the body of RawWrite assuming the caller is holding the
 // appropriate locks.
 func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
-	return drpcwire.SplitN(s.newPacket(kind, data), s.opts.SplitSize, s.pollWrite)
+	fr := s.newFrame(kind)
+	n := s.opts.SplitSize
+
+	for {
+		switch {
+		case s.sigs.send.IsSet():
+			return s.sigs.send.Err()
+		case s.sigs.term.IsSet():
+			return s.sigs.term.Err()
+		}
+
+		fr.Data, data = drpcwire.SplitData(data, n)
+		fr.Done = len(data) == 0
+
+		if err := s.wr.WriteFrame(fr); err != nil {
+			return s.checkCancelError(errs.Wrap(err))
+		} else if fr.Done {
+			return nil
+		}
+	}
 }
 
 // RawFlush flushes any buffers of data.

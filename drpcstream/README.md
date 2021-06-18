@@ -20,6 +20,9 @@ type Options struct {
 	// interface, so if you use this you must be ready to type assert and
 	// call RawFlush dynamically.
 	ManualFlush bool
+
+	// Internal contains options that are for internal use only.
+	Internal drpcopts.Stream
 }
 ```
 

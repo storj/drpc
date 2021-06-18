@@ -5,6 +5,7 @@ package drpcconn
 
 import (
 	"context"
+	"sync"
 
 	"github.com/zeebo/errs"
 
@@ -26,6 +27,7 @@ type Options struct {
 type Conn struct {
 	tr   drpc.Transport
 	man  *drpcmanager.Manager
+	mu   sync.Mutex
 	wbuf []byte
 }
 
@@ -77,24 +79,30 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, ou
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
+	// we have to protect c.wbuf here even though the manager only allows one
+	// stream at a time because the stream may async close allowing another
+	// concurrent call to Invoke to proceed.
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.wbuf, err = drpcenc.MarshalAppend(in, enc, c.wbuf[:0])
 	if err != nil {
 		return err
 	}
 
-	if err := c.doInvoke(stream, enc, []byte(rpc), c.wbuf, metadata, out); err != nil {
+	if err := c.doInvoke(stream, enc, rpc, c.wbuf, metadata, out); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Conn) doInvoke(stream *drpcstream.Stream, enc drpc.Encoding, rpc, data []byte, metadata []byte, out drpc.Message) (err error) {
+func (c *Conn) doInvoke(stream *drpcstream.Stream, enc drpc.Encoding, rpc string, data []byte, metadata []byte, out drpc.Message) (err error) {
 	if len(metadata) > 0 {
 		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
 			return err
 		}
 	}
-	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
+	if err := stream.RawWrite(drpcwire.KindInvoke, []byte(rpc)); err != nil {
 		return err
 	}
 	if err := stream.RawWrite(drpcwire.KindMessage, data); err != nil {
@@ -125,19 +133,20 @@ func (c *Conn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ 
 		return nil, err
 	}
 
-	if err := c.doNewStream(stream, []byte(rpc), metadata); err != nil {
+	if err := c.doNewStream(stream, rpc, metadata); err != nil {
 		return nil, errs.Combine(err, stream.Close())
 	}
+
 	return stream, nil
 }
 
-func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc []byte, metadata []byte) error {
+func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc string, metadata []byte) error {
 	if len(metadata) > 0 {
 		if err := stream.RawWrite(drpcwire.KindInvokeMetadata, metadata); err != nil {
 			return err
 		}
 	}
-	if err := stream.RawWrite(drpcwire.KindInvoke, rpc); err != nil {
+	if err := stream.RawWrite(drpcwire.KindInvoke, []byte(rpc)); err != nil {
 		return err
 	}
 	if err := stream.RawFlush(); err != nil {

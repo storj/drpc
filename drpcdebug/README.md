@@ -9,6 +9,6 @@ Package drpcdebug provides helpers for debugging.
 #### func  Log
 
 ```go
-func Log(cb func() string)
+func Log(cb func() (who, what, why string))
 ```
 Log executes the callback for a string to log if built with the debug tag.

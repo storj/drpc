@@ -97,6 +97,13 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 	return m
 }
 
+// String returns a string representation of the manager.
+func (m *Manager) String() string { return fmt.Sprintf("<man %p>", m) }
+
+func (m *Manager) log(what string, cb func() string) {
+	drpcdebug.Log(func() (_, _, _ string) { return m.String(), what, cb() })
+}
+
 //
 // helpers
 //
@@ -157,7 +164,7 @@ func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
 // that need to be closed to signal the state change.
 func (m *Manager) terminate(err error) {
 	if m.sigs.term.Set(err) {
-		drpcdebug.Log(func() string { return fmt.Sprintf("MAN[%p]: terminating %v", m, err) })
+		m.log("TERM", func() string { return fmt.Sprint(err) })
 		m.sigs.tport.Set(m.tr.Close())
 		m.sbuf.Close()
 	}
@@ -184,7 +191,7 @@ func (m *Manager) manageReader() {
 			return
 		}
 
-		drpcdebug.Log(func() string { return fmt.Sprintf("MAN[%p]: %v", m, pkt) })
+		m.log("READ", pkt.String)
 
 	again:
 		switch curr := m.sbuf.Get(); {
@@ -261,7 +268,7 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 		isFinished := stream.IsFinished()
 		stream.Cancel(ctx.Err())
 		if !isFinished {
-			drpcdebug.Log(func() string { return fmt.Sprintf("MAN[%p][%p]: unfinished", m, stream) })
+			m.log("UNFIN", stream.String)
 			m.terminate(ctx.Err())
 		}
 		<-m.sterm
@@ -297,7 +304,9 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 		return nil, err
 	}
 
-	return m.newStream(ctx, m.sbuf.Get().ID()+1), nil
+	stream = m.newStream(ctx, m.sbuf.Get().ID()+1)
+	m.log("NEWCLI", stream.String)
+	return stream, nil
 }
 
 // NewServerStream starts a stream on the managed transport for use by a server. It does
@@ -355,7 +364,9 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 					ctx = drpcmetadata.AddPairs(ctx, meta)
 				}
 
-				return m.newStream(ctx, pkt.ID.Stream), rpc, nil
+				stream := m.newStream(ctx, pkt.ID.Stream)
+				m.log("NEWSRV", stream.String)
+				return stream, rpc, nil
 
 			default:
 				// this should never happen, but defensive.

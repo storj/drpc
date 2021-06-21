@@ -172,6 +172,13 @@ func (s *Stream) SendError(serr error) (err error)
 SendError terminates the stream and sends the error to the remote. It is a no-op
 if the stream is already terminated.
 
+#### func (*Stream) String
+
+```go
+func (s *Stream) String() string
+```
+String returns a string representation of the stream.
+
 #### func (*Stream) Terminated
 
 ```go

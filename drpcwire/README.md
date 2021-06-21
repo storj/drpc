@@ -101,6 +101,13 @@ and err will be nil. If there is not enough data for a frame, ok will be false
 and err will be nil. If the data in the buf is malformed, then an error is
 returned.
 
+#### func (Frame) String
+
+```go
+func (fr Frame) String() string
+```
+String returns a human readable form of the packet.
+
 #### type ID
 
 ```go

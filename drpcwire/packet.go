@@ -59,7 +59,7 @@ func (i ID) Less(j ID) bool {
 }
 
 // String returns a human readable form of the ID.
-func (i ID) String() string { return fmt.Sprintf("<%d,%d>", i.Stream, i.Message) }
+func (i ID) String() string { return fmt.Sprintf("<id s:%d m:%d>", i.Stream, i.Message) }
 
 //
 // data frame
@@ -81,6 +81,12 @@ type Frame struct {
 
 	// Control is true if the frame has the control bit set.
 	Control bool
+}
+
+// String returns a human readable form of the packet.
+func (fr Frame) String() string {
+	return fmt.Sprintf("<frm s:%d m:%d data:%d kind:%s done:%v>",
+		fr.ID.Stream, fr.ID.Message, len(fr.Data), fr.Kind, fr.Done)
 }
 
 // ParseFrame attempts to parse a frame at the beginning of buf. If successful
@@ -155,6 +161,6 @@ type Packet struct {
 
 // String returns a human readable form of the packet.
 func (p Packet) String() string {
-	return fmt.Sprintf("<s:%d m:%d kind:%s data:%d>",
-		p.ID.Stream, p.ID.Message, p.Kind, len(p.Data))
+	return fmt.Sprintf("<pkt s:%d m:%d data:%d kind:%s>",
+		p.ID.Stream, p.ID.Message, len(p.Data), p.Kind)
 }

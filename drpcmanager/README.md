@@ -63,6 +63,13 @@ NewServerStream starts a stream on the managed transport for use by a server. It
 does this by waiting for the client to issue an invoke message and returning the
 details.
 
+#### func (*Manager) String
+
+```go
+func (m *Manager) String() string
+```
+String returns a string representation of the manager.
+
 #### type Options
 
 ```go

@@ -6,4 +6,4 @@
 package drpcdebug
 
 // Log executes the callback for a string to log if built with the debug tag.
-func Log(cb func() string) {}
+func Log(cb func() (who, what, why string)) {}

@@ -91,6 +91,13 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 	return s
 }
 
+// String returns a string representation of the stream.
+func (s *Stream) String() string { return fmt.Sprintf("<str %p s:%d>", s, s.id.Stream) }
+
+func (s *Stream) log(what string, cb func() string) {
+	drpcdebug.Log(func() (_, _, _ string) { return s.String(), what, cb() })
+}
+
 //
 // context
 //
@@ -160,7 +167,7 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
 		return nil
 	}
 
-	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: %v", s, s.id.Stream, pkt) })
+	s.log("HANDLE", pkt.String)
 
 	if pkt.Kind == drpcwire.KindMessage {
 		s.pbuf.Put(pkt.Data)
@@ -241,6 +248,8 @@ func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) (err error) {
 	fr.Data = data
 	fr.Done = true
 
+	s.log("SEND", fr.String)
+
 	if err := s.wr.WriteFrame(fr); err != nil {
 		return errs.Wrap(err)
 	}
@@ -299,6 +308,8 @@ func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
 
 		fr.Data, data = drpcwire.SplitData(data, n)
 		fr.Done = len(data) == 0
+
+		s.log("SEND", fr.String)
 
 		if err := s.wr.WriteFrame(fr); err != nil {
 			return s.checkCancelError(errs.Wrap(err))
@@ -413,7 +424,7 @@ var (
 // SendError terminates the stream and sends the error to the remote. It is a no-op if
 // the stream is already terminated.
 func (s *Stream) SendError(serr error) (err error) {
-	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: SendError(%v)", s, s.id.Stream, serr) })
+	s.log("CALL", func() string { return fmt.Sprintf("SendError(%v)", err) })
 
 	s.mu.Lock()
 	if s.sigs.term.IsSet() {
@@ -435,7 +446,7 @@ func (s *Stream) SendError(serr error) (err error) {
 // Close terminates the stream and sends that the stream has been closed to the remote.
 // It is a no-op if the stream is already terminated.
 func (s *Stream) Close() (err error) {
-	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: Close()", s, s.id.Stream) })
+	s.log("CALL", func() string { return "Close()" })
 
 	s.mu.Lock()
 	if s.sigs.term.IsSet() {
@@ -457,7 +468,7 @@ func (s *Stream) Close() (err error) {
 // also already issued a CloseSend, the stream is terminated. It is a no-op if the
 // stream already has sent a CloseSend or if it is terminated.
 func (s *Stream) CloseSend() (err error) {
-	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: CloseSend()", s, s.id.Stream) })
+	s.log("CALL", func() string { return "CloseSend()" })
 
 	s.mu.Lock()
 	if s.sigs.send.IsSet() || s.sigs.term.IsSet() {
@@ -480,7 +491,7 @@ func (s *Stream) CloseSend() (err error) {
 // the provided error, and terminates the stream. It is a no-op if the stream is already
 // terminated.
 func (s *Stream) Cancel(err error) {
-	drpcdebug.Log(func() string { return fmt.Sprintf("STR[%p][%d]: Cancel(%v)", s, s.id.Stream, err) })
+	s.log("CALL", func() string { return fmt.Sprintf("Cancel(%v)", err) })
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

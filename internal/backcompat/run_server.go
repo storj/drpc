@@ -5,6 +5,7 @@ package backcompat
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -50,7 +51,7 @@ func (server) Method2(stream servicedefs.DRPCService_Method2Stream) error {
 	var i int64
 	for {
 		_, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return errs.Wrap(err)
@@ -73,7 +74,7 @@ func (server) Method4(stream servicedefs.DRPCService_Method4Stream) error {
 	var i int64
 	for {
 		_, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return errs.Wrap(err)

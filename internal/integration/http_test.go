@@ -38,7 +38,7 @@ func TestHTTP(t *testing.T) {
 	}
 
 	request := func(method, body string, metadata ...string) (r response) {
-		req, err := http.NewRequest("POST", server.URL+method, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, "POST", server.URL+method, strings.NewReader(body))
 		assert.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 		req.Header["X-Drpc-Metadata"] = metadata

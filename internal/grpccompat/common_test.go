@@ -5,6 +5,7 @@ package grpccompat
 
 import (
 	"context"
+	errors "errors"
 	"flag"
 	"fmt"
 	"io"
@@ -87,11 +88,11 @@ func getErrResult(err error) errResult {
 	switch code := status.Code(err); {
 	case err == nil:
 		return errResultNone
-	case code == codes.Canceled, err == context.Canceled:
+	case code == codes.Canceled, errors.Is(err, context.Canceled):
 		return errResultCanceled
-	case code == codes.DeadlineExceeded, err == context.DeadlineExceeded:
+	case code == codes.DeadlineExceeded, errors.Is(err, context.DeadlineExceeded):
 		return errResultDeadlineExceeded
-	case err == io.EOF:
+	case errors.Is(err, io.EOF):
 		return errResultEOF
 	case strings.Contains(err.Error(), "marker"):
 		return errResultMarker

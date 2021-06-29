@@ -5,6 +5,7 @@ package backcompat
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 
@@ -62,7 +63,7 @@ func runClient(ctx context.Context, addr string) error {
 			}
 		}
 		_, err = stream.Recv()
-		if err != io.EOF {
+		if !errors.Is(err, io.EOF) {
 			return errs.New("invalid last receive (method3): %w", err)
 		}
 	}
@@ -87,7 +88,7 @@ func runClient(ctx context.Context, addr string) error {
 			}
 		}
 		_, err = stream.Recv()
-		if err != io.EOF {
+		if !errors.Is(err, io.EOF) {
 			return errs.New("invalid last receive (method4): %w", err)
 		}
 	}

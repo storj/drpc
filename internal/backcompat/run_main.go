@@ -23,7 +23,7 @@ func Main(ctx context.Context) {
 	}
 	if err != nil {
 		log.Fatalf("%+v", err)
-	} else if err = ctx.Err(); err != nil && err != context.Canceled {
+	} else if err = ctx.Err(); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("%+v", err)
 	}
 }

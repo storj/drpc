@@ -6,6 +6,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"math/rand"
 	"testing"
@@ -31,7 +32,7 @@ func TestLarge(t *testing.T) {
 		var got []any
 		for {
 			in, err := recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
 				return err

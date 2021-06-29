@@ -5,6 +5,7 @@ package drpcmanager
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math/rand"
 	"net"
@@ -230,7 +231,9 @@ func runRandomized(t *testing.T, prog []byte, r runner) {
 //
 
 func expectedError(err error) bool {
-	return err != nil && (err == io.EOF || err == context.Canceled || err.Error() == "")
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, context.Canceled) ||
+		(err != nil && err.Error() == "")
 }
 
 func parseOp(op byte) (cmd byte, arg int, done bool) {

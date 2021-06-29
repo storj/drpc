@@ -5,6 +5,7 @@ package grpccompat
 
 import (
 	"context"
+	errors "errors"
 	"io"
 	"testing"
 
@@ -28,7 +29,7 @@ var benchmarkImpl = &serviceImpl{
 		var in *In
 		for {
 			cin, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
 				return err
@@ -54,7 +55,7 @@ var benchmarkImpl = &serviceImpl{
 	Method4Fn: func(stream ServerMethod4Stream) error {
 		for {
 			in, err := stream.Recv()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			} else if err != nil {
 				return err

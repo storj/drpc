@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"io"
 	"runtime"
 	"testing"
@@ -63,7 +64,7 @@ func TestCancel(t *testing.T) {
 
 		go cancel()
 
-		for stream.Send(in(1)) != io.EOF {
+		for !errors.Is(stream.Send(in(1)), io.EOF) {
 		}
 	}
 }

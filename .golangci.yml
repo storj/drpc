@@ -10,41 +10,79 @@ run:
 
 linters:
   enable:
-    - govet                   # check standard vet rules
-    - staticcheck             # comprehensive checks
-    - errcheck                # find unchecked errors
-    - ineffassign             # find ineffective assignments
-    - varcheck                # find unused global variables and constants
-    - structcheck             # check for unused struct parameters
-    - deadcode                # find code that is not used
     - bodyclose               # find unclosed http response bodies
-    - nakedret                # check for naked returns
-    - gofmt                   # sanity check formatting
-    - misspell                # check spelling
-    - unconvert               # remove unnecessary conversions
-    - gocritic                # checks for style, performance issues, and common programming errors
+    - deadcode                # find code that is not used
     - dogsled                 # checks for too many ignored arguments
-    - goprintffuncname        # Checks that printf-like functions are named with `f` at the end [fast: true, auto-fix: false]
-    - gosec
-    - exportloopref           # replaces scopelint
-    #TODO#- whitespace        # checks for leading/trailing newlines
-    #TODO#- unparam           # check for unused parameters
-    #TODO#- maligned          # check for better memory usage
+    - durationcheck           # verifies whether durations are multiplied, usually a mistake
+    - errcheck                # find unchecked errors
+    - errorlint               # finds misuses of errors
+    - exportloopref           # check for exported loop vars
+    - gocritic                # checks for style, performance issues, and common programming errors
+    - godot                   # dots for everything
+    - goerr113                # check error expressions
+    - gofmt                   # sanity check formatting
+    - goprintffuncname        # checks that printf-like functions are named with `f` at the end [fast: true, auto-fix: false]
+    - govet                   # check standard vet rules
+    - importas                # verify that imports are consistent
+    - ineffassign             # find ineffective assignments
+    - makezero                # verifies that slices use defaults
+    - misspell                # check spelling
+    - nakedret                # check for naked returns
+    - nilerr                  # checks for misuses of `if err != nil { return nil }`
+    - noctx                   # finds locations that should use context
+    - nolintlint              # checks that nolint directives are correct
+    - revive                  # check standard linting rules
+    - staticcheck             # comprehensive checks
+    - structcheck             # check for unused struct parameters
+    - unconvert               # remove unnecessary conversions
+    - varcheck                # find unused global variables and constants
+    - wastedassign
+    #TODO#- forcetypeassert   # needs work to replace unchecked interface type assertion
+    #TODO#- gochecknoglobals  # needs work to remove globals
+    #TODO#- gochecknoinits    # needs work to remove init()
+    #TODO#- gofumpt           # not sure whether it's useful
+    #TODO#- nestif            # looks useful, however needs work
     #TODO#- prealloc          # easy optimizations
+    #TODO#- unparam           # check for unused parameters
+    #TODO#- whitespace        # checks for leading/trailing newlines
   disable:
-    - godox
-    - wsl             # too much noise
-    - goimports       # disabled, because it's slow, using scripts/check-imports.go instead.
-    - goconst         # check for things that could be replaced by constants
-    - gocyclo         # needs tweaking
-    - depguard        # unused
-    - stylecheck      # has false positives
-    - dupl            # slow
-    - interfacer      # not that useful
-    - gosimple        # part of staticcheck
-    - unused          # part of staticcheck
-    - lll
-    - rowserrcheck    # checks if sql.Rows.Err is checked correctly - Disabled  because it reports false positive with defer statements after Query call
+    - asciicheck       # non-ascii is allowed
+    - cyclop           # this complexity is not a good metric
+    - depguard         # unused
+    - dupl             # slow
+    - exhaustive       # doesn't handle default case
+    - exhaustivestruct # false positivies
+    - forbidigo        # not useful
+    - funlen           # no limit on func length
+    - gci              # we have custom import checking
+    - gocognit         # this complexity is not a good metric
+    - goconst          # check for things that could be replaced by constants
+    - gocyclo          # this complexity is not a good metric
+    - godox            # too many false positivies
+    - goheader         # separate tool
+    - goimports        # disabled, because it's slow, using scripts/check-imports.go instead.
+    - gomnd            # false positives
+    - gomoddirectives  # not useful
+    - gomodguard       # not useful
+    - gosec            # needs tweaking
+    - gosimple         # part of staticcheck
+    - ifshort          # usefulness, depends on the context
+    - interfacer       # not that useful
+    - lll              # don't need this check
+    - nlreturn         # non-important code style
+    - paralleltest     # too many false positives
+    - predeclared      # kind of useful, but not critical
+    - promlinter       # not relevant
+    - rowserrcheck     # checks if sql.Rows.Err is checked correctly - Disabled  because it reports false positive with defer statements after Query call
+    - sqlclosecheck    # we have tagsql, which checks this better
+    - stylecheck       # has false positives
+    - tagliatelle      # not our style
+    - testpackage      # sometimes it's useful to have tests on private funcs
+    - thelper          # too many false positives
+    - tparallel        # false positivies
+    - unused           # part of staticcheck
+    - wrapcheck        # too much noise and false positives
+    - wsl              # too much noise
   fast: false
 
 output:
@@ -78,12 +116,12 @@ linters-settings:
       - ifElseChain
   goimports:
     local: "storj.io"
+  golint:
+    min-confidence: 0.8
   gofmt:
     simplify: true
   gocyclo:
     min-complexity: 10
-  maligned:
-    suggest-new: true
   dupl:
     threshold: 150
   goconst:
@@ -126,8 +164,9 @@ issues:
   exclude-use-default: false
 
   exclude-rules:
-    # allow math/rand usage in _test.go files
-    - path: _test\.go
-      linters:
-      - gosec
-      text: "G404:"
+    - linters:
+        - goerr113
+      text: "do not define dynamic errors"
+    - linters:
+        - revive
+      text: "if-return"

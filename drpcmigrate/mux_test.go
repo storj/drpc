@@ -11,26 +11,23 @@ import (
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/errs"
-	"golang.org/x/sync/errgroup"
 )
 
 func TestMux(t *testing.T) {
-	expect := func(lis net.Listener, data string) func() error {
-		return func() error {
-			conn, err := lis.Accept()
-			if err != nil {
-				return err
-			}
-
-			buf := make([]byte, len(data))
-			_, err = io.ReadFull(conn, buf)
-			if err != nil {
-				return err
-			}
-
-			assert.Equal(t, data, string(buf))
-			return nil
+	run := func(lis net.Listener, data string) error {
+		conn, err := lis.Accept()
+		if err != nil {
+			return err
 		}
+
+		buf := make([]byte, len(data))
+		_, err = io.ReadFull(conn, buf)
+		if err != nil {
+			return err
+		}
+
+		assert.Equal(t, data, string(buf))
+		return nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -44,18 +41,23 @@ func TestMux(t *testing.T) {
 
 	mux := NewListenMux(lis, len("prefixN"))
 
-	var lisGroup errgroup.Group
-	lisGroup.Go(expect(mux.Route("prefix1"), "data1"))
-	lisGroup.Go(expect(mux.Route("prefix2"), "data2"))
-	lisGroup.Go(expect(mux.Default(), "prefix3data3"))
+	lisErrs := make(chan error, 3)
+	go func() { lisErrs <- run(mux.Route("prefix1"), "data1") }()
+	go func() { lisErrs <- run(mux.Route("prefix2"), "data2") }()
+	go func() { lisErrs <- run(mux.Default(), "prefix3data3") }()
 
-	var muxGroup errgroup.Group
-	muxGroup.Go(func() error { return mux.Run(ctx) })
+	muxErrs := make(chan error, 1)
+	go func() { muxErrs <- mux.Run(ctx) }()
 
-	assert.NoError(t, lisGroup.Wait())
+	for i := 0; i < 3; i++ {
+		assert.NoError(t, <-lisErrs)
+	}
 
 	cancel()
-	assert.NoError(t, muxGroup.Wait())
+
+	for i := 0; i < 1; i++ {
+		assert.NoError(t, <-muxErrs)
+	}
 }
 
 func TestMuxAcceptError(t *testing.T) {

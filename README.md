@@ -15,11 +15,16 @@ A drop-in, lightweight gRPC replacement.
 
 ## Highlights
 
-* Simple, at just a few thousands lines of code!
+* Simple, at just a few thousand lines of code.
+* Low external dependencies. Only 3 requirements in go.mod, and 9 lines of `go mod graph`!
 * Compatible. Works for many gRPC use-cases as-is!
-* Fast. DRPC has a lightning quick wire format
+* Fast. DRPC has a lightning quick wire format.
 * Extensible. DRPC is transport agnostic, supports middleware, and is designed around interfaces.
 * Battle Tested. Already used in production for years across tens of thousands of servers.
+
+## Licensing
+
+DRPC is licensed under the MIT/expat license. See the LICENSE file for more.
 
 ## Benchmarks
 
@@ -144,6 +149,26 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
     </tr>
 </table>
 
-## Licensing
+## Lines of code
 
-DRPC is licensed under the MIT/expat license. See the LICENSE file for more.
+| Package                              | Lines    |
+| ---                                  | ---      |
+| storj.io/drpc/cmd/protoc-gen-go-drpc | 418      |
+| storj.io/drpc/drpcstream             | 388      |
+| storj.io/drpc/drpcwire               | 326      |
+| storj.io/drpc/drpcmanager            | 280      |
+| storj.io/drpc/drpcmigrate            | 237      |
+| storj.io/drpc/drpchttp               | 214      |
+| storj.io/drpc/drpcsignal             | 133      |
+| storj.io/drpc/drpcconn               | 116      |
+| storj.io/drpc/drpcmetadata           | 115      |
+| storj.io/drpc/drpcmux                | 95       |
+| storj.io/drpc/drpcserver             | 76       |
+| storj.io/drpc/drpccache              | 54       |
+| storj.io/drpc                        | 48       |
+| storj.io/drpc/drpcerr                | 42       |
+| storj.io/drpc/drpcctx                | 37       |
+| storj.io/drpc/drpcdebug              | 19       |
+| storj.io/drpc/drpcenc                | 15       |
+| storj.io/drpc/internal/drpcopts      | 11       |
+| **Total**                            | **2624** |

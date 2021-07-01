@@ -37,9 +37,6 @@ type Conn interface {
 	// Closed returns a channel that is closed if the connection is definitely closed.
 	Closed() <-chan struct{}
 
-	// Transport returns the transport the connection is using.
-	Transport() Transport
-
 	// Invoke issues a unary RPC to the remote. Only one Invoke or Stream may be
 	// open at once.
 	Invoke(ctx context.Context, rpc string, enc Encoding, in, out Message) error

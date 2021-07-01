@@ -39,7 +39,7 @@ func TestTransport_Error(t *testing.T) {
 	<-started
 
 	// kill the transport from underneath of it
-	assert.NoError(t, cli.DRPCConn().Transport().Close())
+	assert.NoError(t, cli.DRPCConn().(*drpcconn.Conn).Transport().Close())
 }
 
 func TestTransport_Blocked(t *testing.T) {
@@ -108,7 +108,7 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	<-started
 
 	// kill the transport from underneath of it
-	assert.NoError(t, cli.DRPCConn().Transport().Close())
+	assert.NoError(t, cli.DRPCConn().(*drpcconn.Conn).Transport().Close())
 
 	// ensure both of the errors we sent are canceled
 	assert.Equal(t, <-errs, context.Canceled)

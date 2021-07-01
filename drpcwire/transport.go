@@ -4,7 +4,6 @@
 package drpcwire
 
 import (
-	"bufio"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -97,46 +96,28 @@ func (b *Writer) Flush() (err error) {
 // Reader
 //
 
-// SplitFrame is used by bufio.Scanner to split frames out of a stream of bytes.
-func SplitFrame(data []byte, atEOF bool) (int, []byte, error) {
-	rem, _, ok, err := ParseFrame(data)
-	switch advance := len(data) - len(rem); {
-	case err != nil:
-		return 0, nil, err
-	case len(data) > 0 && !ok && atEOF:
-		return 0, nil, drpc.ProtocolError.New("truncated frame")
-	case !ok:
-		return 0, nil, nil
-	case advance < 0, len(data) < advance:
-		return 0, nil, drpc.InternalError.New("scanner issue with advance value")
-	default:
-		return advance, data[:advance], nil
-	}
-}
-
 // Reader reconstructs packets from frames read from an io.Reader.
 type Reader struct {
-	buf *bufio.Scanner
-	id  ID
+	r    io.Reader
+	curr []byte
+	buf  []byte
+	id   ID
 }
+
+const maximumFrameSize = 4<<20 + 1 + 9 + 9 + 9
 
 // NewReader constructs a Reader to read Packets from the io.Reader.
 func NewReader(r io.Reader) *Reader {
-	// we don't allow packet payloads over 4MiB. the maximum frame header
-	// size can be 1 header byte, and 9 bytes for each of the varint
-	// encoded stream id, message id, and data length.
-	const maximumFrameSize = 4<<20 + 1 + 9 + 9 + 9
-
-	buf := bufio.NewScanner(r)
-	buf.Buffer(make([]byte, 4<<10), maximumFrameSize)
-	buf.Split(SplitFrame)
-	return &Reader{buf: buf}
+	return &Reader{
+		r:    r,
+		curr: make([]byte, 0, 64*1024),
+	}
 }
 
 // ReadPacket reads a packet from the io.Reader. It is equivalent to
 // calling ReadPacketUsing(nil).
-func (s *Reader) ReadPacket() (pkt Packet, err error) {
-	return s.ReadPacketUsing(nil)
+func (r *Reader) ReadPacket() (pkt Packet, err error) {
+	return r.ReadPacketUsing(nil)
 }
 
 // ReadPacketUsing reads a packet from the io.Reader. IDs read from
@@ -145,43 +126,86 @@ func (s *Reader) ReadPacket() (pkt Packet, err error) {
 // If the amount of data in the Packet becomes too large, an error is
 // returned. The returned packet's Data field is constructed by appending
 // to the provided buf after it has been resliced to be zero length.
-func (s *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
+func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 	pkt.Data = buf[:0]
-	for s.buf.Scan() {
-		rem, fr, ok, err := ParseFrame(s.buf.Bytes())
+
+	var fr Frame
+	var ok bool
+
+	for {
+		r.curr, fr, ok, err = ParseFrame(r.curr)
 		switch {
 		case err != nil:
 			return Packet{}, drpc.ProtocolError.Wrap(err)
-		case !ok, len(rem) > 0:
-			return Packet{}, drpc.InternalError.New("problem with scanner")
+
+		case !ok:
+			// r.curr doesn't have enough data for a full frame, so prepend
+			// it to the read buffer if it is in the appropriate state.
+			if len(r.buf) == 0 {
+				r.buf = append(r.buf[:0], r.curr...)
+			}
+
+			if cap(r.buf)-len(r.buf) < 4096 {
+				nbuf := make([]byte, len(r.buf), 2*cap(r.buf)+4096)
+				copy(nbuf, r.buf)
+				r.buf = nbuf
+			}
+
+			n, err := r.r.Read(r.buf[len(r.buf):cap(r.buf)])
+			if err != nil {
+				return Packet{}, err
+			}
+
+			ncap := uint(len(r.buf) + n)
+			if ncap > uint(cap(r.buf)) {
+				return Packet{}, drpc.ProtocolError.New("data overflow")
+			}
+			r.buf = r.buf[:ncap]
+
+			if len(r.buf) > maximumFrameSize {
+				return Packet{}, drpc.ProtocolError.New("data overflow")
+			}
+
+			r.curr = r.buf
+			continue
+		}
+
+		// since we got a packet, signal that we need to restore buf with
+		// whatever remains in r.curr the next time we don't have a packet.
+		if len(r.buf) > 0 {
+			r.buf = r.buf[:0]
+		}
+
+		switch {
 		case fr.Control:
 			// Ignore any frames with the control bit set so that we can
 			// use it in the future to mean things to people who understand
 			// it.
 			continue
-		case fr.ID.Less(s.id):
+
+		case fr.ID.Less(r.id):
 			return Packet{}, drpc.ProtocolError.New("id monotonicity violation")
-		case s.id.Less(fr.ID):
-			s.id = fr.ID
+
+		case r.id.Less(fr.ID):
+			r.id = fr.ID
 			pkt = Packet{
 				Data: pkt.Data[:0],
 				ID:   fr.ID,
 				Kind: fr.Kind,
 			}
+
 		case fr.Kind != pkt.Kind:
 			return Packet{}, drpc.ProtocolError.New("packet kind change")
 		}
 
 		pkt.Data = append(pkt.Data, fr.Data...)
+
 		switch {
 		case len(pkt.Data) > 4<<20:
 			return Packet{}, drpc.ProtocolError.New("data overflow")
+
 		case fr.Done:
 			return pkt, nil
 		}
 	}
-	if err := s.buf.Err(); err != nil {
-		return Packet{}, err
-	}
-	return Packet{}, io.EOF
 }

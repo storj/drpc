@@ -44,13 +44,6 @@ func SplitData(buf []byte, n int) (prefix, suffix []byte)
 SplitData is used to split a buffer if it is larger than n bytes. If n is zero,
 a reasonable default is used. If n is less than zero then it does not split.
 
-#### func  SplitFrame
-
-```go
-func SplitFrame(data []byte, atEOF bool) (int, []byte, error)
-```
-SplitFrame is used by bufio.Scanner to split frames out of a stream of bytes.
-
 #### func  SplitN
 
 ```go
@@ -220,7 +213,7 @@ NewReader constructs a Reader to read Packets from the io.Reader.
 #### func (*Reader) ReadPacket
 
 ```go
-func (s *Reader) ReadPacket() (pkt Packet, err error)
+func (r *Reader) ReadPacket() (pkt Packet, err error)
 ```
 ReadPacket reads a packet from the io.Reader. It is equivalent to calling
 ReadPacketUsing(nil).
@@ -228,7 +221,7 @@ ReadPacketUsing(nil).
 #### func (*Reader) ReadPacketUsing
 
 ```go
-func (s *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error)
+func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error)
 ```
 ReadPacketUsing reads a packet from the io.Reader. IDs read from frames must be
 monotonically increasing. When a new ID is read, the old data is discarded. This

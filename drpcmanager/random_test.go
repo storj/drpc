@@ -254,5 +254,5 @@ type incID drpcwire.ID
 func (id *incID) incStream() { *id = incID{Stream: id.Stream + 1} }
 func (id *incID) incMessage() drpcwire.ID {
 	id.Message++
-	return drpcwire.ID(*id)
+	return drpcwire.ID{Stream: id.Stream + 1, Message: id.Message}
 }

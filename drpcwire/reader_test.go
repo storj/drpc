@@ -5,33 +5,15 @@ package drpcwire
 
 import (
 	"bytes"
+	"errors"
 	"io"
+	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zeebo/assert"
 )
-
-func TestWriter(t *testing.T) {
-	run := func(size int) func(t *testing.T) {
-		return func(t *testing.T) {
-			var exp []byte
-			var got bytes.Buffer
-
-			wr := NewWriter(&got, size)
-			for i := 0; i < 1000; i++ {
-				fr := RandFrame()
-				exp = AppendFrame(exp, fr)
-				assert.NoError(t, wr.WriteFrame(fr))
-			}
-			assert.NoError(t, wr.Flush())
-			assert.That(t, bytes.Equal(exp, got.Bytes()))
-		}
-	}
-
-	t.Run("Size 0B", run(0))
-	t.Run("Size 1MB", run(1024*1024))
-}
 
 func TestReader(t *testing.T) {
 	type testCase struct {
@@ -116,6 +98,35 @@ func TestReader(t *testing.T) {
 				f(KindMessage, 1, "1", true, true),
 			},
 		},
+
+		{ // packet kind changes
+			Frames: []Frame{
+				f(KindMessage, 1, "", false, false),
+				f(KindClose, 1, "", false, false),
+			},
+			Error: "packet kind change",
+		},
+
+		{ // id monotonicity from id reuse
+			Packets: []Packet{
+				p(KindMessage, 1, "1"),
+			},
+			Frames: []Frame{
+				f(KindMessage, 1, "1", true, false),
+				f(KindMessage, 1, "2", true, false),
+			},
+			Error: "id monotonicity violation",
+		},
+
+		{ // message id zero is not allowed
+			Frames: []Frame{{ID: ID{Stream: 1, Message: 0}}},
+			Error:  "id monotonicity violation",
+		},
+
+		{ // stream id zero is not allowed
+			Frames: []Frame{{ID: ID{Stream: 0, Message: 1}}},
+			Error:  "id monotonicity violation",
+		},
 	}
 
 	for _, tc := range cases {
@@ -138,5 +149,57 @@ func TestReader(t *testing.T) {
 		} else {
 			assert.Equal(t, err, io.EOF)
 		}
+	}
+}
+
+func TestReaderRandomized(t *testing.T) {
+	seed := time.Now().UnixNano()
+	t.Log("seed:", seed)
+	rng := rand.New(rand.NewSource(seed))
+
+	// create a function to get a predefined sequence of bytes
+	bid := 0
+	get := func(n int) []byte {
+		out := make([]byte, n)
+		for i := range out {
+			out[i] = byte(bid)
+			bid++
+		}
+		return out
+	}
+
+	// construct a random sequence of frames of different sizes
+	// to attempt to capture any bugs from buffer management
+	var buf []byte
+
+	mid := uint64(1)
+	done := false
+	for i := 0; i < 1000; i++ {
+		buf = AppendFrame(buf, Frame{
+			ID:   ID{Stream: 1, Message: mid},
+			Data: get(rng.Intn(8192)),
+			Done: done,
+		})
+
+		if done {
+			mid++
+		}
+
+		done = rng.Intn(10) == 0
+	}
+
+	// read all of the packets back which should have the
+	// exact sequence of bytes, so we reset bid to generate
+	// the sequence again.
+	bid = 0
+	r := NewReader(bytes.NewBuffer(buf))
+	for i := 1; ; i++ {
+		pkt, err := r.ReadPacket()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, pkt.ID.Message, i)
+		assert.Equal(t, pkt.Data, get(len(pkt.Data)))
 	}
 }

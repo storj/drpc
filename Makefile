@@ -1,7 +1,7 @@
 .DEFAULT_GOAL = all
 
 .PHONY: all
-all: docs generate lint test tidy
+all: tidy docs generate lint test
 
 .PHONY: quick
 quick: generate test

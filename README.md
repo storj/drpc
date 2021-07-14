@@ -5,26 +5,48 @@ A drop-in, lightweight gRPC replacement.
 [![Go Report Card](https://goreportcard.com/badge/storj.io/drpc)](https://goreportcard.com/report/storj.io/drpc)
 [![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://pkg.go.dev/storj.io/drpc)
 ![Beta](https://img.shields.io/badge/version-beta-green.svg)
+[![Zulip Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://drpc.zulipchat.com)
 
 ## Links
 
  * [DRPC website](https://storj.github.io/drpc/)
+ * [Examples](https://github.com/storj/drpc/tree/main/examples)
  * [Quickstart documentation](https://storj.github.io/drpc/docs.html)
  * [Launch blog post](https://www.storj.io/blog/introducing-drpc-our-replacement-for-grpc)
- * [Examples](https://github.com/storj/drpc/tree/main/examples)
 
 ## Highlights
 
-* Simple, at just a few thousand lines of code.
-* Low external dependencies. Only 3 requirements in go.mod, and 9 lines of `go mod graph`!
+* Simple, at just a few thousand [lines of code](#lines-of-code).
+* [Small dependencies](./blob/main/go.mod). Only 3 requirements in go.mod, and 9 lines of `go mod graph`!
 * Compatible. Works for many gRPC use-cases as-is!
-* Fast. DRPC has a lightning quick wire format.
-* Extensible. DRPC is transport agnostic, supports middleware, and is designed around interfaces.
+* [Fast](#benchmarks). DRPC has a lightning quick [wire format](https://github.com/storj/drpc/wiki/Docs:-Wire-protocol).
+* [Extensible](#external-packages). DRPC is transport agnostic, supports middleware, and is designed around interfaces.
 * Battle Tested. Already used in production for years across tens of thousands of servers.
+
+## External Packages
+
+ * [go.bryk.io/pkg/net/drpc](https://pkg.go.dev/go.bryk.io/pkg/net/drpc)
+    - Simplified TLS setup (for client and server)
+    - Server middleware, including basic components for logging, token-based auth, rate limit, panic recovery, etc
+    - Client middleware, including basic components for logging, custom metadata, panic recovery, etc
+    - Bi-directional streaming support over upgraded HTTP(S) connections using WebSockets
+    - Concurrent RPCs via connection pool
+
+## Other Languages
+
+Some bindings for other languages are in progress, all in various states of completeness. Join the [Zulip chat](https://drpc.zulipchat.com) if you want more information or to help out with any!
+
+| Language | Repository                          | Status     |
+|----------|-------------------------------------|------------|
+| C++      | https://github.com/storj/drpc-cpp   | Incomplete |
+| Rust     | https://github.com/zeebo/drpc-rs    | Incomplete |
+| Node     | https://github.com/mjpitz/drpc-node | Incomplete |
 
 ## Licensing
 
 DRPC is licensed under the MIT/expat license. See the LICENSE file for more.
+
+---
 
 ## Benchmarks
 

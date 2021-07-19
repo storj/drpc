@@ -47,8 +47,8 @@
                 rev = "e92f7f42d44a515670339331b652aa8a7516c390";
                 sha256 = "sha256-n2Rytcuaffy9ftzDT1Nrmi2RWiyWDOf6B4qvIWiVz7M=";
               };
-              vendorSha256 = "sha256-6D452YbnkunAfD/M69VmwGDxENmVS72NKj92FTemJR0=";
               doCheck = false;
+              vendorSha256 = "sha256-6D452YbnkunAfD/M69VmwGDxENmVS72NKj92FTemJR0=";
               allowGoReference = true; # until check-imports stops needing this
               subPackages = [
                 "check-copyright"
@@ -67,8 +67,8 @@
                 rev = "v1.36.0";
                 sha256 = "sha256-sUDeWY/yMyijbKsXDBwBXLShXTAZ4445I4hpP7bTndQ=";
               };
-              vendorSha256 = "sha256-KHd9zmNsmXmc2+NNtTnw/CSkmGwcBVYNrpEUmIoZi5Q=";
               doCheck = false;
+              vendorSha256 = "sha256-KHd9zmNsmXmc2+NNtTnw/CSkmGwcBVYNrpEUmIoZi5Q=";
               modRoot = "./cmd/protoc-gen-go-grpc";
             };
 
@@ -80,9 +80,22 @@
                 rev = "v1.26.0";
                 sha256 = "sha256-n2LHI8DXQFFWhTPOFCegBgwi/0tFvRE226AZfRW8Bnc=";
               };
-              vendorSha256 = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
               doCheck = false;
+              vendorSha256 = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
               modRoot = "./cmd/protoc-gen-go";
+            };
+
+            protoc-gen-twirp = buildGoPackage {
+              name = "protoc-gen-twirp";
+              src = fetchFromGitHub {
+                owner = "twitchtv";
+                repo = "twirp";
+                rev = "v8.1.0";
+                sha256 = "sha256-ezSNrDfOE1nj4FlX7E7Z7/eGfQw1B7NP34aj8ml5pDk=";
+              };
+              doCheck = false;
+              goPackagePath = "github.com/twitchtv/twirp";
+              subPackages = [ "./protoc-gen-twirp" ];
             };
 
             stringer = buildGoModule {
@@ -93,8 +106,8 @@
                 rev = "v0.1.4";
                 sha256 = "sha256-7iQZvA6uUjZLP3/dxaM9y9jomSwEoaUgGclnciF8rh4=";
               };
-              vendorSha256 = "sha256-PRC59obp0ptooFuWhg2ruihEfJ0wKeMyT9xcLjoZyCo=";
               doCheck = false;
+              vendorSha256 = "sha256-PRC59obp0ptooFuWhg2ruihEfJ0wKeMyT9xcLjoZyCo=";
               subPackages = [ "cmd/stringer" ];
             };
 
@@ -106,6 +119,7 @@
                 rev = "0bfa0490548148882a54c15fbc52a621a9f50cbe";
                 sha256 = "sha256-5gGun9CTvI3VNsMudJ6zjrViy6Zk00NuJ4pZJbzY/Uk=";
               };
+              doCheck = false;
               goPackagePath = "github.com/robertkrimen/godocdown";
               subPackages = [ "./godocdown" ];
             };
@@ -123,6 +137,7 @@
 
               devtools.protoc-gen-go-grpc
               devtools.protoc-gen-go
+              devtools.protoc-gen-twirp
               devtools.staticcheck
               devtools.ci
               devtools.stringer

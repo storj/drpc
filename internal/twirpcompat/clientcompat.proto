@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package compat;
+option go_package = "storj.io/drpc/internal/twirpcompat";
+
+service CompatService {
+    rpc Method(Req) returns (Resp);
+    rpc NoopMethod(Empty) returns (Empty);
+}
+
+message Empty {}
+
+message Req { string v = 1; }
+message Resp { int32 v = 1; }

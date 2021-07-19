@@ -44,29 +44,74 @@ import (
 //
 // where percentEncode is the encoding used for query strings. Only the '%' and '='
 // characters are necessary to be escaped.
-func New(handler drpc.Handler) http.Handler {
-	return wrapper{handler: handler}
+func New(handler drpc.Handler, os ...Option) http.Handler {
+	opts := options{
+		codeMapper: defaultCodeMapper,
+	}
+	for _, o := range os {
+		o.apply(&opts)
+	}
+
+	return wrapper{
+		handler: handler,
+		opts:    opts,
+	}
+}
+
+// Option configures some aspect of the handler.
+type Option struct{ apply func(*options) }
+
+// WithCodeMapper sets the function that will be called when the rpc handler
+// returns an error to map the error to the json code field. For example,
+// to map Twirp errors back to their appropriate code, you could write
+//
+// 	func twirpMapper(err error) string {
+// 		var te twirp.Error
+// 		if errors.As(err, &te) {
+// 			return string(te.Code())
+// 		}
+// 		return "unknown"
+// 	}
+//
+// and use it with
+//
+// 	handler := drpchttp.New(mux, drpchttp.WithCodeMapper(twirpMapper))
+func WithCodeMapper(mapper func(error) string) Option {
+	return Option{apply: func(opts *options) { opts.codeMapper = mapper }}
+}
+
+func defaultCodeMapper(err error) string {
+	code := "unknown"
+	if dcode := drpcerr.Code(err); dcode != 0 {
+		code = fmt.Sprintf("drpcerr(%d)", dcode)
+	}
+	return code
+}
+
+type options struct {
+	codeMapper func(error) string
 }
 
 // wrapper implements net/http.Handler by dispatching to the provided drpc.Handler.
 type wrapper struct {
 	handler drpc.Handler
+	opts    options
 }
 
-func (h wrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	data, serr := h.serveHTTP(req)
+func (w wrapper) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	data, serr := w.serveHTTP(req)
 	if serr != nil {
-		http.Error(w, serr.JSON(), serr.status)
+		http.Error(rw, serr.JSON(), serr.status)
 		return
 	}
-	w.Header().Set("Content-Type", w.Header().Get("Content-Type"))
-	_, _ = w.Write(data)
+	rw.Header().Set("Content-Type", rw.Header().Get("Content-Type"))
+	_, _ = rw.Write(data)
 }
 
-func (h wrapper) serveHTTP(req *http.Request) (data []byte, serr *statusErr) {
+func (w wrapper) serveHTTP(req *http.Request) (data []byte, serr *statusErr) {
 	ctx, err := Context(req)
 	if err != nil {
-		return nil, wrapStatusErr(http.StatusInternalServerError, err)
+		return nil, w.wrapStatusErr(http.StatusInternalServerError, err)
 	}
 
 	ct := req.Header.Get("Content-Type")
@@ -74,15 +119,15 @@ func (h wrapper) serveHTTP(req *http.Request) (data []byte, serr *statusErr) {
 	case "application/protobuf":
 	case "application/json":
 	default:
-		return nil, newStatusErr(http.StatusUnsupportedMediaType, "invalid content type: %q", ct)
+		return nil, w.newStatusErr(http.StatusUnsupportedMediaType, "invalid content type: %q", ct)
 	}
 
 	const maxSize = 4 << 20
 	data, err = ioutil.ReadAll(io.LimitReader(req.Body, maxSize))
 	if err != nil {
-		return nil, wrapStatusErr(http.StatusInternalServerError, err)
+		return nil, w.wrapStatusErr(http.StatusInternalServerError, err)
 	} else if len(data) >= maxSize {
-		return nil, newStatusErr(http.StatusInternalServerError, "message size limit exceeded")
+		return nil, w.newStatusErr(http.StatusInternalServerError, "message size limit exceeded")
 	}
 
 	stream := &unitaryStream{
@@ -91,8 +136,8 @@ func (h wrapper) serveHTTP(req *http.Request) (data []byte, serr *statusErr) {
 		in:   data,
 	}
 
-	if err := h.handler.HandleRPC(stream, req.URL.Path); err != nil {
-		return nil, wrapStatusErr(http.StatusInternalServerError, err)
+	if err := w.handler.HandleRPC(stream, req.URL.Path); err != nil {
+		return nil, w.wrapStatusErr(http.StatusInternalServerError, err)
 	}
 
 	return stream.out, nil
@@ -135,15 +180,20 @@ func (us *unitaryStream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error
 
 type statusErr struct {
 	status int
+	code   string
 	err    error
 }
 
-func newStatusErr(status int, format string, args ...interface{}) *statusErr {
-	return wrapStatusErr(status, errs.New(format, args...))
+func (w wrapper) newStatusErr(status int, format string, args ...interface{}) *statusErr {
+	return w.wrapStatusErr(status, errs.New(format, args...))
 }
 
-func wrapStatusErr(status int, err error) *statusErr {
-	return &statusErr{status: status, err: err}
+func (w wrapper) wrapStatusErr(status int, err error) *statusErr {
+	return &statusErr{
+		status: status,
+		code:   w.opts.codeMapper(err),
+		err:    err,
+	}
 }
 
 func (s *statusErr) Error() string { return s.err.Error() }
@@ -151,12 +201,8 @@ func (s *statusErr) Cause() error  { return s.err }
 func (s *statusErr) Unwrap() error { return s.err }
 
 func (s *statusErr) JSON() string {
-	code := "unknown"
-	if dcode := drpcerr.Code(s.err); dcode != 0 {
-		code = fmt.Sprintf("drpcerr(%d)", dcode)
-	}
 	data, _ := json.MarshalIndent(map[string]interface{}{
-		"code": code,
+		"code": s.code,
 		"msg":  s.err.Error(),
 	}, "", "    ")
 	return string(data)

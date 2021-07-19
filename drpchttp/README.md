@@ -34,7 +34,7 @@ unmarshal.
 #### func  New
 
 ```go
-func New(handler drpc.Handler) http.Handler
+func New(handler drpc.Handler, os ...Option) http.Handler
 ```
 New returns a net/http.Handler that dispatches to the passed in drpc.Handler.
 
@@ -63,3 +63,33 @@ possibly multiple times. The format is
 
 where percentEncode is the encoding used for query strings. Only the '%' and '='
 characters are necessary to be escaped.
+
+#### type Option
+
+```go
+type Option struct {
+}
+```
+
+Option configures some aspect of the handler.
+
+#### func  WithCodeMapper
+
+```go
+func WithCodeMapper(mapper func(error) string) Option
+```
+WithCodeMapper sets the function that will be called when the rpc handler
+returns an error to map the error to the json code field. For example, to map
+Twirp errors back to their appropriate code, you could write
+
+    func twirpMapper(err error) string {
+    	var te twirp.Error
+    	if errors.As(err, &te) {
+    		return string(te.Code())
+    	}
+    	return "unknown"
+    }
+
+and use it with
+
+    handler := drpchttp.New(mux, drpchttp.WithCodeMapper(twirpMapper))

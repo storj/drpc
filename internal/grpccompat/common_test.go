@@ -4,26 +4,39 @@
 package grpccompat
 
 import (
+	"bufio"
+	"bytes"
 	"context"
-	errors "errors"
+	"encoding/base64"
+	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/textproto"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/improbable-eng/grpc-web/go/grpcweb"
+	"github.com/zeebo/assert"
 	"github.com/zeebo/errs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpcerr"
+	"storj.io/drpc/drpchttp"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
@@ -145,6 +158,37 @@ func testCompat(t *testing.T, impl *serviceImpl, fn testFunc) {
 	}
 }
 
+func testWebCompat(t *testing.T, impl *serviceImpl, fn testFunc) {
+	defer checkGoroutines(t)
+
+	results := [][]result{}
+
+	grpcServer := createGRPCWebServer(impl.GRPC())
+	defer grpcServer.Close()
+	results = append(results, collectResults(t, webClient{grpcServer.URL, false}, fn))
+	results = append(results, collectResults(t, webClient{grpcServer.URL, true}, fn))
+
+	drpcServer := createDRPCWebServer(impl.DRPC())
+	defer drpcServer.Close()
+	results = append(results, collectResults(t, webClient{drpcServer.URL, false}, fn))
+	results = append(results, collectResults(t, webClient{drpcServer.URL, true}, fn))
+
+	grpcClient, close := createGRPCConnection(impl.GRPC())
+	defer close()
+	results = append(results, collectResults(t, grpcWrapper{grpcClient}, fn))
+
+	drpcClient, close := createDRPCConnection(impl.DRPC())
+	defer close()
+	results = append(results, collectResults(t, drpcWrapper{drpcClient}, fn))
+
+	for i := 0; i < len(results); i++ {
+		t.Log(i, results[i])
+		if i > 0 {
+			assert.That(t, allResultsEqual(results[i-1], results[i]))
+		}
+	}
+}
+
 //
 // helpers
 //
@@ -167,11 +211,15 @@ func checkGoroutines(t *testing.T) {
 
 	start := time.Now()
 	for {
-		if cg := runtime.NumGoroutine(); cg == 2 {
+		// github.com/improbable-eng/grpc-web/go/grpcweb ends up pulling in
+		// some dependency that starts a background goroutine for some reason.
+		// what the holy moly github.com/desertbit/timer? ugh.
+		if cg := runtime.NumGoroutine(); cg == 3 {
 			return
 		} else if time.Since(start) > 10*time.Second {
 			t.Fatalf("goroutine leak:\n%s", stackTrace())
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -222,6 +270,18 @@ func createGRPCConnection(server ServiceServer) (ServiceClient, func()) {
 		ctx.Cancel()
 		ctx.Wait()
 	}
+}
+
+func createDRPCWebServer(server DRPCServiceServer) *httptest.Server {
+	mux := drpcmux.New()
+	_ = DRPCRegisterService(mux, server)
+	return httptest.NewServer(drpchttp.New(mux))
+}
+
+func createGRPCWebServer(server ServiceServer) *httptest.Server {
+	srv := grpc.NewServer()
+	RegisterServiceServer(srv, server)
+	return httptest.NewServer(grpcweb.WrapServer(srv))
 }
 
 //
@@ -310,6 +370,246 @@ type ClientMethod4Stream interface {
 
 	Send(*In) error
 	Recv() (*Out, error)
+}
+
+//
+// web client
+//
+
+func readExactly(r io.Reader, n uint64) ([]byte, error) {
+	buf := make([]byte, n)
+	_, err := io.ReadFull(r, buf)
+	return buf, err
+}
+
+func grpcRead(r io.Reader) ([]byte, bool, error) {
+	if tmp, err := readExactly(r, 5); err != nil {
+		return nil, false, err
+	} else if size := binary.BigEndian.Uint32(tmp[1:5]); size > 4<<20 {
+		return nil, false, errs.New("message too large")
+	} else if data, err := readExactly(r, uint64(size)); errors.Is(err, io.EOF) {
+		return nil, false, io.ErrUnexpectedEOF
+	} else if err != nil {
+		return nil, false, err
+	} else {
+		return data, tmp[0] == 128, nil
+	}
+}
+
+func framedData(buf []byte) []byte {
+	var tmp [5]byte
+	binary.BigEndian.PutUint32(tmp[1:5], uint32(len(buf)))
+	return append(tmp[:], buf...)
+}
+
+func parseTrailers(buf []byte) (http.Header, error) {
+	buf = append(bytes.TrimSpace(buf), "\r\n\r\n"...)
+	body := bufio.NewReader(bytes.NewReader(buf))
+	trailer, err := textproto.NewReader(body).ReadMIMEHeader()
+	return http.Header(trailer), errs.Wrap(err)
+}
+
+func handleTrailers(trailers http.Header) error {
+	if status := trailers.Get("Grpc-Status"); status == "" {
+		return errs.New("no returned status")
+	} else if s, err := strconv.ParseUint(status, 10, 64); err != nil {
+		return errs.Wrap(err)
+	} else if s != 0 {
+		return drpcerr.WithCode(errs.New("%s", trailers.Get("Grpc-Message")), s)
+	} else {
+		return nil
+	}
+}
+
+type webClient struct {
+	url  string
+	text bool
+}
+
+func (w webClient) Method1(ctx context.Context, in *In) (*Out, error) {
+	buf, err := proto.Marshal(in)
+	if err != nil {
+		return nil, errs.Wrap(err)
+	}
+
+	url := w.url + "/service.Service/Method1"
+	body := framedData(buf)
+	ct := "application/grpc-web+proto"
+	if w.text {
+		body = []byte(base64.StdEncoding.EncodeToString(body))
+		ct = "application/grpc-web-text+proto"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, errs.Wrap(err)
+	}
+	req.Header.Set("Content-Type", ct)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errs.Wrap(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// sooo, this is cool. it seems like grpc-web has its own mechanism for
+	// adding trailers (by setting the MSB of the first byte of the framing
+	// format) rather than just like, letting http handle it. i have no idea
+	// why (probably browser support), and it's very hard to find any clients
+	// that aren't a bunch of javascript i don't understand. and so, here i
+	// am, blindly doing my best on what i think it's going for.
+	//
+	// another complication, btw, is that when no response body is present,
+	// servers are allowed to send the trailers as headers instead of just
+	// always sending them in the response body. why all this flexability?
+	// the world may never know.
+
+	// by default, start with the headers as the trailers, because they
+	// might be there.
+	trailers := resp.Header.Clone()
+	out := new(Out)
+
+	var reply io.Reader = resp.Body
+	if w.text {
+		reply = &base64Reader{r: resp.Body}
+	}
+
+	switch data, trailer, err := grpcRead(reply); {
+	case errors.Is(err, io.EOF):
+	case err != nil:
+		return nil, errs.Wrap(err)
+	case trailer:
+		trailers, err = parseTrailers(data)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		if err := proto.Unmarshal(data, out); err != nil {
+			return nil, errs.Wrap(err)
+		}
+	}
+
+	switch data, trailer, err := grpcRead(reply); {
+	case errors.Is(err, io.EOF):
+	case err != nil:
+		return nil, errs.Wrap(err)
+	case !trailer:
+		return nil, errs.New("expected trailers")
+	default:
+		trailers, err = parseTrailers(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := handleTrailers(trailers); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (w webClient) Method3(ctx context.Context, in *In) (ClientMethod3Stream, error) {
+	buf, err := proto.Marshal(in)
+	if err != nil {
+		return nil, errs.Wrap(err)
+	}
+
+	url := w.url + "/service.Service/Method3"
+	body := framedData(buf)
+	ct := "application/grpc-web+proto"
+	if w.text {
+		body = []byte(base64.StdEncoding.EncodeToString(body))
+		ct = "application/grpc-web-text+proto"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, errs.Wrap(err)
+	}
+	req.Header.Set("Content-Type", ct)
+
+	resp, err := http.DefaultClient.Do(req) //nolint: bodyclose
+	if err != nil {
+		return nil, errs.Wrap(err)
+	}
+
+	var reply io.Reader = resp.Body
+	if w.text {
+		reply = &base64Reader{r: resp.Body}
+	}
+
+	return &webClientMethod3Stream{ctx: ctx, resp: resp, r: reply}, nil
+}
+
+func (w webClient) Method2(ctx context.Context) (ClientMethod2Stream, error) {
+	panic("method2 not available")
+}
+
+func (w webClient) Method4(ctx context.Context) (ClientMethod4Stream, error) {
+	panic("method4 not available")
+}
+
+type webClientMethod3Stream struct {
+	ctx  context.Context
+	err  error
+	resp *http.Response
+	r    io.Reader
+}
+
+func (w *webClientMethod3Stream) Context() context.Context { return w.ctx }
+
+func (w *webClientMethod3Stream) Recv() (_ *Out, err error) {
+	if w.err != nil {
+		return nil, w.err
+	}
+
+	defer func() {
+		w.err = err
+		if err != nil {
+			_ = w.resp.Body.Close()
+		}
+	}()
+
+	trailers := w.resp.Header.Clone()
+
+	switch data, trailer, err := grpcRead(w.r); {
+	case errors.Is(err, io.EOF):
+	case err != nil:
+		return nil, err
+	case trailer:
+		trailers, err = parseTrailers(data)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		out := new(Out)
+		if err := proto.Unmarshal(data, out); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+
+	if err := handleTrailers(trailers); err != nil {
+		return nil, err
+	}
+	return nil, io.EOF
+}
+
+type base64Reader struct {
+	r io.Reader
+	b io.Reader
+}
+
+func (b *base64Reader) Read(p []byte) (n int, err error) {
+	if b.b == nil {
+		b.b = base64.NewDecoder(base64.StdEncoding, b.r)
+	}
+	n, err = b.b.Read(p)
+	if n == 0 && errors.Is(err, io.EOF) {
+		b.b = base64.NewDecoder(base64.StdEncoding, b.r)
+		n, err = b.b.Read(p)
+	}
+	return n, err
 }
 
 //

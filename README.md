@@ -32,9 +32,11 @@ A drop-in, lightweight gRPC replacement.
     - Bi-directional streaming support over upgraded HTTP(S) connections using WebSockets
     - Concurrent RPCs via connection pool
 
+ * Open an issue or join the [Zulip chat](https://drpc.zulipchat.com) if you'd like to be featured here.
+
 ## Other Languages
 
-DRPC can be made compatible with RPC clients generated from other languages. For example, [Twirp](https://github.com/twitchtv/twirp) clients can be used against the [drpchttp](https://pkg.go.dev/storj.io/drpc/drpchttp) package. Other compatibility layers are in progress.
+DRPC can be made compatible with RPC clients generated from other languages. For example, [Twirp](https://github.com/twitchtv/twirp) clients and [grpc-web](https://github.com/grpc/grpc-web/) clients can be used against the [drpchttp](https://pkg.go.dev/storj.io/drpc/drpchttp) package.
 
 Native implementations can have some advantages, and so some bindings for other languages are in progress, all in various states of completeness. Join the [Zulip chat](https://drpc.zulipchat.com) if you want more information or to help out with any!
 
@@ -177,11 +179,11 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
 
 | Package                              | Lines    |
 | ---                                  | ---      |
+| storj.io/drpc/drpchttp               | 475      |
 | storj.io/drpc/cmd/protoc-gen-go-drpc | 418      |
 | storj.io/drpc/drpcstream             | 388      |
 | storj.io/drpc/drpcwire               | 332      |
 | storj.io/drpc/drpcmanager            | 280      |
-| storj.io/drpc/drpchttp               | 239      |
 | storj.io/drpc/drpcmigrate            | 237      |
 | storj.io/drpc/drpcsignal             | 133      |
 | storj.io/drpc/drpcconn               | 116      |
@@ -195,4 +197,4 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
 | storj.io/drpc/drpcdebug              | 19       |
 | storj.io/drpc/drpcenc                | 15       |
 | storj.io/drpc/internal/drpcopts      | 11       |
-| **Total**                            | **2654** |
+| **Total**                            | **2890** |

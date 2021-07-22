@@ -34,18 +34,34 @@ unmarshal.
 #### func  New
 
 ```go
-func New(handler drpc.Handler, os ...Option) http.Handler
+func New(handler drpc.Handler) http.Handler
 ```
 New returns a net/http.Handler that dispatches to the passed in drpc.Handler.
+See NewWithOptions for more details.
 
-The returned value handles unitary RPCs over an http request. The RPCs are
-hosted at a path based on their name, like `/service.Server/Method` and accept
-the request message in JSON or protobuf, depending on if the requested
-Content-Type is equal to "application/json" or "application/protobuf",
-respectively. If the response was a success, the HTTP status code will be 200
-OK, and the body contains the message encoded the same way as the request. If
-there was an error, the HTTP status code will not be 200 OK, the response body
-is always JSON, and will look something like
+#### func  NewWithOptions
+
+```go
+func NewWithOptions(handler drpc.Handler, os ...Option) http.Handler
+```
+NewWithOptions returns a net/http.Handler that dispatches to the passed in
+drpc.Handler. The RPCs are hosted at a path based on their name, like
+`/service.Server/Method`.
+
+Metadata can be attached by adding the "X-Drpc-Metadata" header to the request
+possibly multiple times. The format is
+
+    X-Drpc-Metadata: percentEncode(key)=percentEncode(value)
+
+where percentEncode is the encoding used for query strings. Only the '%' and '='
+characters are necessary to be escaped.
+
+The specific protocol for the request and response used is chosen by the
+request's Content-Type. By default the content types "application/json" and
+"application/protobuf" correspond to unitary-only RPCs that respond with the
+same Content-Type as the incoming request upon success. Upon failure, the
+response code will not be 200 OK, the response content type will always be
+"application/json", and the body will look something like
 
     {
       "code": "...",
@@ -56,13 +72,14 @@ where msg is a textual description of the error, and code is a short string that
 describes the kind of error that happened, if possible. If nothing could be
 detected, then the string "unknown" is used for the code.
 
-Metadata can be attached by adding the "X-Drpc-Metadata" header to the request
-possibly multiple times. The format is
-
-    X-Drpc-Metadata: percentEncode(key)=percentEncode(value)
-
-where percentEncode is the encoding used for query strings. Only the '%' and '='
-characters are necessary to be escaped.
+The content types "application/grpc-web+proto", "application/grpc-web+json",
+"application/grpc-web-text+proto", and "application/grpc-web-text+json" will
+serve unitary and server-streaming RPCs using the protocol described by the
+grpc-web project. Informally, messages are framed with a 5 byte header where the
+first byte is some flags, and the second through fourth are the message length
+in big endian. Response codes and status messages are sent as HTTP Trailers. The
+"-text" series of content types mean that the whole request and response bodies
+are base64 encoded.
 
 #### type Option
 
@@ -73,23 +90,40 @@ type Option struct {
 
 Option configures some aspect of the handler.
 
-#### func  WithCodeMapper
+#### func  WithProtocol
 
 ```go
-func WithCodeMapper(mapper func(error) string) Option
+func WithProtocol(contentType string, pr Protocol) Option
 ```
-WithCodeMapper sets the function that will be called when the rpc handler
-returns an error to map the error to the json code field. For example, to map
-Twirp errors back to their appropriate code, you could write
+WithProtocol associates the given Protocol with some content type. The match is
+exact, with the special case that the content type "*" is the fallback Protocol
+used when nothing matches.
 
-    func twirpMapper(err error) string {
-    	var te twirp.Error
-    	if errors.As(err, &te) {
-    		return string(te.Code())
-    	}
-    	return "unknown"
-    }
+#### type Protocol
 
-and use it with
+```go
+type Protocol interface {
+	// NewStream takes an incoming request and response writer and returns
+	// a drpc.Stream that should be used for the RPC.
+	NewStream(rw http.ResponseWriter, req *http.Request) Stream
+}
+```
 
-    handler := drpchttp.New(mux, drpchttp.WithCodeMapper(twirpMapper))
+Protocol is used by the handler to create drpc.Streams from incoming requests
+and format responses.
+
+#### type Stream
+
+```go
+type Stream interface {
+	drpc.Stream
+
+	// Finish is passed the possibly-nil error that was generated handling
+	// the RPC and is expected to write any error reporting or otherwise
+	// finalize the request.
+	Finish(err error)
+}
+```
+
+Stream wraps a drpc.Stream type with a Finish method that knows how to send and
+format the error/response to an http request.

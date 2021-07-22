@@ -1,10 +1,14 @@
 .DEFAULT_GOAL = all
 
 .PHONY: all
-all: tidy docs generate lint test
+all: tidy docs generate lint vet test
 
-.PHONY: quick
-quick: generate test
+.PHONY: check
+check: generate vet
+
+.PHONY: tidy
+tidy:
+	./scripts/run.sh '*' go mod tidy
 
 .PHONY: docs
 docs:
@@ -25,12 +29,12 @@ lint:
 	./scripts/run.sh -v 'examples' staticcheck ./...
 	./scripts/run.sh -v 'examples' golangci-lint -j=2 run
 
+.PHONY: vet
+vet:
+	./scripts/run.sh '*' go vet ./...
+
 .PHONY: test
 test:
 	./scripts/run.sh '*'           go test ./...              -race -count=1 -bench=. -benchtime=1x
 	./scripts/run.sh 'integration' go test ./... -tags=gogo   -race -count=1 -bench=. -benchtime=1x
 	./scripts/run.sh 'integration' go test ./... -tags=custom -race -count=1 -bench=. -benchtime=1x
-
-.PHONY: tidy
-tidy:
-	./scripts/run.sh '*' go mod tidy

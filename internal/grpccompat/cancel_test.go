@@ -31,6 +31,7 @@ func TestCancel_ErrorAfterCancel(t *testing.T) {
 		ensure(nil, stream.Send(in(0)))
 	})
 }
+
 func TestCancel_CancelAfterError(t *testing.T) {
 	impl := &serviceImpl{
 		Method4Fn: func(stream ServerMethod4Stream) error {

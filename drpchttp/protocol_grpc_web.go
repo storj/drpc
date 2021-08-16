@@ -87,6 +87,9 @@ func (gws *grpcWebStream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err erro
 var nlSpace = strings.NewReplacer("\n", " ", "\r", " ")
 
 func (gws *grpcWebStream) Finish(err error) {
+	// if there is an error and the code is "0" (Ok) either
+	// because it is unset or explicitly set to 0, then set it
+	// to "2" (Unknown) so that an error status is sent instead.
 	status := strconv.FormatUint(drpcerr.Code(err), 10)
 	if err != nil && status == "0" {
 		status = "2"

@@ -44,8 +44,8 @@
               src = fetchFromGitHub {
                 owner = "storj";
                 repo = "ci";
-                rev = "e92f7f42d44a515670339331b652aa8a7516c390";
-                sha256 = "sha256-n2Rytcuaffy9ftzDT1Nrmi2RWiyWDOf6B4qvIWiVz7M=";
+                rev = "63f7574acdb97dd567c64537228d8582980ec301";
+                sha256 = "sha256-AkrUZbS88BLc3dtWxYkecUNa29slwQ7/feT9+lPWO9g=";
               };
               doCheck = false;
               vendorSha256 = "sha256-6D452YbnkunAfD/M69VmwGDxENmVS72NKj92FTemJR0=";

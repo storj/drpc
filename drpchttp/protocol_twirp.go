@@ -42,9 +42,9 @@ type twirpStream struct {
 	body io.ReadCloser
 	rw   http.ResponseWriter
 
-	out  []byte
-	ine  error
-	oute error
+	response []byte
+	recvErr  error
+	sendErr  error
 }
 
 func setErrorOrEOF(errp *error, err error) {
@@ -59,20 +59,20 @@ func (ts *twirpStream) CloseSend() error         { return nil }
 func (ts *twirpStream) Close() error             { return nil }
 
 func (ts *twirpStream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
-	if ts.oute != nil {
-		return ts.oute
+	if ts.sendErr != nil {
+		return ts.sendErr
 	}
-	ts.out, err = ts.tp.marshal(msg, enc)
-	setErrorOrEOF(&ts.oute, err)
+	ts.response, err = ts.tp.marshal(msg, enc)
+	setErrorOrEOF(&ts.sendErr, err)
 	return err
 }
 
 func (ts *twirpStream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error) {
-	if ts.ine != nil {
-		return ts.ine
+	if ts.recvErr != nil {
+		return ts.recvErr
 	}
 	buf, err := twirpRead(ts.body)
-	setErrorOrEOF(&ts.ine, err)
+	setErrorOrEOF(&ts.recvErr, err)
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (ts *twirpStream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error) 
 func (ts *twirpStream) Finish(err error) {
 	if err == nil {
 		ts.rw.WriteHeader(http.StatusOK)
-		_, _ = ts.rw.Write(ts.out)
+		_, _ = ts.rw.Write(ts.response)
 		return
 	}
 

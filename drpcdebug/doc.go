@@ -3,3 +3,6 @@
 
 // Package drpcdebug provides helpers for debugging.
 package drpcdebug
+
+// Enabled is a constant describing if logs are enabled or not.
+const Enabled = enabled

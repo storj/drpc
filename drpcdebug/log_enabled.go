@@ -23,3 +23,7 @@ func Log(cb func() (who, what, why string)) {
 	logger.Output(2, fmt.Sprintf("%24s | %-26s | %-6s | %s",
 		where, who, what, why))
 }
+
+// this exists to work around a bug in markdown doc generation so that it
+// does not generate two entries for Enabled, one set to true and one to false.
+const enabled = true

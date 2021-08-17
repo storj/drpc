@@ -181,9 +181,9 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
 | ---                                  | ---      |
 | storj.io/drpc/drpchttp               | 475      |
 | storj.io/drpc/cmd/protoc-gen-go-drpc | 418      |
-| storj.io/drpc/drpcstream             | 388      |
+| storj.io/drpc/drpcstream             | 390      |
 | storj.io/drpc/drpcwire               | 332      |
-| storj.io/drpc/drpcmanager            | 280      |
+| storj.io/drpc/drpcmanager            | 300      |
 | storj.io/drpc/drpcmigrate            | 237      |
 | storj.io/drpc/drpcsignal             | 133      |
 | storj.io/drpc/drpcconn               | 116      |
@@ -194,7 +194,7 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
 | storj.io/drpc                        | 47       |
 | storj.io/drpc/drpcerr                | 42       |
 | storj.io/drpc/drpcctx                | 37       |
-| storj.io/drpc/drpcdebug              | 19       |
+| storj.io/drpc/drpcdebug              | 22       |
 | storj.io/drpc/drpcenc                | 15       |
 | storj.io/drpc/internal/drpcopts      | 11       |
-| **Total**                            | **2890** |
+| **Total**                            | **2915** |

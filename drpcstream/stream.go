@@ -95,7 +95,9 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 func (s *Stream) String() string { return fmt.Sprintf("<str %p s:%d>", s, s.id.Stream) }
 
 func (s *Stream) log(what string, cb func() string) {
-	drpcdebug.Log(func() (_, _, _ string) { return s.String(), what, cb() })
+	if drpcdebug.Enabled {
+		drpcdebug.Log(func() (_, _, _ string) { return s.String(), what, cb() })
+	}
 }
 
 //

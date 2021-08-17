@@ -47,17 +47,24 @@ type Manager struct {
 	rd   *drpcwire.Reader
 	opts Options
 
-	sem   drpcsignal.Chan      // held by the active stream
-	sbuf  streamBuffer         // largest stream id created
-	pkts  chan drpcwire.Packet // channel for invoke packets
-	pdone drpcsignal.Chan      // signals when a packets buffers can be reused
-	sterm chan struct{}        // shared signal for stream terminated
+	sem     drpcsignal.Chan      // held by the active stream
+	sbuf    streamBuffer         // largest stream id created
+	pkts    chan drpcwire.Packet // channel for invoke packets
+	pdone   drpcsignal.Chan      // signals when a packets buffers can be reused
+	sterm   chan struct{}        // shared signal for stream terminated
+	streams chan streamInfo      // channel to signal that a stream should start
 
 	sigs struct {
-		term  drpcsignal.Signal // set when the manager should start terminating
-		read  drpcsignal.Signal // set after the goroutine reading from the transport is done
-		tport drpcsignal.Signal // set after the transport has been closed
+		term   drpcsignal.Signal // set when the manager should start terminating
+		stream drpcsignal.Signal // set when the manage streams goroutine is done
+		read   drpcsignal.Signal // set after the goroutine reading from the transport is done
+		tport  drpcsignal.Signal // set after the transport has been closed
 	}
+}
+
+type streamInfo struct {
+	ctx    context.Context
+	stream *drpcstream.Stream
 }
 
 // New returns a new Manager for the transport.
@@ -74,8 +81,9 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 		rd:   drpcwire.NewReader(tr),
 		opts: opts,
 
-		pkts:  make(chan drpcwire.Packet),
-		sterm: make(chan struct{}, 1),
+		pkts:    make(chan drpcwire.Packet),
+		sterm:   make(chan struct{}, 1),
+		streams: make(chan streamInfo),
 	}
 
 	// initialize the stream buffer
@@ -93,6 +101,7 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 	drpcopts.SetStreamTerm(&m.opts.Stream.Internal, m.sterm)
 
 	go m.manageReader()
+	go m.manageStreams()
 
 	return m
 }
@@ -101,7 +110,9 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 func (m *Manager) String() string { return fmt.Sprintf("<man %p>", m) }
 
 func (m *Manager) log(what string, cb func() string) {
-	drpcdebug.Log(func() (_, _, _ string) { return m.String(), what, cb() })
+	if drpcdebug.Enabled {
+		drpcdebug.Log(func() (_, _, _ string) { return m.String(), what, cb() })
+	}
 }
 
 //
@@ -244,8 +255,24 @@ func (m *Manager) manageReader() {
 func (m *Manager) newStream(ctx context.Context, sid uint64) *drpcstream.Stream {
 	stream := drpcstream.NewWithOptions(ctx, sid, m.wr, m.opts.Stream)
 	m.sbuf.Set(stream)
-	go m.manageStream(ctx, stream)
+	m.streams <- streamInfo{ctx: ctx, stream: stream}
 	return stream
+}
+
+// manageStreams reads from the streams channel for stream infos and runs the
+// manageStream function on them.
+func (m *Manager) manageStreams() {
+	defer m.sigs.stream.Set(nil)
+
+	for {
+		select {
+		case si := <-m.streams:
+			m.manageStream(si.ctx, si.stream)
+
+		case <-m.sigs.term.Signal():
+			return
+		}
+	}
 }
 
 // manageStream watches the context and the stream and returns when the stream is
@@ -288,12 +315,9 @@ func (m *Manager) Closed() <-chan struct{} {
 func (m *Manager) Close() error {
 	m.terminate(managerClosed.New("Close called"))
 
+	m.sigs.stream.Wait()
 	m.sigs.read.Wait()
 	m.sigs.tport.Wait()
-
-	// wait for any active streams to exit
-	m.sem.Send()
-	m.sem.Recv()
 
 	return m.sigs.tport.Err()
 }

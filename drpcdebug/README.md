@@ -6,6 +6,11 @@ Package drpcdebug provides helpers for debugging.
 
 ## Usage
 
+```go
+const Enabled = enabled
+```
+Enabled is a constant describing if logs are enabled or not.
+
 #### func  Log
 
 ```go

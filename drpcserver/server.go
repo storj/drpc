@@ -77,7 +77,9 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			// TODO(jeff): temporary errors?
+			if isTemporary(err) {
+				continue
+			}
 			select {
 			case <-ctx.Done():
 				tracker.Wait()

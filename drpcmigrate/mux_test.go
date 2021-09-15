@@ -40,10 +40,12 @@ func TestMux(t *testing.T) {
 	)
 
 	mux := NewListenMux(lis, len("prefixN"))
+	lis1 := mux.Route("prefix1")
+	lis2 := mux.Route("prefix2")
 
 	lisErrs := make(chan error, 3)
-	go func() { lisErrs <- run(mux.Route("prefix1"), "data1") }()
-	go func() { lisErrs <- run(mux.Route("prefix2"), "data2") }()
+	go func() { lisErrs <- run(lis1, "data1") }()
+	go func() { lisErrs <- run(lis2, "data2") }()
 	go func() { lisErrs <- run(mux.Default(), "prefix3data3") }()
 
 	muxErrs := make(chan error, 1)

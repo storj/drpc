@@ -252,11 +252,17 @@ func (m *Manager) manageReader() {
 //
 
 // newStream creates a stream value with the appropriate configuration for this manager.
-func (m *Manager) newStream(ctx context.Context, sid uint64) *drpcstream.Stream {
+func (m *Manager) newStream(ctx context.Context, sid uint64) (*drpcstream.Stream, error) {
 	stream := drpcstream.NewWithOptions(ctx, sid, m.wr, m.opts.Stream)
-	m.sbuf.Set(stream)
-	m.streams <- streamInfo{ctx: ctx, stream: stream}
-	return stream
+	select {
+	case m.streams <- streamInfo{ctx: ctx, stream: stream}:
+		m.sbuf.Set(stream)
+		m.log("STREAM", stream.String)
+		return stream, nil
+
+	case <-m.sigs.term.Signal():
+		return nil, m.sigs.term.Err()
+	}
 }
 
 // manageStreams reads from the streams channel for stream infos and runs the
@@ -328,9 +334,7 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 		return nil, err
 	}
 
-	stream = m.newStream(ctx, m.sbuf.Get().ID()+1)
-	m.log("NEWCLI", stream.String)
-	return stream, nil
+	return m.newStream(ctx, m.sbuf.Get().ID()+1)
 }
 
 // NewServerStream starts a stream on the managed transport for use by a server. It does
@@ -388,9 +392,8 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 					ctx = drpcmetadata.AddPairs(ctx, meta)
 				}
 
-				stream := m.newStream(ctx, pkt.ID.Stream)
-				m.log("NEWSRV", stream.String)
-				return stream, rpc, nil
+				stream, err := m.newStream(ctx, pkt.ID.Stream)
+				return stream, rpc, err
 
 			default:
 				// this should never happen, but defensive.

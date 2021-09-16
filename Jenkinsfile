@@ -2,7 +2,8 @@ pipeline {
     agent {
         docker {
             label 'main'
-            image docker.build("storj-ci", "--pull git://github.com/storj/ci.git#main").id
+            image 'storjlabs/ci:latest'
+            alwaysPull true
             args '-u root:root --cap-add SYS_PTRACE -v "/tmp/gomod":/go/pkg/mod'
         }
     }
@@ -31,6 +32,12 @@ pipeline {
         stage('Lint') {
             steps {
                 sh 'make lint'
+            }
+        }
+
+        stage('Vet') {
+            steps {
+                sh 'make vet'
             }
         }
     }

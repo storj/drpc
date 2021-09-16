@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"syscall"
 )
 
 const (
@@ -30,7 +31,7 @@ func isTemporary(err error) bool {
 	}
 
 	var sErr *os.SyscallError
-	if errors.As(nErr.Err, &sErr) {
+	if errors.As(err, &sErr) {
 		switch sErr.Err {
 		case _WSAENETRESET,
 			_WSAEMFILE,

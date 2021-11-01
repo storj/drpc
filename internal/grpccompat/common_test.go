@@ -226,6 +226,10 @@ func checkGoroutines(t *testing.T) {
 func in(n int64) *In   { return &In{In: n} }
 func out(n int64) *Out { return &Out{Out: n} }
 
+func asOut(in *In) *Out {
+	return &Out{Out: in.In, Buf: in.Buf, Opt: in.Opt}
+}
+
 func createDRPCConnectionWithOptions(server DRPCServiceServer, opts drpcmanager.Options) (DRPCServiceClient, func()) {
 	ctx := drpcctx.NewTracker(context.Background())
 	c1, c2 := pipe()

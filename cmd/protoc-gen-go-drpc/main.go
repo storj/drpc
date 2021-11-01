@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/pluginpb"
 )
 
 type config struct {
@@ -33,6 +34,7 @@ func main() {
 			}
 			generateFile(plugin, f, conf)
 		}
+		plugin.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		return nil
 	})
 }

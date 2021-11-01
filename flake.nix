@@ -21,7 +21,7 @@
             ]));
           };
           subPackages = [ "cmd/protoc-gen-go-drpc" ];
-          vendorSha256 = "sha256-gE5b0cmq4lHEY1Ar0dCERbFLRvptNESZqija4Ruw9z0=";
+          vendorSha256 = "sha256-3kIFjZDi2qnEDXDY0ozvylxJlBePkK7IPFOVipsfLBU=";
         };
 
         devShell =
@@ -77,8 +77,8 @@
               src = fetchFromGitHub {
                 owner = "protocolbuffers";
                 repo = "protobuf-go";
-                rev = "v1.26.0";
-                sha256 = "sha256-n2LHI8DXQFFWhTPOFCegBgwi/0tFvRE226AZfRW8Bnc=";
+                rev = "v1.27.1";
+                sha256 = "sha256-wkUvMsoJP38KMD5b3Fz65R1cnpeTtDcVqgE7tNlZXys=";
               };
               doCheck = false;
               vendorSha256 = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
@@ -128,7 +128,7 @@
             buildInputs = [
               defaultPackage
 
-              go
+              go_1_17
               golangci-lint
               protobuf
               graphviz

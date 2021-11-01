@@ -5,7 +5,7 @@ package grpccompat
 
 import (
 	"context"
-	errors "errors"
+	"errors"
 	"io"
 	"testing"
 
@@ -15,10 +15,6 @@ import (
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcstream"
 )
-
-func asOut(in *In) *Out {
-	return &Out{Out: in.In, Buf: in.Buf}
-}
 
 var benchmarkImpl = &serviceImpl{
 	Method1Fn: func(ctx context.Context, in *In) (*Out, error) {

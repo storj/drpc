@@ -3,7 +3,7 @@ module storj.io/drpc/examples/drpc
 go 1.17
 
 require (
-	google.golang.org/protobuf v1.26.0
+	google.golang.org/protobuf v1.27.1
 	storj.io/drpc v0.0.17
 )
 

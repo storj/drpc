@@ -31,6 +31,11 @@ type Options struct {
 	// call RawFlush dynamically.
 	ManualFlush bool
 
+	// MaximumBufferSize causes the Stream to drop any internal buffers that
+	// are larger than this amount to control maximum memory usage at the
+	// expense of more allocations. 0 is unlimited.
+	MaximumBufferSize int
+
 	// Internal contains options that are for internal use only.
 	Internal drpcopts.Stream
 }
@@ -385,11 +390,14 @@ func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
 	s.write.Lock()
 	defer s.write.Unlock()
 
-	s.wbuf, err = drpcenc.MarshalAppend(msg, enc, s.wbuf[:0])
+	wbuf, err := drpcenc.MarshalAppend(msg, enc, s.wbuf[:0])
 	if err != nil {
 		return errs.Wrap(err)
 	}
-	if err := s.rawWriteLocked(drpcwire.KindMessage, s.wbuf); err != nil {
+	if s.opts.MaximumBufferSize == 0 || len(wbuf) < s.opts.MaximumBufferSize {
+		s.wbuf = wbuf
+	}
+	if err := s.rawWriteLocked(drpcwire.KindMessage, wbuf); err != nil {
 		return err
 	}
 	if !s.opts.ManualFlush {

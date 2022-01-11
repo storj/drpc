@@ -21,6 +21,11 @@ type Options struct {
 	// call RawFlush dynamically.
 	ManualFlush bool
 
+	// MaximumBufferSize causes the Stream to drop any internal buffers that
+	// are larger than this amount to control maximum memory usage at the
+	// expense of more allocations. 0 is unlimited.
+	MaximumBufferSize int
+
 	// Internal contains options that are for internal use only.
 	Internal drpcopts.Stream
 }

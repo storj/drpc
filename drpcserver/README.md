@@ -12,6 +12,11 @@ Package drpcserver allows one to execute registered rpcs.
 type Options struct {
 	// Manager controls the options we pass to the managers this server creates.
 	Manager drpcmanager.Options
+
+	// Log is called when errors happen that can not be returned up, like
+	// temporary network errors when accepting connections, or errors
+	// handling individual clients. It is not called if nil.
+	Log func(error)
 }
 ```
 

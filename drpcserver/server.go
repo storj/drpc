@@ -6,6 +6,7 @@ package drpcserver
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/zeebo/errs"
 
@@ -20,6 +21,11 @@ import (
 type Options struct {
 	// Manager controls the options we pass to the managers this server creates.
 	Manager drpcmanager.Options
+
+	// Log is called when errors happen that can not be returned up, like
+	// temporary network errors when accepting connections, or errors
+	// handling individual clients. It is not called if nil.
+	Log func(error)
 }
 
 // Server is an implementation of drpc.Server to serve drpc connections.
@@ -67,6 +73,7 @@ func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
 // on new connections.
 func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
 	tracker := drpcctx.NewTracker(ctx)
+	defer tracker.Wait()
 	defer tracker.Cancel()
 
 	tracker.Run(func(ctx context.Context) {
@@ -77,24 +84,35 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+
 			if isTemporary(err) {
+				if s.opts.Log != nil {
+					s.opts.Log(err)
+				}
+
+				t := time.NewTimer(500 * time.Millisecond)
+				select {
+				case <-t.C:
+				case <-ctx.Done():
+					t.Stop()
+					return nil
+				}
+
 				continue
 			}
-			select {
-			case <-ctx.Done():
-				tracker.Wait()
-				return nil
-			default:
-				tracker.Cancel()
-				tracker.Wait()
-				return errs.Wrap(err)
-			}
+
+			return errs.Wrap(err)
 		}
 
 		// TODO(jeff): connection limits?
 		tracker.Run(func(ctx context.Context) {
-			// TODO(jeff): handle this error?
-			_ = s.ServeOne(ctx, conn)
+			err := s.ServeOne(ctx, conn)
+			if err != nil && s.opts.Log != nil {
+				s.opts.Log(err)
+			}
 		})
 	}
 }

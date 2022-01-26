@@ -169,3 +169,29 @@ func TestStream_ContextCancel(t *testing.T) {
 	<-st.Context().Done()
 	<-child.Done()
 }
+
+func TestStream_ConcurrentCloseCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	pr, pw := io.Pipe()
+	defer func() { _ = pr.Close() }()
+	defer func() { _ = pw.Close() }()
+
+	st := New(ctx, 0, drpcwire.NewWriter(pw, 0))
+
+	// start the Close call
+	errch := make(chan error, 1)
+	go func() { errch <- st.Close() }()
+
+	// wait for the close to begin writing
+	_, err := pr.Read(make([]byte, 1))
+	assert.NoError(t, err)
+
+	// cancel the context and close the transport
+	st.Cancel(context.Canceled)
+	assert.NoError(t, pw.Close())
+
+	// we should always receive the canceled error
+	assert.That(t, errors.Is(<-errch, context.Canceled))
+}

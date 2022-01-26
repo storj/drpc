@@ -434,7 +434,7 @@ var (
 // SendError terminates the stream and sends the error to the remote. It is a no-op if
 // the stream is already terminated.
 func (s *Stream) SendError(serr error) (err error) {
-	s.log("CALL", func() string { return fmt.Sprintf("SendError(%v)", err) })
+	s.log("CALL", func() string { return fmt.Sprintf("SendError(%v)", serr) })
 
 	s.mu.Lock()
 	if s.sigs.term.IsSet() {
@@ -506,7 +506,7 @@ func (s *Stream) Cancel(err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.sigs.term.IsSet() {
+	if s.sigs.term.IsSet() && s.write.Unlocked() && s.read.Unlocked() {
 		return
 	}
 

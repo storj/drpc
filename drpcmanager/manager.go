@@ -252,8 +252,11 @@ func (m *Manager) manageReader() {
 //
 
 // newStream creates a stream value with the appropriate configuration for this manager.
-func (m *Manager) newStream(ctx context.Context, sid uint64) (*drpcstream.Stream, error) {
-	stream := drpcstream.NewWithOptions(ctx, sid, m.wr, m.opts.Stream)
+func (m *Manager) newStream(ctx context.Context, sid uint64, kind string) (*drpcstream.Stream, error) {
+	opts := m.opts.Stream
+	drpcopts.SetStreamKind(&opts.Internal, kind)
+
+	stream := drpcstream.NewWithOptions(ctx, sid, m.wr, opts)
 	select {
 	case m.streams <- streamInfo{ctx: ctx, stream: stream}:
 		m.sbuf.Set(stream)
@@ -334,7 +337,7 @@ func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Strea
 		return nil, err
 	}
 
-	return m.newStream(ctx, m.sbuf.Get().ID()+1)
+	return m.newStream(ctx, m.sbuf.Get().ID()+1, "cli")
 }
 
 // NewServerStream starts a stream on the managed transport for use by a server. It does
@@ -392,7 +395,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 					ctx = drpcmetadata.AddPairs(ctx, meta)
 				}
 
-				stream, err := m.newStream(ctx, pkt.ID.Stream)
+				stream, err := m.newStream(ctx, pkt.ID.Stream, "srv")
 				return stream, rpc, err
 
 			default:

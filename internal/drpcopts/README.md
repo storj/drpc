@@ -9,6 +9,13 @@ users of the library that are not required to be backward compatible.
 
 ## Usage
 
+#### func  GetStreamKind
+
+```go
+func GetStreamKind(opts *Stream) string
+```
+GetStreamKind returns the kind debug string stored in the options.
+
 #### func  GetStreamTerm
 
 ```go
@@ -22,6 +29,13 @@ GetStreamTerm returns the chan<- struct{} stored in the options.
 func GetStreamTransport(opts *Stream) drpc.Transport
 ```
 GetStreamTransport returns the drpc.Transport stored in the options.
+
+#### func  SetStreamKind
+
+```go
+func SetStreamKind(opts *Stream, kind string)
+```
+SetStreamKind sets the kind debug string stored in the options.
 
 #### func  SetStreamTerm
 

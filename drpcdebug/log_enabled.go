@@ -1,6 +1,7 @@
 // Copyright (C) 2019 Storj Labs, Inc.
 // See LICENSE for copying information.
 
+//go:build debug
 // +build debug
 
 package drpcdebug
@@ -20,7 +21,7 @@ func Log(cb func() (who, what, why string)) {
 	_, file, line, _ := runtime.Caller(1)
 	where := fmt.Sprintf("%s:%d", filepath.Base(file), line)
 	who, what, why := cb()
-	logger.Output(2, fmt.Sprintf("%24s | %-26s | %-6s | %s",
+	logger.Output(2, fmt.Sprintf("%24s | %-32s | %-6s | %s",
 		where, who, what, why))
 }
 

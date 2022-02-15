@@ -97,7 +97,11 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 }
 
 // String returns a string representation of the stream.
-func (s *Stream) String() string { return fmt.Sprintf("<str %p s:%d>", s, s.id.Stream) }
+func (s *Stream) String() string {
+	return fmt.Sprintf("<str %p s:%d k:%s>",
+		s, s.id.Stream, drpcopts.GetStreamKind(&s.opts.Internal),
+	)
+}
 
 func (s *Stream) log(what string, cb func() string) {
 	if drpcdebug.Enabled {

@@ -35,6 +35,10 @@ func (pb *packetBuffer) Put(data []byte) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
+	if pb.err != nil {
+		return
+	}
+
 	pb.data = data
 	pb.set = true
 	pb.cond.Broadcast()

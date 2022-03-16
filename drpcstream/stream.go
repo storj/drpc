@@ -199,7 +199,7 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
 	case drpcwire.KindClose:
 		s.sigs.recv.Set(io.EOF)
 		s.pbuf.Close(io.EOF)
-		s.terminate(drpc.Error.New("remote closed the stream"))
+		s.terminate(drpc.ClosedError.New("remote closed the stream"))
 		return nil
 
 	case drpcwire.KindCloseSend:

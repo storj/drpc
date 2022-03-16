@@ -11,7 +11,9 @@ import (
 	"testing"
 
 	"github.com/zeebo/assert"
+	"github.com/zeebo/errs"
 
+	"storj.io/drpc"
 	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcwire"
 )
@@ -27,22 +29,26 @@ func TestStream_StateTransitions(t *testing.T) {
 		return st.HandlePacket(drpcwire.Packet{Kind: kind})
 	}
 
-	checkErrs := func(t *testing.T, exp, got error) {
+	checkErrs := func(t *testing.T, exp interface{}, got error) {
 		t.Helper()
 
-		switch exp { //nolint: errorlint // testing for specific errors
-		case any:
-			assert.Error(t, got)
-		case nil:
-			assert.NoError(t, got)
-		default:
-			assert.Equal(t, exp, got)
+		if cl, ok := exp.(*errs.Class); ok {
+			assert.That(t, cl.Has(got))
+		} else {
+			switch exp {
+			case any:
+				assert.Error(t, got)
+			case nil:
+				assert.NoError(t, got)
+			default:
+				assert.Equal(t, exp, got)
+			}
 		}
 	}
 
 	cases := []struct {
 		Op   func(st *Stream) error
-		Send error
+		Send interface{}
 		Recv error
 	}{
 		{ // send close
@@ -77,7 +83,7 @@ func TestStream_StateTransitions(t *testing.T) {
 
 		{ // recv close
 			Op:   func(st *Stream) error { return handlePacket(st, drpcwire.KindClose) },
-			Send: any,
+			Send: &drpc.ClosedError,
 			Recv: io.EOF,
 		},
 

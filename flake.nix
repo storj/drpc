@@ -85,6 +85,19 @@
               modRoot = "./cmd/protoc-gen-go";
             };
 
+            protoc-gen-gogo = buildGoPackage {
+              name = "protoc-gen-gogo";
+              src = fetchFromGitHub {
+                owner = "gogo";
+                repo = "protobuf";
+                rev = "v1.3.2";
+                sha256 = "sha256-CoUqgLFnLNCS9OxKFS7XwjE17SlH6iL1Kgv+0uEK2zU=";
+              };
+              doCheck = false;
+              goPackagePath = "github.com/gogo/protobuf";
+              subPackages = [ "./protoc-gen-gogo" ];
+            };
+
             protoc-gen-twirp = buildGoPackage {
               name = "protoc-gen-twirp";
               src = fetchFromGitHub {
@@ -137,6 +150,7 @@
 
               devtools.protoc-gen-go-grpc
               devtools.protoc-gen-go
+              devtools.protoc-gen-gogo
               devtools.protoc-gen-twirp
               devtools.staticcheck
               devtools.ci

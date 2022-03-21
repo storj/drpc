@@ -92,10 +92,14 @@ func (ts *twirpStream) Finish(err error) {
 		status = 500
 	}
 
-	data, _ := json.MarshalIndent(map[string]interface{}{
+	data, err := json.MarshalIndent(map[string]interface{}{
 		"code": code,
 		"msg":  err.Error(),
 	}, "", "    ")
+	if err != nil {
+		http.Error(ts.rw, "", http.StatusInternalServerError)
+		return
+	}
 
 	ts.rw.Header().Set("Content-Type", "application/json")
 	ts.rw.WriteHeader(status)

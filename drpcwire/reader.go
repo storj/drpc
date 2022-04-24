@@ -9,8 +9,16 @@ import (
 	"storj.io/drpc"
 )
 
+// ReaderOptions controls configuration settings for a reader.
+type ReaderOptions struct {
+	// MaximumBufferSize controls the maximum size of buffered
+	// packet data.
+	MaximumBufferSize int
+}
+
 // Reader reconstructs packets from frames read from an io.Reader.
 type Reader struct {
+	opts ReaderOptions
 	r    io.Reader
 	curr []byte
 	buf  []byte
@@ -21,7 +29,18 @@ const maximumFrameSize = 4<<20 + 1 + 9 + 9 + 9
 
 // NewReader constructs a Reader to read Packets from the io.Reader.
 func NewReader(r io.Reader) *Reader {
+	return NewReaderWithOptions(r, ReaderOptions{})
+}
+
+// NewReaderWithOptions constructs a Reader to read Packets from
+// the io.Reader. It uses the provided options to manage buffering.
+func NewReaderWithOptions(r io.Reader, opts ReaderOptions) *Reader {
+	if opts.MaximumBufferSize == 0 {
+		// Default to 4MB.
+		opts.MaximumBufferSize = 4 << 20
+	}
 	return &Reader{
+		opts: opts,
 		r:    r,
 		curr: make([]byte, 0, 64*1024),
 		id:   ID{Stream: 1, Message: 1},
@@ -116,7 +135,7 @@ func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 		pkt.Data = append(pkt.Data, fr.Data...)
 
 		switch {
-		case len(pkt.Data) > 4<<20:
+		case len(pkt.Data) > r.opts.MaximumBufferSize:
 			return Packet{}, drpc.ProtocolError.New("data overflow")
 
 		case fr.Done:

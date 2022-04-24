@@ -291,7 +291,8 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 
 	select {
 	case <-m.sigs.term.Signal():
-		stream.Cancel(context.Canceled)
+		err, _ := m.sigs.term.Get()
+		stream.Cancel(err)
 		<-m.sterm
 		return
 

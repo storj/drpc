@@ -5,6 +5,8 @@ package integration
 
 import (
 	"context"
+	"errors"
+	"io"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -80,13 +82,15 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 
 	// create a channel to signal when the rpc has started
 	started := make(chan struct{})
-	errs := make(chan error, 2)
+	errs := make(chan error, 1)
+	closed := make(chan struct{})
 
 	// create a server that signals then waits for the context to die
 	cli, close := createConnection(impl{
 		Method2Fn: func(stream DRPCService_Method2Stream) error {
 			started <- struct{}{}
 			errs <- stream.MsgRecv(nil, Encoding)
+			closed <- struct{}{}
 			return nil
 		},
 	})
@@ -96,6 +100,7 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	ctx.Run(func(ctx context.Context) {
 		stream, _ := cli.Method2(ctx)
 		started <- struct{}{}
+		<-closed
 		errs <- stream.MsgRecv(nil, Encoding)
 	})
 
@@ -111,6 +116,6 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	assert.NoError(t, cli.DRPCConn().(*drpcconn.Conn).Transport().Close())
 
 	// ensure both of the errors we sent are canceled
-	assert.Equal(t, <-errs, context.Canceled)
-	assert.Equal(t, <-errs, context.Canceled)
+	assert.True(t, errors.Is(<-errs, io.EOF))
+	assert.True(t, errors.Is(<-errs, io.ErrClosedPipe))
 }

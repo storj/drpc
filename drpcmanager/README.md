@@ -78,6 +78,9 @@ type Options struct {
 	// flushing. Normal writes to streams typically issue a flush explicitly.
 	WriterBufferSize int
 
+	// Reader are passed to any readers the manager creates.
+	Reader drpcwire.ReaderOptions
+
 	// Stream are passed to any streams the manager creates.
 	Stream drpcstream.Options
 

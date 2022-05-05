@@ -210,6 +210,14 @@ func NewReader(r io.Reader) *Reader
 ```
 NewReader constructs a Reader to read Packets from the io.Reader.
 
+#### func  NewReaderWithOptions
+
+```go
+func NewReaderWithOptions(r io.Reader, opts ReaderOptions) *Reader
+```
+NewReaderWithOptions constructs a Reader to read Packets from the io.Reader. It
+uses the provided options to manage buffering.
+
 #### func (*Reader) ReadPacket
 
 ```go
@@ -229,6 +237,18 @@ allows for easier asynchronous interrupts. If the amount of data in the Packet
 becomes too large, an error is returned. The returned packet's Data field is
 constructed by appending to the provided buf after it has been resliced to be
 zero length.
+
+#### type ReaderOptions
+
+```go
+type ReaderOptions struct {
+	// MaximumBufferSize controls the maximum size of buffered
+	// packet data.
+	MaximumBufferSize int
+}
+```
+
+ReaderOptions controls configuration settings for a reader.
 
 #### type Writer
 

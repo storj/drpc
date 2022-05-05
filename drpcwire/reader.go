@@ -25,7 +25,13 @@ type Reader struct {
 	id   ID
 }
 
-const maximumFrameSize = 4<<20 + 1 + 9 + 9 + 9
+// A frame adds at most this many bytes of overhead to some data by prefixing
+// the data with:
+//     1: control byte
+//     9: maximum varint stream id
+//     9: maximum varint message id
+//     9: maximum varint data length
+const maxFrameOverhead = 1 + 9 + 9 + 9
 
 // NewReader constructs a Reader to read Packets from the io.Reader.
 func NewReader(r io.Reader) *Reader {
@@ -36,9 +42,9 @@ func NewReader(r io.Reader) *Reader {
 // the io.Reader. It uses the provided options to manage buffering.
 func NewReaderWithOptions(r io.Reader, opts ReaderOptions) *Reader {
 	if opts.MaximumBufferSize == 0 {
-		// Default to 4MB.
-		opts.MaximumBufferSize = 4 << 20
+		opts.MaximumBufferSize = 4 << 20 // Default to 4MiB.
 	}
+
 	return &Reader{
 		opts: opts,
 		r:    r,
@@ -95,7 +101,7 @@ func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 			}
 			r.buf = r.buf[:ncap]
 
-			if len(r.buf) > maximumFrameSize {
+			if len(r.buf)-maxFrameOverhead > r.opts.MaximumBufferSize {
 				return Packet{}, drpc.ProtocolError.New("data overflow")
 			}
 

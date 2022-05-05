@@ -20,6 +20,7 @@ func TestReader(t *testing.T) {
 		Packets []Packet
 		Frames  []Frame
 		Error   string
+		Options ReaderOptions
 	}
 
 	p := func(kind Kind, id uint64, data string) Packet {
@@ -53,6 +54,9 @@ func TestReader(t *testing.T) {
 	}
 	megaFrames = append(megaFrames, f(KindMessage, 1, "", true, false))
 
+	// 1 more than the maximum frame overhead is the minimum required to overflow
+	const overFrame = maxFrameOverhead + 1
+
 	cases := []testCase{
 		m(p(KindMessage, 1, "hello world"),
 			f(KindMessage, 1, "hello", false, false),
@@ -77,15 +81,30 @@ func TestReader(t *testing.T) {
 		},
 
 		{ // a single frame that's too large
-			Packets: []Packet{},
-			Frames:  []Frame{f(KindMessage, 1, strings.Repeat("X", 4<<20+22), true, false)},
+			Frames: []Frame{f(KindMessage, 1, strings.Repeat("X", 4<<20+overFrame), true, false)},
+			Error:  "data overflow",
+		},
+
+		{ // a single frame that's too large with limited size
+			Frames:  []Frame{f(KindMessage, 1, strings.Repeat("X", 1000+overFrame), true, false)},
 			Error:   "data overflow",
+			Options: ReaderOptions{MaximumBufferSize: 1000},
 		},
 
 		{ // multiple frames that make too large a packet
-			Packets: []Packet{},
-			Frames:  megaFrames,
+			Frames: megaFrames,
+			Error:  "data overflow",
+		},
+
+		{ // multiple frames that make too large a packet with limited size
+			Frames: []Frame{
+				f(KindMessage, 1, strings.Repeat("X", 500), false, false),
+				f(KindMessage, 1, strings.Repeat("X", 400), false, false),
+				f(KindMessage, 1, strings.Repeat("X", 100), false, false),
+				f(KindMessage, 1, strings.Repeat("X", overFrame), true, false),
+			},
 			Error:   "data overflow",
+			Options: ReaderOptions{MaximumBufferSize: 1000},
 		},
 
 		{ // Control bit is ignored
@@ -135,7 +154,7 @@ func TestReader(t *testing.T) {
 			buf = AppendFrame(buf, fr)
 		}
 
-		rd := NewReader(bytes.NewReader(buf))
+		rd := NewReaderWithOptions(bytes.NewReader(buf), tc.Options)
 		for _, expPkt := range tc.Packets {
 			pkt, err := rd.ReadPacket()
 			assert.NoError(t, err)

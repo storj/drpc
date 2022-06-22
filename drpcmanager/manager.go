@@ -5,7 +5,9 @@ package drpcmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/zeebo/errs"
@@ -294,7 +296,11 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 
 	select {
 	case <-m.sigs.term.Signal():
-		stream.Cancel(context.Canceled)
+		err := m.sigs.term.Err()
+		if errors.Is(err, io.EOF) {
+			err = context.Canceled
+		}
+		stream.Cancel(err)
 		<-m.sterm
 		return
 

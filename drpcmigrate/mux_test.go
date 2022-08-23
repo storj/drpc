@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/errs"
@@ -59,6 +60,81 @@ func TestMux(t *testing.T) {
 
 	for i := 0; i < 1; i++ {
 		assert.NoError(t, <-muxErrs)
+	}
+}
+
+func TestMuxLoopClose(t *testing.T) {
+	timeout := time.NewTimer(5 * time.Second)
+	processed := make(chan struct{})
+
+	run := func(lis net.Listener) error {
+		for {
+			_, err := lis.Accept()
+			if err != nil {
+				return err
+			}
+			processed <- struct{}{}
+			// usually conn is passed here to a new go routine
+			// assuming it's done without error
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	lis := newFakeListener(
+		newPrefixConn([]byte("prefix1data1"), nil),
+		newPrefixConn([]byte("prefix2data2"), nil),
+		newPrefixConn([]byte("prefix3data3"), nil),
+	)
+
+	mux := NewListenMux(lis, len("prefixN"))
+	lis1 := mux.Route("prefix1")
+	lis2 := mux.Route("prefix2")
+
+	expectedErrs := make(chan error, 3)
+	muxErr := make(chan error, 1)
+	go func() {
+		expectedErrs <- run(lis1)
+	}()
+	go func() {
+		expectedErrs <- run(lis2)
+
+	}()
+	go func() {
+		expectedErrs <- run(mux.Default())
+	}()
+
+	go func() {
+		muxErr <- mux.Run(ctx)
+	}()
+
+	for i := 0; i < 3; i++ {
+		select {
+		case <-processed:
+		case <-timeout.C:
+			t.Fatal("test is timed out")
+		}
+
+	}
+
+	// stopping the mux
+	cancel()
+
+	select {
+	case err := <-muxErr:
+		assert.NoError(t, err)
+	case <-timeout.C:
+		t.Fatal("test is timed out")
+	}
+
+	for i := 0; i < 3; i++ {
+		select {
+		case err := <-expectedErrs:
+			assert.Error(t, err)
+		case <-timeout.C:
+			t.Fatal("test is timed out")
+		}
 	}
 }
 

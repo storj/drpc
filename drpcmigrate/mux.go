@@ -95,7 +95,8 @@ func (m *ListenMux) Run(ctx context.Context) error {
 	for _, lis := range m.routes {
 		<-lis.done
 	}
-
+	m.def.err = Closed
+	close(m.def.done)
 	return m.err
 }
 

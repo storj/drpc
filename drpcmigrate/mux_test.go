@@ -94,20 +94,11 @@ func TestMuxLoopClose(t *testing.T) {
 
 	expectedErrs := make(chan error, 3)
 	muxErr := make(chan error, 1)
-	go func() {
-		expectedErrs <- run(lis1)
-	}()
-	go func() {
-		expectedErrs <- run(lis2)
+	go func() { expectedErrs <- run(lis1) }()
+	go func() { expectedErrs <- run(lis2) }()
+	go func() { expectedErrs <- run(mux.Default()) }()
 
-	}()
-	go func() {
-		expectedErrs <- run(mux.Default())
-	}()
-
-	go func() {
-		muxErr <- mux.Run(ctx)
-	}()
+	go func() { muxErr <- mux.Run(ctx) }()
 
 	for i := 0; i < 3; i++ {
 		select {
@@ -115,7 +106,6 @@ func TestMuxLoopClose(t *testing.T) {
 		case <-timeout.C:
 			t.Fatal("test is timed out")
 		}
-
 	}
 
 	// stopping the mux

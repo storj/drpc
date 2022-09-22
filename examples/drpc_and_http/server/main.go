@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"golang.org/x/sync/errgroup"
+
 	"storj.io/drpc/drpchttp"
 	"storj.io/drpc/drpcmigrate"
 	"storj.io/drpc/drpcmux"
@@ -58,6 +59,10 @@ func Main(ctx context.Context) error {
 	// create a listen mux that evalutes enough bytes to recognize the DRPC header
 	lisMux := drpcmigrate.NewListenMux(lis, len(drpcmigrate.DRPCHeader))
 
+	// grap the listen mux route for the DRPC Header and default handler
+	drpcLis := lisMux.Route(drpcmigrate.DRPCHeader)
+	httpLis := lisMux.Default()
+
 	// we're going to run the different protocol servers in parallel, so
 	// make an errgroup
 	var group errgroup.Group
@@ -66,9 +71,6 @@ func Main(ctx context.Context) error {
 	group.Go(func() error {
 		// create a drpc server
 		s := drpcserver.New(m)
-
-		// grap the listen mux route for the DRPC Header
-		drpcLis := lisMux.Route(drpcmigrate.DRPCHeader)
 
 		// run the server
 		// N.B.: if you want TLS, you need to wrap the drpcLis net.Listener
@@ -82,7 +84,7 @@ func Main(ctx context.Context) error {
 		s := http.Server{Handler: drpchttp.New(m)}
 
 		// run the server
-		return s.Serve(lisMux.Default())
+		return s.Serve(httpLis)
 	})
 
 	// run the listen mux

@@ -36,29 +36,16 @@ func Main(ctx context.Context) error {
 
 	// parse the response
 	var data struct {
-		Status string `json:"status"`
-
-		Response struct {
-			Cookie struct {
-				Type string `json:"type"`
-			} `json:"cookie"`
-		} `json:"response"`
-
-		Error string `json:"error"`
-		Code  int    `json:"code"`
+		Cookie struct {
+			Type string `json:"type"`
+		} `json:"cookie"`
 	}
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return err
 	}
 
-	// confirm the rpc layer worked okay
-	if data.Status != "ok" {
-		return fmt.Errorf("unexpected rpc status %q %q %q",
-			data.Status, data.Code, data.Error)
-	}
-
 	// check the results
-	_, err = fmt.Println(data.Response.Cookie.Type)
+	_, err = fmt.Println(data.Cookie.Type)
 	return err
 }

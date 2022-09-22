@@ -27,10 +27,11 @@ type Reader struct {
 
 // A frame adds at most this many bytes of overhead to some data by prefixing
 // the data with:
-//     1: control byte
-//     9: maximum varint stream id
-//     9: maximum varint message id
-//     9: maximum varint data length
+//
+//	1: control byte
+//	9: maximum varint stream id
+//	9: maximum varint message id
+//	9: maximum varint data length
 const maxFrameOverhead = 1 + 9 + 9 + 9
 
 // NewReader constructs a Reader to read Packets from the io.Reader.
@@ -48,7 +49,9 @@ func NewReaderWithOptions(r io.Reader, opts ReaderOptions) *Reader {
 	return &Reader{
 		opts: opts,
 		r:    r,
-		curr: make([]byte, 0, 64*1024),
+		// Err on the side of a smaller buffer since ReadPacket will lazily
+		// grow this buffer.
+		curr: make([]byte, 0, 4096),
 		id:   ID{Stream: 1, Message: 1},
 	}
 }

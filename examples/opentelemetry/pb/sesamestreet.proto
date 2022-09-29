@@ -1,0 +1,25 @@
+// Copyright (C) 2021 Storj Labs, Inc.
+// See LICENSE for copying information.
+
+syntax = "proto3";
+option go_package = "storj.io/drpc/examples/opentelemetry/pb";
+
+package sesamestreet;
+
+message Cookie {
+  enum Type {
+    Sugar = 0;
+    Oatmeal = 1;
+    Chocolate = 2;
+  }
+
+  Type type = 1;
+}
+
+message Crumbs {
+  Cookie cookie = 1;
+}
+
+service CookieMonster {
+  rpc EatCookie(Cookie) returns (Crumbs) {}
+}

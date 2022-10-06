@@ -29,6 +29,7 @@ import (
 	"github.com/zeebo/errs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -265,7 +266,7 @@ func createGRPCConnection(server ServiceServer) (ServiceClient, func()) {
 	lis := makeListener(ctx, c1)
 	ctx.Run(func(context.Context) { _ = srv.Serve(lis) })
 	cc, _ := grpc.Dial("",
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(makeDialer(c2)))
 
 	return NewServiceClient(cc), func() {
@@ -325,7 +326,7 @@ func makeListener(ctx context.Context, tr drpc.Transport) *listenOne {
 }
 
 func (l *listenOne) Close() error   { l.cancel(); return nil }
-func (l *listenOne) Addr() net.Addr { return nil }
+func (l *listenOne) Addr() net.Addr { return &net.TCPAddr{IP: net.IP{3: 0}} }
 func (l *listenOne) Accept() (conn net.Conn, err error) {
 	if l.tr != nil {
 		conn, l.tr = transportConn{l.tr}, nil

@@ -34,6 +34,12 @@ A drop-in, lightweight gRPC replacement.
 
  * Open an issue or join the [Zulip chat](https://drpc.zulipchat.com) if you'd like to be featured here.
 
+ ## Examples
+
+  * [A basic drpc client and server](./tree/main/examples/drpc)
+  * [A basic drpc client and server that also serves a Twirp/grpc-web compatible http server on the same port](./tree/main/examples/drpc)
+  * [Serving gRPC and DRPC on the same port](./tree/main/examples/grpc_and_drpc)
+
 ## Other Languages
 
 DRPC can be made compatible with RPC clients generated from other languages. For example, [Twirp](https://github.com/twitchtv/twirp) clients and [grpc-web](https://github.com/grpc/grpc-web/) clients can be used against the [drpchttp](https://pkg.go.dev/storj.io/drpc/drpchttp) package.
@@ -73,128 +79,130 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
     <tr>
         <td rowspan=4>time/op</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>30.2µs</td><td>8.6µs</td><td>-71.60%</td><td rowspan=4></td>
-        <td>38.0µs</td><td>11.1µs</td><td>-70.88%</td><td rowspan=4></td>
-        <td>1.33ms</td><td>0.63ms</td><td>-52.30%</td>
+        <td>24.5µs</td><td>6.1µs</td><td>-74.87%</td><td rowspan=4></td>
+        <td>32.4µs</td><td>8.8µs</td><td>-72.89%</td><td rowspan=4></td>
+        <td>1.43ms</td><td>0.58ms</td><td>-59.47%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>878ns</td><td>759ns</td><td>-13.54%</td>
-        <td>2.85µs</td><td>2.00µs</td><td>-29.69%</td>
-        <td>508µs</td><td>249µs</td><td>-51.08%</td>
+        <td>745ns</td><td>528ns</td><td>-29.13%</td>
+        <td>2.63µs</td><td>1.46µs</td><td>-44.66%</td>
+        <td>512µs</td><td>236µs</td><td>-53.89%</td>
     </tr>
     <tr>
         <td>Output Stream</td>
-        <td>862ns</td><td>757ns</td><td>-12.18%</td>
-        <td>2.76µs</td><td>1.99µs</td><td>-27.92%</td>
-        <td>487µs</td><td>239µs</td><td>-50.94%</td>
+        <td>711ns</td><td>532ns</td><td>-25.11%</td>
+        <td>2.63µs</td><td>1.51µs</td><td>-42.59%</td>
+        <td>515µs</td><td>210µs</td><td>-59.26%</td>
     </tr>
     <tr>
         <td>Bidir Stream</td>
-        <td>9.81µs</td><td>3.30µs</td><td>-66.38%</td>
-        <td>14.8µs</td><td>4.9µs</td><td>-66.69%</td>
-        <td>1.31ms</td><td>0.55ms</td><td>-58.41%</td>
+        <td>7.29µs</td><td>2.52µs</td><td>-65.46%</td>
+        <td>12.3µs</td><td>3.9µs</td><td>-68.68%</td>
+        <td>1.44ms</td><td>0.44ms</td><td>-69.05%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
         <td rowspan=4>speed</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>70.0kB/s</td><td>230.0kB/s</td><td>+228.57%</td><td rowspan=4></td>
-        <td>54.0MB/s</td><td>185.3MB/s</td><td>+243.44%</td><td rowspan=4></td>
-        <td>791MB/s</td><td>1658MB/s</td><td>+109.62%</td>
+        <td>80.0kB/s</td><td>325.0kB/s</td><td>+306.25%</td><td rowspan=4></td>
+        <td>63.4MB/s</td><td>234.3MB/s</td><td>+269.56%</td><td rowspan=4></td>
+        <td>734MB/s</td><td>1812MB/s</td><td>+146.99%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>2.29MB/s</td><td>2.64MB/s</td><td>+15.37%</td>
-        <td>721MB/s</td><td>1026MB/s</td><td>+42.21%</td>
-        <td>2.06GB/s</td><td>4.22GB/s</td><td>+104.32%</td>
+        <td>2.69MB/s</td><td>3.79MB/s</td><td>+41.00%</td>
+        <td>780MB/s</td><td>1409MB/s</td><td>+80.67%</td>
+        <td>2.05GB/s</td><td>4.45GB/s</td><td>+117.12%</td>
     </tr>
     <tr>
         <td>Output Stream</td>
-        <td>2.32MB/s</td><td>2.64MB/s</td><td>+13.67%</td>
-        <td>743MB/s</td><td>1031MB/s</td><td>+38.74%</td>
-        <td>2.15GB/s</td><td>4.39GB/s</td><td>+103.75%</td>
+        <td>2.81MB/s</td><td>3.76MB/s</td><td>+33.52%</td>
+        <td>780MB/s</td><td>1360MB/s</td><td>+74.23%</td>
+        <td>2.04GB/s</td><td>5.01GB/s</td><td>+145.53%</td>
     </tr>
     <tr>
         <td>Bidir Stream</td>
-        <td>200kB/s</td><td>604kB/s</td><td>+201.87%</td>
-        <td>138MB/s</td><td>415MB/s</td><td>+200.20%</td>
-        <td>799MB/s</td><td>1920MB/s</td><td>+140.44%</td>
+        <td>274kB/s</td><td>794kB/s</td><td>+189.95%</td>
+        <td>166MB/s</td><td>533MB/s</td><td>+220.19%</td>
+        <td>730MB/s</td><td>2360MB/s</td><td>+223.10%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
         <td rowspan=4>mem/op</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>8.37kB</td><td>1.29kB</td><td>-84.59%</td><td rowspan=4></td>
-        <td>21.8kB</td><td>7.7kB</td><td>-64.81%</td><td rowspan=4></td>
-        <td>6.50MB</td><td>3.16MB</td><td>-51.38%</td>
+        <td>8.66kB</td><td>1.42kB</td><td>-83.62%</td><td rowspan=4></td>
+        <td>22.2kB</td><td>7.8kB</td><td>-64.83%</td><td rowspan=4></td>
+        <td>6.61MB</td><td>3.16MB</td><td>-52.21%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>399B</td><td>80B</td><td>-79.96%</td>
-        <td>7.09kB</td><td>2.13kB</td><td>-69.97%</td>
-        <td>3.20MB</td><td>1.05MB</td><td>-67.16%</td>
-    </tr>
-    <tr>
-        <td>Output Stream</td>
-        <td>309B</td><td>80B</td><td>-74.13%</td>
-        <td>6.98kB</td><td>2.13kB</td><td>-69.53%</td>
+        <td>381B</td><td>80B</td><td>-79.01%</td>
+        <td>7.08kB</td><td>2.13kB</td><td>-69.95%</td>
         <td>3.20MB</td><td>1.05MB</td><td>-67.17%</td>
     </tr>
     <tr>
+        <td>Output Stream</td>
+        <td>305B</td><td>80B</td><td>-73.80%</td>
+        <td>7.00kB</td><td>2.13kB</td><td>-69.62%</td>
+        <td>3.20MB</td><td>1.05MB</td><td>-67.19%</td>
+    </tr>
+    <tr>
         <td>Bidir Stream</td>
-        <td>1.02kB</td><td>0.24kB</td><td>-76.40%</td>
-        <td>14.4kB</td><td>4.3kB</td><td>-69.99%</td>
-        <td>6.52MB</td><td>2.10MB</td><td>-67.74%</td>
+        <td>1.00kB</td><td>0.24kB</td><td>-75.90%</td>
+        <td>14.5kB</td><td>4.3kB</td><td>-70.10%</td>
+        <td>6.61MB</td><td>2.10MB</td><td>-68.20%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
         <td rowspan=4>allocs/op</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>169</td><td>7</td><td>-95.86%</td><td rowspan=4></td>
-        <td>171</td><td>9</td><td>-94.74%</td><td rowspan=4></td>
-        <td>403</td><td>9</td><td>-97.76%</td>
+        <td>168</td><td>7</td><td>-95.83%</td><td rowspan=4></td>
+        <td>170</td><td>9</td><td>-94.71%</td><td rowspan=4></td>
+        <td>400</td><td>9</td><td>-97.75%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>11</td><td>1</td><td>-90.91%</td>
-        <td>12</td><td>2</td><td>-83.33%</td>
-        <td>121</td><td>2</td><td>-98.35%</td>
+        <td>9</td><td>1</td><td>-88.89%</td>
+        <td>10</td><td>2</td><td>-80.00%</td>
+        <td>118</td><td>2</td><td>-98.31%</td>
     </tr>
     <tr>
         <td>Output Stream</td>
         <td>9</td><td>1</td><td>-88.89%</td>
         <td>10</td><td>2</td><td>-80.00%</td>
-        <td>117</td><td>2</td><td>-98.29%</td>
+        <td>120</td><td>2</td><td>-98.33%</td>
     </tr>
     <tr>
         <td>Bidir Stream</td>
-        <td>41</td><td>3</td><td>-92.68%</td>
-        <td>44</td><td>5</td><td>-88.64%</td>
-        <td>272</td><td>5</td><td>-98.16%</td>
+        <td>39</td><td>3</td><td>-92.31%</td>
+        <td>42</td><td>5</td><td>-88.10%</td>
+        <td>277</td><td>5</td><td>-98.20%</td>
     </tr>
 </table>
 
 ## Lines of code
 
+DRPC is proud to get as much done in as few lines of code as possible. It's the author's belief that this is only possible by having a clean, strong architecture and that it reduces the chances for bugs to exist (most studies show a linear corellation with number of bugs and lines of code). This table helps keep the library honest, and it would be nice if more libraries considered this.
+
 | Package                              | Lines    |
 | ---                                  | ---      |
-| storj.io/drpc/drpchttp               | 475      |
-| storj.io/drpc/cmd/protoc-gen-go-drpc | 418      |
-| storj.io/drpc/drpcstream             | 390      |
-| storj.io/drpc/drpcwire               | 332      |
-| storj.io/drpc/drpcmanager            | 300      |
-| storj.io/drpc/drpcmigrate            | 237      |
+| storj.io/drpc/drpchttp               | 478      |
+| storj.io/drpc/cmd/protoc-gen-go-drpc | 420      |
+| storj.io/drpc/drpcstream             | 401      |
+| storj.io/drpc/drpcwire               | 343      |
+| storj.io/drpc/drpcmanager            | 311      |
+| storj.io/drpc/drpcmigrate            | 239      |
 | storj.io/drpc/drpcsignal             | 133      |
+| storj.io/drpc/drpcserver             | 133      |
 | storj.io/drpc/drpcconn               | 116      |
 | storj.io/drpc/drpcmetadata           | 115      |
 | storj.io/drpc/drpcmux                | 95       |
-| storj.io/drpc/drpcserver             | 76       |
 | storj.io/drpc/drpccache              | 54       |
 | storj.io/drpc                        | 47       |
 | storj.io/drpc/drpcerr                | 42       |
 | storj.io/drpc/drpcctx                | 37       |
 | storj.io/drpc/drpcdebug              | 22       |
 | storj.io/drpc/drpcenc                | 15       |
-| storj.io/drpc/internal/drpcopts      | 11       |
-| **Total**                            | **2915** |
+| storj.io/drpc/internal/drpcopts      | 14       |
+| **Total**                            | **3015** |

@@ -193,6 +193,7 @@ DRPC is proud to get as much done in as few lines of code as possible. It's the 
 | storj.io/drpc/drpcwire               | 343      |
 | storj.io/drpc/drpcmanager            | 311      |
 | storj.io/drpc/drpcmigrate            | 239      |
+| storj.io/drpc/drpcpool               | 230      |
 | storj.io/drpc/drpcsignal             | 133      |
 | storj.io/drpc/drpcserver             | 133      |
 | storj.io/drpc/drpcconn               | 116      |
@@ -205,4 +206,4 @@ DRPC is proud to get as much done in as few lines of code as possible. It's the 
 | storj.io/drpc/drpcdebug              | 22       |
 | storj.io/drpc/drpcenc                | 15       |
 | storj.io/drpc/internal/drpcopts      | 14       |
-| **Total**                            | **3015** |
+| **Total**                            | **3245** |

@@ -200,3 +200,17 @@ func TestStream_ConcurrentCloseCancel(t *testing.T) {
 	// we should always receive the canceled error
 	assert.That(t, errors.Is(<-errch, context.Canceled))
 }
+
+func TestStream_Control(t *testing.T) {
+	st := New(context.Background(), 0, drpcwire.NewWriter(io.Discard, 0))
+
+	// N.B. the stream will return nil on any HandlePacket calls after the
+	// stream has been terminated for any reason, including if an invalid
+	// packet has been sent. the order of these two assertions is important!
+
+	// an invalid packet is not an error if the control bit is set
+	assert.NoError(t, st.HandlePacket(drpcwire.Packet{Control: true}))
+
+	// an invalid packet is an error if the control bit it not set
+	assert.That(t, drpc.InternalError.Has(st.HandlePacket(drpcwire.Packet{})))
+}

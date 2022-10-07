@@ -10,10 +10,11 @@ package drpcwire
 func SplitN(pkt Packet, n int, cb func(fr Frame) error) error {
 	for {
 		fr := Frame{
-			Data: pkt.Data,
-			ID:   pkt.ID,
-			Kind: pkt.Kind,
-			Done: true,
+			Data:    pkt.Data,
+			ID:      pkt.ID,
+			Kind:    pkt.Kind,
+			Control: pkt.Control,
+			Done:    true,
 		}
 
 		fr.Data, pkt.Data = SplitData(pkt.Data, n)

@@ -23,11 +23,12 @@ func TestReader(t *testing.T) {
 		Options ReaderOptions
 	}
 
-	p := func(kind Kind, id uint64, data string) Packet {
+	p := func(kind Kind, id uint64, control bool, data string) Packet {
 		return Packet{
-			Data: []byte(data),
-			ID:   ID{Stream: 1, Message: id},
-			Kind: kind,
+			Data:    []byte(data),
+			ID:      ID{Stream: 1, Message: id},
+			Kind:    kind,
+			Control: control,
 		}
 	}
 
@@ -58,19 +59,24 @@ func TestReader(t *testing.T) {
 	const overFrame = maxFrameOverhead + 1
 
 	cases := []testCase{
-		m(p(KindMessage, 1, "hello world"),
+		m(p(KindMessage, 1, false, "hello world"),
 			f(KindMessage, 1, "hello", false, false),
 			f(KindMessage, 1, " ", false, false),
 			f(KindMessage, 1, "world", true, false)),
 
-		m(p(KindClose, 2, ""),
+		m(p(KindMessage, 1, true, "hello world"),
+			f(KindMessage, 1, "hello", false, false),
+			f(KindMessage, 1, " ", false, true),
+			f(KindMessage, 1, "world", true, false)),
+
+		m(p(KindClose, 2, false, ""),
 			f(KindMessage, 1, "hello", false, false),
 			f(KindMessage, 1, " ", false, false),
 			f(KindClose, 2, "", true, false)),
 
 		{
 			Packets: []Packet{
-				p(KindClose, 2, ""),
+				p(KindClose, 2, false, ""),
 			},
 			Frames: []Frame{
 				f(KindMessage, 1, "1", false, false),
@@ -107,14 +113,16 @@ func TestReader(t *testing.T) {
 			Options: ReaderOptions{MaximumBufferSize: 1000},
 		},
 
-		{ // Control bit is ignored
+		{ // Control bit is preserved
 			Packets: []Packet{
-				p(KindClose, 2, ""),
+				p(KindClose, 2, false, ""),
+				p(KindMessage, 3, true, "ab"),
 			},
 			Frames: []Frame{
 				f(KindMessage, 1, "1", false, false),
 				f(KindClose, 2, "", true, false),
-				f(KindMessage, 1, "1", true, true),
+				f(KindMessage, 3, "a", false, true),
+				f(KindMessage, 3, "b", true, false),
 			},
 		},
 
@@ -128,7 +136,7 @@ func TestReader(t *testing.T) {
 
 		{ // id monotonicity from id reuse
 			Packets: []Packet{
-				p(KindMessage, 1, "1"),
+				p(KindMessage, 1, false, "1"),
 			},
 			Frames: []Frame{
 				f(KindMessage, 1, "1", true, false),

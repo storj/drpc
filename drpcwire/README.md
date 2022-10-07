@@ -152,6 +152,9 @@ const (
 	// with a code attached.
 	KindError Kind = 3
 
+	// KindCancel is sent to notify the remote that we have soft canceled.
+	KindCancel Kind = 4
+
 	// KindClose is used to inform that the rpc is dead. It has no body.
 	KindClose Kind = 5
 

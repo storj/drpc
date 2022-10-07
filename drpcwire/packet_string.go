@@ -11,30 +11,20 @@ func _() {
 	_ = x[KindInvoke-1]
 	_ = x[KindMessage-2]
 	_ = x[KindError-3]
+	_ = x[KindCancel-4]
 	_ = x[KindClose-5]
 	_ = x[KindCloseSend-6]
 	_ = x[KindInvokeMetadata-7]
 }
 
-const (
-	_Kind_name_0 = "InvokeMessageError"
-	_Kind_name_1 = "CloseCloseSendInvokeMetadata"
-)
+const _Kind_name = "InvokeMessageErrorCancelCloseCloseSendInvokeMetadata"
 
-var (
-	_Kind_index_0 = [...]uint8{0, 6, 13, 18}
-	_Kind_index_1 = [...]uint8{0, 5, 14, 28}
-)
+var _Kind_index = [...]uint8{0, 6, 13, 18, 24, 29, 38, 52}
 
 func (i Kind) String() string {
-	switch {
-	case 1 <= i && i <= 3:
-		i -= 1
-		return _Kind_name_0[_Kind_index_0[i]:_Kind_index_0[i+1]]
-	case 5 <= i && i <= 7:
-		i -= 5
-		return _Kind_name_1[_Kind_index_1[i]:_Kind_index_1[i+1]]
-	default:
-		return "Kind(" + strconv.FormatInt(int64(i), 10) + ")"
+	i -= 1
+	if i >= Kind(len(_Kind_index)-1) {
+		return "Kind(" + strconv.FormatInt(int64(i+1), 10) + ")"
 	}
+	return _Kind_name[_Kind_index[i]:_Kind_index[i+1]]
 }

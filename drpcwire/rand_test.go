@@ -60,6 +60,7 @@ var payloadSize = map[Kind]func() int{
 	KindInvoke:         func() int { return rand.Intn(1023) + 1 },
 	KindMessage:        func() int { return rand.Intn(1023) + 1 },
 	KindError:          func() int { return rand.Intn(1023) + 1 },
+	KindCancel:         func() int { return 0 },
 	KindClose:          func() int { return 0 },
 	KindCloseSend:      func() int { return 0 },
 	KindInvokeMetadata: func() int { return rand.Intn(1023) + 1 },

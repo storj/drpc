@@ -35,12 +35,12 @@ import (
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcconn"
-	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
 	"storj.io/drpc/drpchttp"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
+	"storj.io/drpc/drpctest"
 )
 
 var fullErrors = flag.Bool("full-errors", false, "if true, display full errors in logs")
@@ -144,12 +144,12 @@ func collectResults(t *testing.T, cli Client, fn testFunc) []result {
 func testCompat(t *testing.T, impl *serviceImpl, fn testFunc) {
 	defer checkGoroutines(t)
 
-	grpcClient, close := createGRPCConnection(impl.GRPC())
+	grpcClient, close := createGRPCConnection(t, impl.GRPC())
 	defer close()
 	grpcResults := collectResults(t, grpcWrapper{grpcClient}, fn)
 	t.Logf("grpc: %s", grpcResults)
 
-	drpcClient, close := createDRPCConnection(impl.DRPC())
+	drpcClient, close := createDRPCConnection(t, impl.DRPC())
 	defer close()
 	drpcResults := collectResults(t, drpcWrapper{drpcClient}, fn)
 	t.Logf("drpc: %s", drpcResults)
@@ -174,11 +174,11 @@ func testWebCompat(t *testing.T, impl *serviceImpl, fn testFunc) {
 	results = append(results, collectResults(t, webClient{drpcServer.URL, false}, fn))
 	results = append(results, collectResults(t, webClient{drpcServer.URL, true}, fn))
 
-	grpcClient, close := createGRPCConnection(impl.GRPC())
+	grpcClient, close := createGRPCConnection(t, impl.GRPC())
 	defer close()
 	results = append(results, collectResults(t, grpcWrapper{grpcClient}, fn))
 
-	drpcClient, close := createDRPCConnection(impl.DRPC())
+	drpcClient, close := createDRPCConnection(t, impl.DRPC())
 	defer close()
 	results = append(results, collectResults(t, drpcWrapper{drpcClient}, fn))
 
@@ -231,8 +231,8 @@ func asOut(in *In) *Out {
 	return &Out{Out: in.In, Buf: in.Buf, Opt: in.Opt}
 }
 
-func createDRPCConnectionWithOptions(server DRPCServiceServer, opts drpcmanager.Options) (DRPCServiceClient, func()) {
-	ctx := drpcctx.NewTracker(context.Background())
+func createDRPCConnectionWithOptions(t testing.TB, server DRPCServiceServer, opts drpcmanager.Options) (DRPCServiceClient, func()) {
+	ctx := drpctest.NewTracker(t)
 	c1, c2 := pipe()
 
 	mux := drpcmux.New()
@@ -247,17 +247,16 @@ func createDRPCConnectionWithOptions(server DRPCServiceServer, opts drpcmanager.
 
 	return NewDRPCServiceClient(conn), func() {
 		_ = conn.Close()
-		ctx.Cancel()
-		ctx.Wait()
+		ctx.Close()
 	}
 }
 
-func createDRPCConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
-	return createDRPCConnectionWithOptions(server, drpcmanager.Options{})
+func createDRPCConnection(t testing.TB, server DRPCServiceServer) (DRPCServiceClient, func()) {
+	return createDRPCConnectionWithOptions(t, server, drpcmanager.Options{})
 }
 
-func createGRPCConnection(server ServiceServer) (ServiceClient, func()) {
-	ctx := drpcctx.NewTracker(context.Background())
+func createGRPCConnection(t testing.TB, server ServiceServer) (ServiceClient, func()) {
+	ctx := drpctest.NewTracker(t)
 	c1, c2 := pipe()
 
 	srv := grpc.NewServer()
@@ -272,8 +271,7 @@ func createGRPCConnection(server ServiceServer) (ServiceClient, func()) {
 	return NewServiceClient(cc), func() {
 		_ = lis.Close()
 		_ = cc.Close()
-		ctx.Cancel()
-		ctx.Wait()
+		ctx.Close()
 	}
 }
 

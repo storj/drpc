@@ -83,12 +83,12 @@ func benchmarkBoth(b *testing.B, fn func(b *testing.B, in *In, client Client)) {
 
 		b.Run(size.Name, func(b *testing.B) {
 			b.Run("GRPC", func(b *testing.B) {
-				conn, close := createGRPCConnection(benchmarkImpl.GRPC())
+				conn, close := createGRPCConnection(b, benchmarkImpl.GRPC())
 				defer close()
 				fn(b, size.Value, grpcWrapper{conn})
 			})
 			b.Run("DRPC", func(b *testing.B) {
-				conn, close := createDRPCConnectionWithOptions(benchmarkImpl.DRPC(), options)
+				conn, close := createDRPCConnectionWithOptions(b, benchmarkImpl.DRPC(), options)
 				defer close()
 				fn(b, size.Value, drpcWrapper{conn})
 			})

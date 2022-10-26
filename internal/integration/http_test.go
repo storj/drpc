@@ -4,7 +4,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,15 +13,14 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpchttp"
 	"storj.io/drpc/drpcmux"
+	"storj.io/drpc/drpctest"
 )
 
 func TestHTTP(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	mux := drpcmux.New()
 	assert.NoError(t, DRPCRegisterService(mux, standardImpl))

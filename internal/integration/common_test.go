@@ -9,16 +9,17 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"testing"
 
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc/drpcconn"
-	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
 	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
 	"storj.io/drpc/drpcsignal"
+	"storj.io/drpc/drpctest"
 )
 
 //
@@ -35,8 +36,8 @@ func data(n int64) []byte {
 
 func in(n int64) *In { return &In{In: n} }
 
-func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
-	ctx := drpcctx.NewTracker(context.Background())
+func createConnection(t testing.TB, server DRPCServiceServer) (DRPCServiceClient, func()) {
+	ctx := drpctest.NewTracker(t)
 	c1, c2 := net.Pipe()
 
 	mux := drpcmux.New()
@@ -47,8 +48,7 @@ func createConnection(server DRPCServiceServer) (DRPCServiceClient, func()) {
 
 	return NewDRPCServiceClient(conn), func() {
 		_ = conn.Close()
-		ctx.Cancel()
-		ctx.Wait()
+		ctx.Close()
 	}
 }
 

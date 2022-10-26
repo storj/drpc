@@ -13,14 +13,13 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
-	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpctest"
 	"storj.io/drpc/drpcwire"
 )
 
 func TestStream_StateTransitions(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	any := errors.New("any sentinel error")
 
@@ -114,9 +113,8 @@ func TestStream_StateTransitions(t *testing.T) {
 }
 
 func TestStream_Unblocks(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	handlePacket := func(st *Stream, kind drpcwire.Kind) error {
 		return st.HandlePacket(drpcwire.Packet{Kind: kind})

@@ -12,16 +12,15 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
+	"storj.io/drpc/drpctest"
 )
 
 func TestSimple(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	cli, close := createConnection(standardImpl)
+	cli, close := createConnection(t, standardImpl)
 	defer close()
 
 	{
@@ -79,11 +78,10 @@ func TestSimple(t *testing.T) {
 }
 
 func TestConcurrent(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	cli, close := createConnection(standardImpl)
+	cli, close := createConnection(t, standardImpl)
 	defer close()
 
 	const N = 1000

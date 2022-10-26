@@ -12,20 +12,18 @@ import (
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc/drpcconn"
-	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpctest"
 )
 
 func TestTransport_Error(t *testing.T) {
-	// ensure that everything we launch eventually exits
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	// create a channel to signal when the rpc has started
 	started := make(chan struct{})
 
 	// create a server that signals then waits for the context to die
-	cli, close := createConnection(impl{
+	cli, close := createConnection(t, impl{
 		Method1Fn: func(ctx context.Context, _ *In) (*Out, error) {
 			started <- struct{}{}
 			<-ctx.Done()
@@ -45,10 +43,8 @@ func TestTransport_Error(t *testing.T) {
 }
 
 func TestTransport_Blocked(t *testing.T) {
-	// ensure that everything we launch eventually exits
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	// create a channel to hold the rpc error
 	errch := make(chan error, 1)
@@ -75,10 +71,8 @@ func TestTransport_Blocked(t *testing.T) {
 }
 
 func TestTransport_ErrorCausesCancel(t *testing.T) {
-	// ensure that everything we launch eventually exits
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	// create a channel to signal when the rpc has started
 	started := make(chan struct{})
@@ -86,7 +80,7 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	cerr := make(chan error, 1)
 
 	// create a server that signals then waits for the context to die
-	cli, close := createConnection(impl{
+	cli, close := createConnection(t, impl{
 		Method2Fn: func(stream DRPCService_Method2Stream) error {
 			started <- struct{}{}
 			serr <- stream.MsgRecv(nil, Encoding)

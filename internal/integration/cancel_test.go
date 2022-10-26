@@ -14,15 +14,14 @@ import (
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc/drpcconn"
-	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpctest"
 )
 
 func TestCancel(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	cli, close := createConnection(standardImpl)
+	cli, close := createConnection(t, standardImpl)
 	defer close()
 
 	{ // ensure that we get canceled if issuing an rpc with an already canceled context
@@ -73,9 +72,8 @@ func TestCancellationPropagation_Unitary(t *testing.T) {
 	timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	called := make(chan struct{}, 1)
 	cancelled := make(chan struct{}, 1)
@@ -92,10 +90,12 @@ func TestCancellationPropagation_Unitary(t *testing.T) {
 		},
 	}
 
-	cli, close := createConnection(sleepy)
+	cli, close := createConnection(t, sleepy)
 	defer close()
 
-	clientctx := drpcctx.NewTracker(context.Background())
+	clientctx := drpctest.NewTracker(t)
+	defer clientctx.Close()
+
 	clientctx.Run(func(ctx context.Context) {
 		_, _ = cli.Method1(ctx, in(1))
 	})
@@ -115,9 +115,8 @@ func TestCancellationPropagation_Stream(t *testing.T) {
 	timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	called := make(chan struct{}, 1)
 	cancelled := make(chan struct{}, 1)
@@ -135,10 +134,12 @@ func TestCancellationPropagation_Stream(t *testing.T) {
 		},
 	}
 
-	cli, close := createConnection(sleepy)
+	cli, close := createConnection(t, sleepy)
 	defer close()
 
-	clientctx := drpcctx.NewTracker(context.Background())
+	clientctx := drpctest.NewTracker(t)
+	defer clientctx.Close()
+
 	clientctx.Run(func(ctx context.Context) {
 		stream, _ := cli.Method4(ctx)
 		called <- struct{}{}
@@ -167,9 +168,8 @@ func TestCancellationPropagation_Stream(t *testing.T) {
 }
 
 func TestCancelWhileWriteBlocked(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	tr := newTransportBlocker()
 	defer func() { _ = tr.Close() }()

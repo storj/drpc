@@ -5,150 +5,361 @@ package drpcpool
 
 import (
 	"context"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc"
+	"storj.io/drpc/drpctest"
 )
 
 func TestPoolReuse(t *testing.T) {
-	ctx := context.Background()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	p := New(Options{
+	pool := New(Options{
 		Capacity:    2,
 		KeyCapacity: 1,
-		Expiration:  0,
 	})
-	defer func() { _ = p.Close() }()
+	defer func() { _ = pool.Close() }()
 
 	count := 0
-	dial := func(ctx context.Context, key interface{}) (drpc.Conn, error) {
+	dial := func(ctx context.Context, key interface{}) (Conn, error) {
 		count++
-		return noopConn{}, nil
+		return new(callbackConn), nil
 	}
-	check := func(c drpc.Conn, e int) {
-		_ = c.Invoke(ctx, "", nil, nil, nil)
-		assert.Equal(t, count, e)
+	check := func(conn drpc.Conn, expected int) {
+		t.Helper()
+		_ = conn.Invoke(ctx, "", nil, nil, nil)
+		assert.Equal(t, count, expected)
 	}
 
-	c1 := p.Get(ctx, "key1", dial)
-	c2 := p.Get(ctx, "key2", dial)
-	c3 := p.Get(ctx, "key3", dial)
+	conn1 := pool.Get(ctx, "key1", dial)
+	conn2 := pool.Get(ctx, "key2", dial)
+	conn3 := pool.Get(ctx, "key3", dial)
 	assert.Equal(t, count, 0) // lazily dial
 
-	check(c1, 1) // c1's first invoke dials
-	check(c1, 1) // c1 reuses the connection
-	check(c2, 2) // c2's first invoke dials
-	check(c2, 2) // c2 reuses the connection
-	check(c1, 2) // c1 still reuses the connection
-	check(c3, 3) // c3's first invoke dials
-	check(c1, 3) // c1 has not been evicted because it was used most recently
-	check(c2, 4) // c2 was evicted so it needs another dial
-}
-
-type noopConn struct{ drpc.Conn }
-
-func (noopConn) Close() error            { return nil }
-func (noopConn) Closed() <-chan struct{} { return nil }
-
-func (noopConn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, out drpc.Message) error {
-	return nil
+	check(conn1, 1) // conn1's first invoke dials
+	check(conn1, 1) // conn1 reuses the connection
+	check(conn2, 2) // conn2's first invoke dials
+	check(conn2, 2) // conn2 reuses the connection
+	check(conn1, 2) // conn1 still reuses the connection
+	check(conn3, 3) // conn3's first invoke dials
+	check(conn1, 3) // conn1 has not been evicted because it was used most recently
+	check(conn2, 4) // conn2 was evicted so it needs another dial
 }
 
 func TestPoolConcurrency(t *testing.T) {
-	ctx := context.Background()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	p := New(Options{
+	pool := New(Options{
 		Capacity:    2,
 		KeyCapacity: 1,
-		Expiration:  0,
 	})
-	defer func() { _ = p.Close() }()
+	defer func() { _ = pool.Close() }()
 
 	count := 0
-	uc1 := new(streamConn)
-	uc2 := new(streamConn)
-	dial := func(ctx context.Context, key interface{}) (drpc.Conn, error) {
+	uc1 := new(callbackConn)
+	uc2 := new(callbackConn)
+	dial := func(ctx context.Context, key interface{}) (Conn, error) {
 		count++
-		return map[string]drpc.Conn{"key1": uc1, "key2": uc2}[key.(string)], nil
+		return map[string]Conn{"key1": uc1, "key2": uc2}[key.(string)], nil
 	}
 
-	c1 := p.Get(ctx, "key1", dial)
-	c2 := p.Get(ctx, "key2", dial)
+	conn1 := pool.Get(ctx, "key1", dial)
+	conn2 := pool.Get(ctx, "key2", dial)
 
 	// ensure we can open multiple concurrent streams to the same destination by dialing more.
-	s1_0, err := c1.NewStream(ctx, "", nil)
+	stream1_1, err := conn1.NewStream(ctx, "", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, count, 1)
 
-	s1_1, err := c1.NewStream(ctx, "", nil)
+	stream1_2, err := conn1.NewStream(ctx, "", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, count, 2)
 
-	s1_2, err := c1.NewStream(ctx, "", nil)
+	stream1_3, err := conn1.NewStream(ctx, "", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, count, 3)
 
 	// ensure we can open multiple concurrent streams to other destinations.
-	s2_0, err := c2.NewStream(ctx, "", nil)
+	stream2_1, err := conn2.NewStream(ctx, "", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, count, 4)
 
 	// close the stream and wait for it to be replaced.
-	uc2.CloseStream(0)
-	<-s2_0.Context().Done()
+	_ = stream2_1.Close()
+	<-stream2_1.Context().Done()
 
 	// ensure that it was replaced and that making a new stream does not dial.
-	s2_1, err := c2.NewStream(ctx, "", nil)
+	stream2_2, err := conn2.NewStream(ctx, "", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, count, 4)
 
 	// close all of the concurrent streams and wait for them to be replaced.
-	uc2.CloseStream(1)
-	<-s2_1.Context().Done()
-	uc1.CloseStream(0)
-	<-s1_0.Context().Done()
-	uc1.CloseStream(1)
-	<-s1_1.Context().Done()
-	uc1.CloseStream(2)
-	<-s1_2.Context().Done()
+	_ = stream2_2.Close()
+	<-stream2_2.Context().Done()
+	_ = stream1_1.Close()
+	<-stream1_1.Context().Done()
+	_ = stream1_2.Close()
+	<-stream1_2.Context().Done()
+	_ = stream1_3.Close()
+	<-stream1_3.Context().Done()
 
 	// ensure that it was replaced and that making a new stream does not dial.
-	s1_3, err := c1.NewStream(ctx, "", nil)
+	stream1_4, err := conn1.NewStream(ctx, "", nil)
 	assert.NoError(t, err)
 	assert.Equal(t, count, 4)
 
 	// clean up.
-	uc1.CloseStream(3)
-	<-s1_3.Context().Done()
+	_ = stream1_4.Close()
+	<-stream1_4.Context().Done()
 }
 
-type streamConn struct {
-	drpc.Conn
-	mu      sync.Mutex
-	streams []*streamConnStream
+// TestPool_Expiration checks that inserted entries expire eventually.
+func TestPool_Expiration(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	closed := make(chan string, 1)
+	pool := New(Options{Expiration: time.Nanosecond})
+	defer func() { _ = pool.Close() }()
+
+	useConn(ctx, pool, closed, "key")
+	assert.Equal(t, <-closed, "key")
 }
 
-func (*streamConn) Close() error            { return nil }
-func (*streamConn) Closed() <-chan struct{} { return nil }
+// TestPool_Stale checks that the stale predicate is called on Take.
+func TestPool_Stale(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-func (s *streamConn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (drpc.Stream, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	calls := 0
+	pool := New(Options{})
+	defer func() { _ = pool.Close() }()
 
-	ctx, cancel := context.WithCancel(ctx)
-	s.streams = append(s.streams, &streamConnStream{ctx: ctx, cancel: cancel})
-	return s.streams[len(s.streams)-1], nil
+	conn := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+		calls++
+		return &callbackConn{ClosedFn: func() <-chan struct{} { return closedCh }}, nil
+	})
+
+	// an invoke should cause a dial
+	invoke(ctx, conn)
+	assert.Equal(t, calls, 1)
+
+	// another invoke should cause another dial because the conn is considered closed
+	invoke(ctx, conn)
+	assert.Equal(t, calls, 2)
 }
 
-func (s *streamConn) CloseStream(n int) { s.streams[n].cancel() }
+// TestPool_Capacity checks that total capacity limits are enforced.
+func TestPool_Capacity(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-type streamConnStream struct {
-	drpc.Stream
-	ctx    context.Context
-	cancel func()
+	closed := make(chan string, 1)
+	pool := New(Options{Capacity: 1})
+	defer func() { _ = pool.Close() }()
+
+	// using key0 should remain in the pool
+	useConn(ctx, pool, closed, "key0")
+	assert.Equal(t, len(closed), 0)
+
+	// using key1 should evict key0
+	useConn(ctx, pool, closed, "key1")
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "key0")
+
+	// close the pool and key1 should be closed
+	_ = pool.Close()
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "key1")
 }
 
-func (s *streamConnStream) Context() context.Context { return s.ctx }
+// TestPool_Capacity_Expiration checks that capacity limits are enforced
+// even if expiration is set.
+func TestPool_Capacity_Expiration(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	closed := make(chan string, 1)
+	pool := New(Options{
+		Capacity:   1,
+		Expiration: time.Hour,
+	})
+	defer func() { _ = pool.Close() }()
+
+	// using key0 should remain in the pool
+	useConn(ctx, pool, closed, "key0")
+	assert.Equal(t, len(closed), 0)
+
+	// using key1 should evict key0
+	useConn(ctx, pool, closed, "key1")
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "key0")
+
+	// close the pool and key1 should be closed
+	_ = pool.Close()
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "key1")
+}
+
+// TestPool_Capacity_Negative checks that negative capacities cache nothing.
+func TestPool_Capacity_Negative(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	closed := make(chan string, 1)
+	pool := New(Options{Capacity: -1})
+	defer func() { _ = pool.Close() }()
+
+	useConn(ctx, pool, closed, "key0")
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "key0")
+}
+
+// TestPool_KeyCapacity checks that per-key capacity limits are enforced.
+func TestPool_KeyCapacity(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	closed := make(chan string, 2)
+	pool := New(Options{KeyCapacity: 1})
+	defer func() { _ = pool.Close() }()
+
+	useConn(ctx, pool, closed, "key0")
+	assert.Equal(t, len(closed), 0)
+
+	useConn(ctx, pool, closed, "key1")
+	assert.Equal(t, len(closed), 0)
+
+	// get two concurrent streams so that we force two underlying dials
+	// causing one to be evicted when it is closed.
+	conn := getConn(ctx, pool, closed, "key0")
+	stream1, _ := conn.NewStream(ctx, "", nil)
+	stream2, _ := conn.NewStream(ctx, "", nil)
+
+	_ = stream1.Close()
+	<-stream1.Context().Done()
+	_ = stream2.Close()
+	<-stream2.Context().Done()
+
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "key0")
+}
+
+// TestPool_KeyCapacity_Negative checks that negative per-key capacities cache nothing.
+func TestPool_KeyCapacity_Negative(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	closed := make(chan string, 1)
+	pool := New(Options{KeyCapacity: -1})
+	defer func() { _ = pool.Close() }()
+
+	useConn(ctx, pool, closed, "key0")
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "key0")
+}
+
+func TestPool_Blocked(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	closed := make(chan string, 2)
+	unblocked := make(chan struct{})
+	pool := New(Options{Capacity: 2})
+	defer func() { _ = pool.Close() }()
+
+	conn1Calls := 0
+	conn1Dials := 0
+	conn1 := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+		conn1Dials++
+		return &callbackConn{
+			CloseFn:     func() error { closed <- "conn1"; return nil },
+			UnblockedFn: func() <-chan struct{} { return unblocked },
+			InvokeFn: func(ctx context.Context, rpc string, enc drpc.Encoding, in, out drpc.Message) error {
+				conn1Calls++
+				return nil
+			},
+		}, nil
+	})
+
+	conn2Calls := 0
+	conn2Dials := 0
+	conn2 := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+		conn2Dials++
+		return &callbackConn{
+			CloseFn: func() error { closed <- "conn2"; return nil },
+			InvokeFn: func(ctx context.Context, rpc string, enc drpc.Encoding, in, out drpc.Message) error {
+				conn2Calls++
+				return nil
+			},
+		}, nil
+	})
+
+	// place a blocked conn in the pool
+	invoke(ctx, conn1)
+	assert.Equal(t, conn1Calls, 1)
+	assert.Equal(t, conn1Dials, 1)
+	assert.Equal(t, conn2Calls, 0)
+	assert.Equal(t, conn2Dials, 0)
+	assert.Equal(t, len(closed), 0)
+
+	// place another blocked conn in the pool
+	invoke(ctx, conn1)
+	assert.Equal(t, conn1Calls, 2)
+	assert.Equal(t, conn1Dials, 2)
+	assert.Equal(t, conn2Calls, 0)
+	assert.Equal(t, conn2Dials, 0)
+	assert.Equal(t, len(closed), 0)
+
+	// invoking with conn2 should cause a conn1 to be evicted
+	invoke(ctx, conn2)
+	assert.Equal(t, conn1Calls, 2)
+	assert.Equal(t, conn1Dials, 2)
+	assert.Equal(t, conn2Calls, 1)
+	assert.Equal(t, conn2Dials, 1)
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "conn1")
+
+	// unblock conn1
+	close(unblocked)
+
+	// since conn1 is the oldest, invoking with it should work
+	invoke(ctx, conn1)
+	assert.Equal(t, conn1Calls, 3)
+	assert.Equal(t, conn1Dials, 2)
+	assert.Equal(t, conn2Calls, 1)
+	assert.Equal(t, conn2Dials, 1)
+	assert.Equal(t, len(closed), 0)
+}
+
+func BenchmarkPool(b *testing.B) {
+	ctx := drpctest.NewTracker(b)
+	defer ctx.Close()
+
+	const capacity = 1000
+
+	pool := New(Options{Capacity: capacity})
+	uc := new(callbackConn)
+	conn := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) { return uc, nil })
+
+	var streams []drpc.Stream
+	for i := 0; i < capacity; i++ {
+		stream, _ := conn.NewStream(ctx, "", nil)
+		streams = append(streams, stream)
+	}
+	for _, stream := range streams {
+		_ = stream.Close()
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		invoke(ctx, conn)
+	}
+}

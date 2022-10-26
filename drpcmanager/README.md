@@ -70,6 +70,16 @@ func (m *Manager) String() string
 ```
 String returns a string representation of the manager.
 
+#### func (*Manager) Unblocked
+
+```go
+func (m *Manager) Unblocked() <-chan struct{}
+```
+Unblocked returns a channel that is closed when the manager is no longer blocked
+from creating a new stream due to a previous stream's soft cancel. It should not
+be called concurrently with NewClientStream or NewServerStream and the return
+result is only valid until the next call to NewClientStream or NewServerStream.
+
 #### type Options
 
 ```go
@@ -83,6 +93,13 @@ type Options struct {
 
 	// Stream are passed to any streams the manager creates.
 	Stream drpcstream.Options
+
+	// SoftCancel controls if a context cancel will cause the transport to be
+	// closed or, if true, a soft cancel message will be attempted if possible.
+	// A soft cancel can reduce the amount of closed and dialed connections at
+	// the potential cost of higher latencies if there is latent data still being
+	// flushed when the cancel happens.
+	SoftCancel bool
 
 	// InactivityTimeout is the amount of time the manager will wait when creating
 	// a NewServerStream. It only includes the time it is reading packets from the

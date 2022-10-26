@@ -22,6 +22,22 @@ implementation as possible.
 
 ## Usage
 
+#### type Conn
+
+```go
+type Conn interface {
+	drpc.Conn
+
+	// Unblocked returns a channel that is closed when the conn is available
+	// for an Invoke or NewStream call.
+	Unblocked() <-chan struct{}
+}
+```
+
+Conn is the type of connections that can be managed by the pool. Connections
+need to provide an Unblocked function that can be used by the pool to skip
+connections that are still blocked on canceling the last RPC.
+
 #### type Options
 
 ```go
@@ -78,7 +94,7 @@ of the combined errors from closing.
 
 ```go
 func (p *Pool) Get(ctx context.Context, key interface{},
-	dial func(ctx context.Context, key interface{}) (drpc.Conn, error)) drpc.Conn
+	dial func(ctx context.Context, key interface{}) (Conn, error)) Conn
 ```
 Get returns a new drpc.Conn that will use the provided dial function to create
 an underlying conn to be cached by the Pool when Conn methods are invoked. It

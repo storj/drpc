@@ -202,6 +202,13 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
 		s.terminate(err)
 		return nil
 
+	case drpcwire.KindCancel:
+		err := context.Canceled
+		s.sigs.cancel.Set(err)
+		s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
+		s.terminate(err)
+		return nil
+
 	case drpcwire.KindClose:
 		s.sigs.recv.Set(io.EOF)
 		s.pbuf.Close(io.EOF)
@@ -261,9 +268,10 @@ func (s *Stream) newFrame(kind drpcwire.Kind) drpcwire.Frame {
 // sendPacket sends the packet in a single write and flushes. It does not check for
 // any conditions to stop it from writing and is meant for internal stream use to
 // do things like signal errors or closes to the remote side.
-func (s *Stream) sendPacket(kind drpcwire.Kind, data []byte) (err error) {
+func (s *Stream) sendPacket(kind drpcwire.Kind, control bool, data []byte) (err error) {
 	fr := s.newFrame(kind)
 	fr.Data = data
+	fr.Control = control
 	fr.Done = true
 
 	s.log("SEND", fr.String)
@@ -470,7 +478,37 @@ func (s *Stream) SendError(serr error) (err error) {
 	s.terminate(termError)
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.KindError, drpcwire.MarshalError(serr)))
+	return s.checkCancelError(s.sendPacket(drpcwire.KindError, false, drpcwire.MarshalError(serr)))
+}
+
+// SendCancel transitions the stream into the canceled state with context.Canceled and
+// sends a cancel error to the remote side for a soft cancel. It is a no-op if the
+// stream is already terminated. It returns true for busy if writes are already blocked
+// and a hard cancel is required.
+func (s *Stream) SendCancel() (busy bool, err error) {
+	s.log("CALL", func() string { return "SendCancel()" })
+
+	s.mu.Lock()
+	if s.sigs.term.IsSet() {
+		s.mu.Unlock()
+		return false, nil
+	}
+
+	// if writes are happening, then we have to do a hard cancel.
+	if !s.write.Unlocked() {
+		s.mu.Unlock()
+		return true, nil
+	}
+
+	defer s.checkFinished()
+	s.write.Lock()
+	defer s.write.Unlock()
+
+	s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
+	s.terminate(context.Canceled)
+	s.mu.Unlock()
+
+	return false, s.checkCancelError(s.sendPacket(drpcwire.KindCancel, true, nil))
 }
 
 // Close terminates the stream and sends that the stream has been closed to the remote.
@@ -491,7 +529,7 @@ func (s *Stream) Close() (err error) {
 	s.terminate(termClosed)
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.KindClose, nil))
+	return s.checkCancelError(s.sendPacket(drpcwire.KindClose, false, nil))
 }
 
 // CloseSend informs the remote that no more messages will be sent. If the remote has
@@ -514,7 +552,7 @@ func (s *Stream) CloseSend() (err error) {
 	s.terminateIfBothClosed()
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.KindCloseSend, nil))
+	return s.checkCancelError(s.sendPacket(drpcwire.KindCloseSend, false, nil))
 }
 
 // Cancel transitions the stream into a state where all writes to the transport will return

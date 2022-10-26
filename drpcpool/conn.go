@@ -13,13 +13,24 @@ import (
 	"storj.io/drpc/drpcsignal"
 )
 
+// Conn is the type of connections that can be managed by the pool. Connections
+// need to provide an Unblocked function that can be used by the pool to skip
+// connections that are still blocked on canceling the last RPC.
+type Conn interface {
+	drpc.Conn
+
+	// Unblocked returns a channel that is closed when the conn is available
+	// for an Invoke or NewStream call.
+	Unblocked() <-chan struct{}
+}
+
 // poolConn is a wrapper that asks a Pool for an underlying conn when necessary.
 type poolConn struct {
 	once sync.Once
 	done chan struct{}
 	key  interface{}
 	pool *Pool
-	dial func(context.Context, interface{}) (drpc.Conn, error)
+	dial func(context.Context, interface{}) (Conn, error)
 }
 
 // Close sets the poolConn to be in a closed state, inhibiting subsequent Invoke or NewStream
@@ -33,6 +44,11 @@ func (p *poolConn) Close() error {
 func (p *poolConn) Closed() <-chan struct{} {
 	return p.done
 }
+
+// Unblocked returns a channel that is closed when calls to Invoke and NewStream are not
+// inhibited by a previous cancel. For this conn, previous cancels are always internally
+// handled by the pool, so it is always unblocked.
+func (p *poolConn) Unblocked() <-chan struct{} { return closedCh }
 
 // Invoke grabs a temporary connection from the Pool, calls Invoke on that, and replaces the
 // connection into the pool after.
@@ -82,7 +98,7 @@ func (p *poolConn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding)
 	return sw, nil
 }
 
-func (p *poolConn) monitorStream(stream drpc.Stream, conn drpc.Conn, sig *drpcsignal.Signal) {
+func (p *poolConn) monitorStream(stream drpc.Stream, conn Conn, sig *drpcsignal.Signal) {
 	<-stream.Context().Done()
 	p.pool.put(p.key, conn)
 	sig.Set(nil)

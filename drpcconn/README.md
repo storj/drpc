@@ -67,6 +67,14 @@ func (c *Conn) Transport() drpc.Transport
 ```
 Transport returns the transport the conn is using.
 
+#### func (*Conn) Unblocked
+
+```go
+func (c *Conn) Unblocked() <-chan struct{}
+```
+Unblocked returns a channel that is closed once the connection is no longer
+blocked by a previously canceled Invoke or NewStream call.
+
 #### type Options
 
 ```go

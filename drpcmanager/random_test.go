@@ -145,7 +145,8 @@ func (rs *randServer) execute(t *testing.T, wr *drpcwire.Writer, op byte) {
 			drpcwire.KindCloseSend,
 			drpcwire.KindClose,
 			drpcwire.KindError,
-		}[arg%3]
+			drpcwire.KindCancel,
+		}[arg%4]
 
 		assert.NoError(t, wr.WriteFrame(drpcwire.Frame{
 			Data: make([]byte, 8),

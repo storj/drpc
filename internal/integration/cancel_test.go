@@ -239,7 +239,7 @@ func TestCancelRepeatedPooled(t *testing.T) {
 	}
 	conns := 0
 	foo := func(ctx context.Context, p *drpcpool.Pool) {
-		conn := p.Get(ctx, "foo", func(ctx context.Context, key interface{}) (drpc.Conn, error) {
+		conn := p.Get(ctx, "foo", func(ctx context.Context, key interface{}) (drpcpool.Conn, error) {
 			conns++
 			return createRawConnection(t, server, tctx), nil
 		})

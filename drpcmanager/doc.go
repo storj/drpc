@@ -3,3 +3,10 @@
 
 // Package drpcmanager reads packets from a transport to make streams.
 package drpcmanager
+
+// closedCh is an already closed channel.
+var closedCh = func() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}()

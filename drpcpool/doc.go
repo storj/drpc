@@ -34,3 +34,10 @@ func closed(ch <-chan struct{}) bool {
 		return false
 	}
 }
+
+// closedCh is an already closed channel.
+var closedCh = func() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}()

@@ -169,6 +169,16 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error)
 ```
 RawWrite sends the data bytes with the given kind.
 
+#### func (*Stream) SendCancel
+
+```go
+func (s *Stream) SendCancel() (busy bool, err error)
+```
+SendCancel transitions the stream into the canceled state with context.Canceled
+and sends a cancel error to the remote side for a soft cancel. It is a no-op if
+the stream is already terminated. It returns true for busy if writes are already
+blocked and a hard cancel is required.
+
 #### func (*Stream) SendError
 
 ```go

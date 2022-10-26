@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/zeebo/errs"
-
-	"storj.io/drpc"
 )
 
 // Options contains the options to configure a pool.
@@ -35,7 +33,7 @@ type Options struct {
 
 type entry struct {
 	key interface{}
-	val drpc.Conn
+	val Conn
 	exp *time.Timer
 }
 
@@ -81,7 +79,7 @@ func (p *Pool) Close() (err error) {
 // underlying conn to be cached by the Pool when Conn methods are invoked. It will
 // share any cached connections with other conns that use the same key.
 func (p *Pool) Get(ctx context.Context, key interface{},
-	dial func(ctx context.Context, key interface{}) (drpc.Conn, error)) drpc.Conn {
+	dial func(ctx context.Context, key interface{}) (Conn, error)) Conn {
 	return &poolConn{
 		done: make(chan struct{}),
 		key:  key,
@@ -141,18 +139,6 @@ func (p *Pool) filterCacheKey(key interface{}) {
 	}
 }
 
-// firstCacheKeyEntryLocked returns the newest put entry for the
-// given cache key.
-//
-// It should only be called with the mutex held.
-func (p *Pool) firstCacheKeyEntryLocked(key interface{}) *entry {
-	entries := p.entries[key]
-	if len(entries) == 0 {
-		return nil
-	}
-	return entries[len(entries)-1]
-}
-
 // oldestEntryLocked returns the oldest put entry from the Cache or nil
 // if one does not exist.
 //
@@ -166,14 +152,13 @@ func (p *Pool) oldestEntryLocked() *entry {
 
 // take acquires a value from the cache if one exists. It returns
 // nil if one does not.
-func (p *Pool) take(key interface{}) drpc.Conn {
+func (p *Pool) take(key interface{}) Conn {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	for {
-		ent := p.firstCacheKeyEntryLocked(key)
-		if ent == nil {
-			return nil
+	for _, ent := range p.entries[key] {
+		if !closed(ent.val.Unblocked()) {
+			continue
 		}
 		p.filterEntryLocked(ent)
 
@@ -185,11 +170,13 @@ func (p *Pool) take(key interface{}) drpc.Conn {
 
 		return ent.val
 	}
+
+	return nil
 }
 
 // put places the connection in to the cache with the provided key, ensuring
 // that the size limits the Pool is configured with are respected.
-func (p *Pool) put(key interface{}, val drpc.Conn) {
+func (p *Pool) put(key interface{}, val Conn) {
 	if p.opts.Capacity < 0 || p.opts.KeyCapacity < 0 {
 		_ = val.Close()
 		return

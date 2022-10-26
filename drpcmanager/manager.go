@@ -35,6 +35,13 @@ type Options struct {
 	// Stream are passed to any streams the manager creates.
 	Stream drpcstream.Options
 
+	// SoftCancel controls if a context cancel will cause the transport to be
+	// closed or, if true, a soft cancel message will be attempted if possible.
+	// A soft cancel can reduce the amount of closed and dialed connections at
+	// the potential cost of higher latencies if there is latent data still being
+	// flushed when the cancel happens.
+	SoftCancel bool
+
 	// InactivityTimeout is the amount of time the manager will wait when creating
 	// a NewServerStream. It only includes the time it is reading packets from the
 	// remote client. In other words, it only includes the time that the client
@@ -155,25 +162,34 @@ func (m *Manager) acquireSemaphore(ctx context.Context) error {
 // the manager is terminated.
 func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
 	prev := m.sbuf.Get()
-
 	if prev == nil {
 		return nil
-	} else if err := prev.Close(); err != nil {
+	}
+
+	// if the stream is not finished yet, we need to wait for it to be
+	// finished before letting the next stream to start. this has to be
+	// done before closing to allow soft cancels to proceed.
+	if !prev.IsFinished() {
+		m.log("UNFIN", prev.String)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+
+		case <-m.sigs.term.Signal():
+			return m.sigs.term.Err()
+
+		case <-prev.Finished():
+			return nil
+		}
+	}
+
+	// ensure the previous stream is closed no matter what.
+	if err := prev.Close(); err != nil {
 		return err
-	} else if prev.IsFinished() {
-		return nil
 	}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-
-	case <-m.sigs.term.Signal():
-		return m.sigs.term.Err()
-
-	case <-prev.Finished():
-		return nil
-	}
+	return nil
 }
 
 // terminate puts the Manager into a terminal state and closes any resources
@@ -292,8 +308,6 @@ func (m *Manager) manageStreams() {
 // manageStream watches the context and the stream and returns when the stream is
 // finished, canceling the stream if the context is canceled.
 func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
-	defer m.sem.Recv()
-
 	select {
 	case <-m.sigs.term.Signal():
 		err := m.sigs.term.Err()
@@ -302,21 +316,45 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 		}
 		stream.Cancel(err)
 		<-m.sterm
-		return
+		m.sem.Recv()
 
 	case <-m.sterm:
-		return
+		m.sem.Recv()
 
 	case <-ctx.Done():
-		// If the stream isn't already finished, we have to terminate the transport
-		// to do an active cancel. If it is already finished, there is no need.
-		isFinished := stream.IsFinished()
-		stream.Cancel(ctx.Err())
-		if !isFinished {
-			m.log("UNFIN", stream.String)
-			m.terminate(ctx.Err())
+		m.log("CANCEL", stream.String)
+
+		if m.opts.SoftCancel {
+			// allow a new stream to begin.
+			m.sem.Recv()
+
+			// attempt to send the soft cancel. if it fails or if the stream is busy
+			// sending something else, then we have to hard cancel.
+			if busy, err := stream.SendCancel(); err != nil {
+				m.terminate(err)
+			} else if busy {
+				m.terminate(ctx.Err())
+			}
+			stream.Cancel(ctx.Err())
+
+			// wait for the stream to signal that it is terminated.
+			<-m.sterm
+		} else {
+			// If the stream isn't already finished, we have to terminate the transport
+			// to do an active cancel. If it is already finished, there is no need.
+			isFinished := stream.IsFinished()
+			stream.Cancel(ctx.Err())
+			if !isFinished {
+				m.log("UNFIN", stream.String)
+				m.terminate(ctx.Err())
+			}
+
+			// wait for the stream to signal that it is terminated.
+			<-m.sterm
+
+			// allow a new stream to begin.
+			m.sem.Recv()
 		}
-		<-m.sterm
 	}
 }
 
@@ -327,6 +365,17 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 // Closed returns a channel that is closed once the manager is closed.
 func (m *Manager) Closed() <-chan struct{} {
 	return m.sigs.term.Signal()
+}
+
+// Unblocked returns a channel that is closed when the manager is no longer blocked
+// from creating a new stream due to a previous stream's soft cancel. It should not
+// be called concurrently with NewClientStream or NewServerStream and the return
+// result is only valid until the next call to NewClientStream or NewServerStream.
+func (m *Manager) Unblocked() <-chan struct{} {
+	if prev := m.sbuf.Get(); prev != nil {
+		return prev.Context().Done()
+	}
+	return closedCh
 }
 
 // Close closes the transport the manager is using.

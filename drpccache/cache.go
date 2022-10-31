@@ -23,12 +23,12 @@ func New() *Cache { return &Cache{} }
 //
 // Example usage:
 //
-// 	cache := drpccache.FromContext(stream.Context())
-// 	if cache != nil {
-// 	       value := cache.LoadOrCreate("initialized", func() (interface{}) {
-// 	               return 42
-// 	       })
-// 	}
+//	cache := drpccache.FromContext(stream.Context())
+//	if cache != nil {
+//	       value := cache.LoadOrCreate("initialized", func() (interface{}) {
+//	               return 42
+//	       })
+//	}
 func FromContext(ctx context.Context) *Cache {
 	cache, _ := ctx.Value(cacheKey{}).(*Cache)
 	return cache

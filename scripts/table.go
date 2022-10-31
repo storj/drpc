@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 // Copyright (C) 2021 Storj Labs, Inc.

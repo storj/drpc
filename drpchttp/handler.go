@@ -25,7 +25,7 @@ func New(handler drpc.Handler) http.Handler {
 // Metadata can be attached by adding the "X-Drpc-Metadata" header to the request
 // possibly multiple times. The format is
 //
-//     X-Drpc-Metadata: percentEncode(key)=percentEncode(value)
+//	X-Drpc-Metadata: percentEncode(key)=percentEncode(value)
 //
 // where percentEncode is the encoding used for query strings. Only the '%' and '='
 // characters are necessary to be escaped.
@@ -37,10 +37,10 @@ func New(handler drpc.Handler) http.Handler {
 // response code will not be 200 OK, the response content type will always be
 // "application/json", and the body will look something like
 //
-//    {
-//      "code": "...",
-//      "msg": "..."
-//    }
+//	{
+//	  "code": "...",
+//	  "msg": "..."
+//	}
 //
 // where msg is a textual description of the error, and code is a short string
 // that describes the kind of error that happened, if possible. If nothing

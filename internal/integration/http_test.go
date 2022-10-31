@@ -6,7 +6,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,7 +46,7 @@ func TestHTTP(t *testing.T) {
 		resp, err := http.DefaultClient.Do(req)
 		assert.NoError(t, err)
 
-		data, err := ioutil.ReadAll(resp.Body)
+		data, err := io.ReadAll(resp.Body)
 		assert.NoError(t, resp.Body.Close())
 		assert.NoError(t, err)
 

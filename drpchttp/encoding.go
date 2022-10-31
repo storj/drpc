@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 
 	"github.com/zeebo/errs"
 
@@ -102,7 +101,7 @@ func grpcRead(r io.Reader) ([]byte, error) {
 }
 
 func twirpRead(r io.Reader) ([]byte, error) {
-	if data, err := ioutil.ReadAll(io.LimitReader(r, maxSize)); err != nil {
+	if data, err := io.ReadAll(io.LimitReader(r, maxSize)); err != nil {
 		return nil, err
 	} else if len(data) > maxSize {
 		return nil, errs.New("message too large")

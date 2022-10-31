@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -101,7 +100,7 @@ func TestStream_StateTransitions(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		st := New(ctx, 0, drpcwire.NewWriter(ioutil.Discard, 0))
+		st := New(ctx, 0, drpcwire.NewWriter(io.Discard, 0))
 		assert.NoError(t, test.Op(st))
 
 		checkErrs(t, test.Send, st.RawWrite(drpcwire.KindMessage, nil))
@@ -156,7 +155,7 @@ func TestStream_Unblocks(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		st := New(ctx, 0, drpcwire.NewWriter(ioutil.Discard, 0))
+		st := New(ctx, 0, drpcwire.NewWriter(io.Discard, 0))
 
 		ctx.Run(func(ctx context.Context) { _, _ = st.RawRecv() })
 		assert.NoError(t, test.Op(st))
@@ -166,7 +165,7 @@ func TestStream_Unblocks(t *testing.T) {
 
 func TestStream_ContextCancel(t *testing.T) {
 	ctx := context.Background()
-	st := New(ctx, 0, drpcwire.NewWriter(ioutil.Discard, 0))
+	st := New(ctx, 0, drpcwire.NewWriter(io.Discard, 0))
 
 	child, cancel := context.WithCancel(st.Context())
 	defer cancel()

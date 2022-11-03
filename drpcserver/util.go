@@ -15,7 +15,8 @@ import (
 func isTemporary(err error) bool {
 	var nErr net.Error
 	if errors.As(err, &nErr) {
-		return nErr.Temporary()
+		//lint:ignore SA1019 while this is deprecated, there is no good replacement
+		return nErr.Temporary() //nolint
 	}
 
 	return false

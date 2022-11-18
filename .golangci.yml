@@ -11,7 +11,6 @@ run:
 linters:
   enable:
     - bodyclose               # find unclosed http response bodies
-    - deadcode                # find code that is not used
     - dogsled                 # checks for too many ignored arguments
     - durationcheck           # verifies whether durations are multiplied, usually a mistake
     - errcheck                # find unchecked errors
@@ -33,9 +32,7 @@ linters:
     - nolintlint              # checks that nolint directives are correct
     - revive                  # check standard linting rules
     - staticcheck             # comprehensive checks
-    - structcheck             # check for unused struct parameters
     - unconvert               # remove unnecessary conversions
-    - varcheck                # find unused global variables and constants
     - wastedassign
     #TODO#- forcetypeassert   # needs work to replace unchecked interface type assertion
     #TODO#- gochecknoglobals  # needs work to remove globals

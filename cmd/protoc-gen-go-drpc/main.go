@@ -1,6 +1,7 @@
 // Copyright (C) 2019 Storj Labs, Inc.
 // See LICENSE for copying information.
 
+// protoc-gen-go-drpc generates DRPC code for protobuf services.
 package main
 
 import (

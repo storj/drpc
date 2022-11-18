@@ -50,7 +50,7 @@ Options contains the options to configure a pool.
 #### type Pool
 
 ```go
-type Pool[K comparable] struct {
+type Pool struct {
 }
 ```
 
@@ -62,22 +62,23 @@ connections either in total or per key.
 #### func  New
 
 ```go
-func New[K comparable](opts Options) *Pool[K]
+func New(opts Options) *Pool
 ```
 New constructs a new Pool with the provided Options.
 
-#### func (*Pool[K]) Close
+#### func (*Pool) Close
 
 ```go
-func (p *Pool[K]) Close() (err error)
+func (p *Pool) Close() (err error)
 ```
 Close evicts all entries from the Pool's cache, closing them and returning all
 of the combined errors from closing.
 
-#### func (*Pool[K]) Get
+#### func (*Pool) Get
 
 ```go
-func (p *Pool[K]) Get(ctx context.Context, key K, dial func(ctx context.Context, key K) (drpc.Conn, error)) drpc.Conn
+func (p *Pool) Get(ctx context.Context, key interface{},
+	dial func(ctx context.Context, key interface{}) (drpc.Conn, error)) drpc.Conn
 ```
 Get returns a new drpc.Conn that will use the provided dial function to create
 an underlying conn to be cached by the Pool when Conn methods are invoked. It

@@ -31,12 +31,6 @@ type Options struct {
 	KeyCapacity int
 }
 
-type entry struct {
-	key interface{}
-	val Conn
-	exp *time.Timer
-}
-
 // Pool is a connection pool with key type K. It maintains a cache of connections
 // per key and ensures the total number of connections in the cache is bounded by
 // configurable values. It does not limit the maximum concurrency of the number
@@ -44,15 +38,15 @@ type entry struct {
 type Pool struct {
 	opts    Options
 	mu      sync.Mutex
-	entries map[interface{}][]*entry
-	order   []*entry
+	entries map[interface{}]*list
+	order   list
 }
 
 // New constructs a new Pool with the provided Options.
 func New(opts Options) *Pool {
 	return &Pool{
 		opts:    opts,
-		entries: make(map[interface{}][]*entry),
+		entries: make(map[interface{}]*list),
 	}
 }
 
@@ -63,14 +57,12 @@ func (p *Pool) Close() (err error) {
 	defer p.mu.Unlock()
 
 	var eg errs.Group
-	for _, entries := range p.entries {
-		for _, ent := range entries {
-			eg.Add(p.closeEntry(ent))
-		}
+	for ent := p.order.head; ent != nil; ent = ent.global.next {
+		eg.Add(p.closeEntry(ent))
 	}
 
-	p.entries = make(map[interface{}][]*entry)
-	p.order = nil
+	p.entries = make(map[interface{}]*list)
+	p.order = list{}
 
 	return eg.Err()
 }
@@ -92,6 +84,23 @@ func (p *Pool) Get(ctx context.Context, key interface{},
 // helpers
 //
 
+func (p *Pool) removeEntry(ent *entry) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	local := p.entries[ent.key]
+	if local == nil {
+		return
+	}
+
+	local.removeEntry(ent, (*entry).localList)
+	p.order.removeEntry(ent, (*entry).globalList)
+
+	if local.count == 0 {
+		delete(p.entries, ent.key)
+	}
+}
+
 // closeEntry ensures the timer and connection are closed, returning any errors.
 func (p *Pool) closeEntry(ent *entry) error {
 	if ent.exp == nil || ent.exp.Stop() {
@@ -100,67 +109,27 @@ func (p *Pool) closeEntry(ent *entry) error {
 	return nil
 }
 
-// filterEntry is a helper to remove a specific entry from a slice of entries.
-func filterEntry(entries []*entry, ent *entry) []*entry {
-	for i := range entries {
-		if entries[i] == ent {
-			copy(entries[i:], entries[i+1:])
-			return entries[:len(entries)-1]
-		}
-	}
-	return entries
-}
-
-// filterEntryLocked removes the entry from the map, deleting the
-// map key if necessary.
-//
-// It should only be called with the mutex held.
-func (p *Pool) filterEntryLocked(ent *entry) {
-	entries := p.entries[ent.key]
-	if len(entries) <= 1 {
-		delete(p.entries, ent.key)
-	} else {
-		p.entries[ent.key] = filterEntry(entries, ent)
-	}
-	p.order = filterEntry(p.order, ent)
-}
-
-// filterCacheKey removes any closed or expired conns from the list
-// of entries for the key, deleting the key from the entries map if
-// necessary.
-func (p *Pool) filterCacheKey(key interface{}) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	for _, ent := range p.entries[key] {
-		if closed(ent.val.Closed()) {
-			p.filterEntryLocked(ent)
-		}
-	}
-}
-
-// oldestEntryLocked returns the oldest put entry from the Cache or nil
-// if one does not exist.
-//
-// It should only be called with the mutex held.
-func (p *Pool) oldestEntryLocked() *entry {
-	if len(p.order) == 0 {
-		return nil
-	}
-	return p.order[0]
-}
-
 // take acquires a value from the cache if one exists. It returns
 // nil if one does not.
 func (p *Pool) take(key interface{}) Conn {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	for _, ent := range p.entries[key] {
+	local := p.entries[key]
+	if local == nil {
+		return nil
+	}
+
+	// N.B. this loop depends on the fact that removing an entry from
+	// the list does not modify the entry's next pointer. a removed
+	// entry still points into the list, but the things that it points
+	// at no longer point at it.
+	for ent := local.head; ent != nil; ent = ent.local.next {
 		if !closed(ent.val.Unblocked()) {
 			continue
 		}
-		p.filterEntryLocked(ent)
+		local.removeEntry(ent, (*entry).localList)
+		p.order.removeEntry(ent, (*entry).globalList)
 
 		if ent.exp != nil && !ent.exp.Stop() {
 			continue
@@ -187,35 +156,43 @@ func (p *Pool) put(key interface{}, val Conn) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	for {
-		entries := p.entries[key]
-		if p.opts.KeyCapacity == 0 || len(entries) < p.opts.KeyCapacity {
-			break
-		}
-
-		ent := entries[0]
-		_ = p.closeEntry(ent)
-		p.filterEntryLocked(ent)
+	local := p.entries[key]
+	if local == nil {
+		local = new(list)
+		p.entries[key] = local
 	}
 
-	for {
-		if p.opts.Capacity == 0 || len(p.order) < p.opts.Capacity {
-			break
-		}
+	for p.opts.KeyCapacity != 0 && local.count >= p.opts.KeyCapacity {
+		ent := local.head
 
-		ent := p.oldestEntryLocked()
 		_ = p.closeEntry(ent)
-		p.filterEntryLocked(ent)
+
+		local.removeEntry(ent, (*entry).localList)
+		p.order.removeEntry(ent, (*entry).globalList)
+	}
+
+	for p.opts.Capacity != 0 && p.order.count >= p.opts.Capacity {
+		ent := p.order.head
+		local := p.entries[ent.key]
+
+		_ = p.closeEntry(ent)
+
+		local.removeEntry(ent, (*entry).localList)
+		p.order.removeEntry(ent, (*entry).globalList)
+
+		if local.count == 0 {
+			delete(p.entries, ent.key)
+		}
 	}
 
 	ent := &entry{key: key, val: val}
-	p.entries[key] = append(p.entries[key], ent)
-	p.order = append(p.order, ent)
+	local.appendEntry(ent, (*entry).localList)
+	p.order.appendEntry(ent, (*entry).globalList)
 
 	if p.opts.Expiration > 0 {
 		ent.exp = time.AfterFunc(p.opts.Expiration, func() {
 			_ = val.Close()
-			p.filterCacheKey(key)
+			p.removeEntry(ent)
 		})
 	}
 }

@@ -337,6 +337,65 @@ func TestPool_Blocked(t *testing.T) {
 	assert.Equal(t, len(closed), 0)
 }
 
+func TestPool_MultipleCachedReuse(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	pool := New(Options{KeyCapacity: 2})
+	defer func() { _ = pool.Close() }()
+
+	closeStream := func(st drpc.Stream) { _ = st.Close(); <-st.Context().Done() }
+	closedConns := make(map[int]bool)
+	dials := 0
+	conn := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+		d := dials
+		dials++
+		return &callbackConn{
+			ClosedFn: func() <-chan struct{} {
+				if closedConns[d] {
+					return closedCh
+				}
+				return nil
+			},
+		}, nil
+	})
+
+	// start two concurrent streams
+	st1, err := conn.NewStream(ctx, "rpc", nil)
+	assert.NoError(t, err)
+	defer closeStream(st1)
+
+	st2, err := conn.NewStream(ctx, "rpc", nil)
+	assert.NoError(t, err)
+	defer closeStream(st2)
+
+	// ensure we dialed twice
+	assert.Equal(t, dials, 2)
+
+	// put both the dialed connections back into the pool
+	closeStream(st1)
+	closeStream(st2)
+
+	// cause the first connection to be considered dead
+	closedConns[0] = true
+
+	// start a new stream
+	st3, err := conn.NewStream(ctx, "rpc", nil)
+	assert.NoError(t, err)
+	defer closeStream(st3)
+
+	// the new stream should have reused the second connection
+	assert.Equal(t, dials, 2)
+
+	// start a new concurrent stream
+	st4, err := conn.NewStream(ctx, "rpc", nil)
+	assert.NoError(t, err)
+	defer closeStream(st4)
+
+	// there should have been no free streams left
+	assert.Equal(t, dials, 3)
+}
+
 func BenchmarkPool(b *testing.B) {
 	ctx := drpctest.NewTracker(b)
 	defer ctx.Close()

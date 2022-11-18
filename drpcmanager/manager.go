@@ -215,12 +215,27 @@ func (m *Manager) manageReader() {
 
 	var pkt drpcwire.Packet
 	var err error
+	var run int
 
 	for !m.sigs.term.IsSet() {
+		// if we have a run of "small" packets, drop the buffer to release
+		// memory so that a burst of large packets does not cause eternally
+		// large heap usage.
+		if run > 10 {
+			pkt.Data = nil
+			run = 0
+		}
+
 		pkt, err = m.rd.ReadPacketUsing(pkt.Data[:0])
 		if err != nil {
 			m.terminate(managerClosed.Wrap(err))
 			return
+		}
+
+		if len(pkt.Data) < cap(pkt.Data)/4 {
+			run++
+		} else {
+			run = 0
 		}
 
 		m.log("READ", pkt.String)

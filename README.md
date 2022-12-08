@@ -36,9 +36,9 @@ A drop-in, lightweight gRPC replacement.
 
  ## Examples
 
-  * [A basic drpc client and server](./tree/main/examples/drpc)
-  * [A basic drpc client and server that also serves a Twirp/grpc-web compatible http server on the same port](./tree/main/examples/drpc)
-  * [Serving gRPC and DRPC on the same port](./tree/main/examples/grpc_and_drpc)
+  * [A basic drpc client and server](../../tree/main/examples/drpc)
+  * [A basic drpc client and server that also serves a Twirp/grpc-web compatible http server on the same port](../../tree/main/examples/drpc)
+  * [Serving gRPC and DRPC on the same port](../../tree/main/examples/grpc_and_drpc)
 
 ## Other Languages
 

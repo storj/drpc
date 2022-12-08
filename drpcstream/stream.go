@@ -213,6 +213,11 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
 		return nil
 
 	default:
+		// ignore any unknown control packets for forwards compatibility
+		if pkt.Control {
+			return nil
+		}
+
 		err := drpc.InternalError.New("unknown packet kind: %s", pkt.Kind)
 		s.terminate(err)
 		return err

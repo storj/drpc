@@ -4,19 +4,17 @@
 package drpcserver
 
 import (
-	"context"
 	"net"
 	"testing"
 
 	"github.com/zeebo/assert"
 
-	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpctest"
 )
 
 func TestServerTemporarySleep(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	calls := 0
 	l := listener(func() (net.Conn, error) {

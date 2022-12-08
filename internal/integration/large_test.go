@@ -5,7 +5,6 @@ package integration
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"math/rand"
@@ -14,13 +13,12 @@ import (
 	"github.com/zeebo/assert"
 	"github.com/zeebo/errs"
 
-	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpctest"
 )
 
 func TestLarge(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	//
 	// define some test helpers
@@ -67,7 +65,7 @@ func TestLarge(t *testing.T) {
 	// execute the actual test
 	//
 
-	cli, close := createConnection(&impl{
+	cli, close := createConnection(t, &impl{
 		Method4Fn: func(stream DRPCService_Method4Stream) error {
 			return run(
 				func(n int64) error { return stream.Send(&Out{Out: n, Data: data(n)}) },

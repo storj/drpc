@@ -11,17 +11,15 @@ import (
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc/drpccache"
-	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpctest"
 )
 
 func TestCache(t *testing.T) {
-	// ensure that everything we launch eventually exits
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	// create a server that signals then waits for the context to die
-	cli, close := createConnection(impl{
+	cli, close := createConnection(t, impl{
 		Method1Fn: func(ctx context.Context, _ *In) (*Out, error) {
 			cache := drpccache.FromContext(ctx)
 			if cache == nil {

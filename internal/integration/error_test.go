@@ -12,16 +12,15 @@ import (
 
 	"github.com/zeebo/assert"
 
-	"storj.io/drpc/drpcctx"
 	"storj.io/drpc/drpcerr"
+	"storj.io/drpc/drpctest"
 )
 
 func TestError(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	cli, close := createConnection(standardImpl)
+	cli, close := createConnection(t, standardImpl)
 	defer close()
 
 	for i := int64(2); i < 20; i++ {
@@ -33,11 +32,10 @@ func TestError(t *testing.T) {
 }
 
 func TestError_Context(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	cli, close := createConnection(impl{
+	cli, close := createConnection(t, impl{
 		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
 			return nil, [...]error{
 				context.Canceled,
@@ -56,11 +54,10 @@ func TestError_Context(t *testing.T) {
 }
 
 func TestError_UnitaryNilResponse(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	cli, close := createConnection(impl{
+	cli, close := createConnection(t, impl{
 		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
 			return nil, nil
 		},
@@ -73,11 +70,10 @@ func TestError_UnitaryNilResponse(t *testing.T) {
 }
 
 func TestError_Message(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
-	cli, close := createConnection(impl{
+	cli, close := createConnection(t, impl{
 		Method1Fn: func(ctx context.Context, in *In) (*Out, error) {
 			return nil, errors.New("some unique error message")
 		},

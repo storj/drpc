@@ -12,7 +12,7 @@ import (
 	"github.com/zeebo/assert"
 
 	"storj.io/drpc"
-	"storj.io/drpc/drpcctx"
+	"storj.io/drpc/drpctest"
 	"storj.io/drpc/drpcwire"
 )
 
@@ -29,9 +29,8 @@ func (testEncoding) Unmarshal(buf []byte, msg drpc.Message) error {
 }
 
 func TestConn_InvokeFlushesSendClose(t *testing.T) {
-	ctx := drpcctx.NewTracker(context.Background())
-	defer ctx.Wait()
-	defer ctx.Cancel()
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
 
 	pc, ps := net.Pipe()
 	defer func() { assert.NoError(t, pc.Close()) }()

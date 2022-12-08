@@ -118,13 +118,11 @@ func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 			r.buf = r.buf[:0]
 		}
 
-		switch {
-		case fr.Control:
-			// Ignore any frames with the control bit set so that we can
-			// use it in the future to mean things to people who understand
-			// it.
-			continue
+		// If any frames are set to control, then the whole packet is
+		// considered to be control.
+		pkt.Control = pkt.Control || fr.Control
 
+		switch {
 		case fr.ID.Less(r.id):
 			return Packet{}, drpc.ProtocolError.New("id monotonicity violation")
 
@@ -132,9 +130,10 @@ func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 			r.id = fr.ID
 
 			pkt = Packet{
-				Data: pkt.Data[:0],
-				ID:   fr.ID,
-				Kind: fr.Kind,
+				Data:    pkt.Data[:0],
+				ID:      fr.ID,
+				Kind:    fr.Kind,
+				Control: fr.Control,
 			}
 
 		case fr.Kind != pkt.Kind:

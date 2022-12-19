@@ -44,7 +44,7 @@ A drop-in, lightweight gRPC replacement.
 
 DRPC can be made compatible with RPC clients generated from other languages. For example, [Twirp](https://github.com/twitchtv/twirp) clients and [grpc-web](https://github.com/grpc/grpc-web/) clients can be used against the [drpchttp](https://pkg.go.dev/storj.io/drpc/drpchttp) package.
 
-Native implementations can have some advantages, and so some bindings for other languages are in progress, all in various states of completeness. Join the [Zulip chat](https://drpc.zulipchat.com) if you want more information or to help out with any!
+Native implementations can have some advantages, and so some support for other languages are in progress, all in various states of completeness. Join the [Zulip chat](https://drpc.zulipchat.com) if you want more information or to help out with any!
 
 | Language | Repository                          | Status     |
 |----------|-------------------------------------|------------|

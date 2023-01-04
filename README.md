@@ -32,6 +32,10 @@ A drop-in, lightweight gRPC replacement.
     - Bi-directional streaming support over upgraded HTTP(S) connections using WebSockets
     - Concurrent RPCs via connection pool
 
+* [go.arsenm.dev/drpc](https://pkg.go.dev/go.arsenm.dev/drpc)
+    - Concurrent RPCs based on [yamux](https://pkg.go.dev/github.com/hashicorp/yamux)
+    - Simple drop-in replacements for `drpcserver` and `drpcconn`
+
  * Open an issue or join the [Zulip chat](https://drpc.zulipchat.com) if you'd like to be featured here.
 
  ## Examples

@@ -185,6 +185,12 @@ type Packet struct {
 
 	// Kind is the kind of the packet.
 	Kind Kind
+
+	// Control is set to true for packets that are
+	// forwards compatible. Unknown or invalid packets
+	// with the control bool set should be ignored
+	// instead of triggering any errors.
+	Control bool
 }
 ```
 

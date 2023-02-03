@@ -5,7 +5,6 @@ package drpcpool
 
 import (
 	"context"
-	"sync"
 
 	"github.com/zeebo/errs"
 
@@ -26,8 +25,7 @@ type Conn interface {
 
 // poolConn is a wrapper that asks a Pool for an underlying conn when necessary.
 type poolConn struct {
-	once sync.Once
-	done chan struct{}
+	done drpcsignal.Chan
 	key  interface{}
 	pool *Pool
 	dial func(context.Context, interface{}) (Conn, error)
@@ -36,13 +34,13 @@ type poolConn struct {
 // Close sets the poolConn to be in a closed state, inhibiting subsequent Invoke or NewStream
 // calls.
 func (p *poolConn) Close() error {
-	p.once.Do(func() { close(p.done) })
+	p.done.Close()
 	return nil
 }
 
 // Closed returns a channel that is closed after calls to Invoke and NewStream are inhibited.
 func (p *poolConn) Closed() <-chan struct{} {
-	return p.done
+	return p.done.Get()
 }
 
 // Unblocked returns a channel that is closed when calls to Invoke and NewStream are not
@@ -53,7 +51,7 @@ func (p *poolConn) Unblocked() <-chan struct{} { return closedCh }
 // Invoke grabs a temporary connection from the Pool, calls Invoke on that, and replaces the
 // connection into the pool after.
 func (p *poolConn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in drpc.Message, out drpc.Message) (err error) {
-	if closed(p.done) {
+	if closed(p.done.Get()) {
 		return errs.New("connection closed")
 	}
 
@@ -75,7 +73,7 @@ func (p *poolConn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in
 // closed after the underlying connection has been returned to the pool, allowing callers to
 // be sure that a connection will be reused if possible.
 func (p *poolConn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ drpc.Stream, err error) {
-	if closed(p.done) {
+	if closed(p.done.Get()) {
 		return nil, errs.New("connection closed")
 	}
 
@@ -94,14 +92,14 @@ func (p *poolConn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding)
 	}
 
 	sw := &streamWrapper{Stream: stream}
-	go p.monitorStream(stream, conn, &sw.ctx.sig)
+	go p.monitorStream(stream, conn, &sw.ctx.done)
 	return sw, nil
 }
 
-func (p *poolConn) monitorStream(stream drpc.Stream, conn Conn, sig *drpcsignal.Signal) {
+func (p *poolConn) monitorStream(stream drpc.Stream, conn Conn, done *drpcsignal.Chan) {
 	<-stream.Context().Done()
 	p.pool.put(p.key, conn)
-	sig.Set(nil)
+	done.Close()
 }
 
 type streamWrapper struct {
@@ -111,8 +109,8 @@ type streamWrapper struct {
 
 type streamWrapperContext struct {
 	context.Context
-	sig drpcsignal.Signal
+	done drpcsignal.Chan
 }
 
 func (s *streamWrapper) Context() context.Context     { return &s.ctx }
-func (s *streamWrapperContext) Done() <-chan struct{} { return s.sig.Signal() }
+func (s *streamWrapperContext) Done() <-chan struct{} { return s.done.Get() }

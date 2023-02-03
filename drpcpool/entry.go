@@ -3,7 +3,10 @@
 
 package drpcpool
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type entry struct {
 	key    interface{}
@@ -11,6 +14,11 @@ type entry struct {
 	exp    *time.Timer
 	global node
 	local  node
+}
+
+func (e *entry) String() string {
+	return fmt.Sprintf("<ent %p k:%v c:%v u:%v>",
+		e, e.key, closed(e.val.Closed()), closed(e.val.Unblocked()))
 }
 
 type node struct {

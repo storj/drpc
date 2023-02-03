@@ -5,10 +5,13 @@ package drpcpool
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/zeebo/errs"
+
+	"storj.io/drpc/drpcdebug"
 )
 
 // Options contains the options to configure a pool.
@@ -50,6 +53,12 @@ func New(opts Options) *Pool {
 	}
 }
 
+func (p *Pool) log(what string, cb func() string) {
+	if drpcdebug.Enabled {
+		drpcdebug.Log(func() (_, _, _ string) { return fmt.Sprintf("<pül %p>", p), what, cb() })
+	}
+}
+
 // Close evicts all entries from the Pool's cache, closing them and returning all
 // of the combined errors from closing.
 func (p *Pool) Close() (err error) {
@@ -73,7 +82,6 @@ func (p *Pool) Close() (err error) {
 func (p *Pool) Get(ctx context.Context, key interface{},
 	dial func(ctx context.Context, key interface{}) (Conn, error)) Conn {
 	return &poolConn{
-		done: make(chan struct{}),
 		key:  key,
 		pool: p,
 		dial: dial,
@@ -103,6 +111,8 @@ func (p *Pool) removeEntry(ent *entry) {
 
 // closeEntry ensures the timer and connection are closed, returning any errors.
 func (p *Pool) closeEntry(ent *entry) error {
+	p.log("CLOSE", ent.String)
+
 	if ent.exp == nil || ent.exp.Stop() {
 		return ent.val.Close()
 	}
@@ -137,6 +147,7 @@ func (p *Pool) take(key interface{}) Conn {
 			continue
 		}
 
+		p.log("TAKEN", ent.String)
 		return ent.val
 	}
 
@@ -188,6 +199,8 @@ func (p *Pool) put(key interface{}, val Conn) {
 	ent := &entry{key: key, val: val}
 	local.appendEntry(ent, (*entry).localList)
 	p.order.appendEntry(ent, (*entry).globalList)
+
+	p.log("PUT", ent.String)
 
 	if p.opts.Expiration > 0 {
 		ent.exp = time.AfterFunc(p.opts.Expiration, func() {

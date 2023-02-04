@@ -84,6 +84,10 @@ type drpcService_Method2Client struct {
 	drpc.Stream
 }
 
+func (x *drpcService_Method2Client) GetStream() drpc.Stream {
+	return x.Stream
+}
+
 func (x *drpcService_Method2Client) Send(m *In) error {
 	return x.MsgSend(m, drpcEncoding_File_service_proto{})
 }
@@ -130,6 +134,10 @@ type drpcService_Method3Client struct {
 	drpc.Stream
 }
 
+func (x *drpcService_Method3Client) GetStream() drpc.Stream {
+	return x.Stream
+}
+
 func (x *drpcService_Method3Client) Recv() (*Out, error) {
 	m := new(Out)
 	if err := x.MsgRecv(m, drpcEncoding_File_service_proto{}); err != nil {
@@ -159,6 +167,10 @@ type DRPCService_Method4Client interface {
 
 type drpcService_Method4Client struct {
 	drpc.Stream
+}
+
+func (x *drpcService_Method4Client) GetStream() drpc.Stream {
+	return x.Stream
 }
 
 func (x *drpcService_Method4Client) Send(m *In) error {

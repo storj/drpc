@@ -149,8 +149,5 @@ func (c *Conn) doNewStream(stream *drpcstream.Stream, rpc string, metadata []byt
 	if err := stream.RawWrite(drpcwire.KindInvoke, []byte(rpc)); err != nil {
 		return err
 	}
-	if err := stream.RawFlush(); err != nil {
-		return err
-	}
 	return nil
 }

@@ -4,6 +4,7 @@
 package drpcstream
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -211,4 +212,51 @@ func TestStream_Control(t *testing.T) {
 
 	// an invalid packet is an error if the control bit it not set
 	assert.That(t, drpc.InternalError.Has(st.HandlePacket(drpcwire.Packet{})))
+}
+
+func TestStream_CorkUntilFirstRead(t *testing.T) {
+	run := func() {
+		ctx := drpctest.NewTracker(t)
+		defer ctx.Close()
+
+		var buf bytes.Buffer
+		st := New(ctx, 0, drpcwire.NewWriter(&buf, 50))
+
+		// concurrently read and write at the same time.
+		// we should always see the write happen.
+
+		errch := make(chan error, 3)
+		ctx.Run(func(ctx context.Context) {
+			errch <- st.MsgSend([]byte("write"), byteEncoding{})
+		})
+		ctx.Run(func(ctx context.Context) {
+			_, err := st.RawRecv()
+			errch <- err
+		})
+		ctx.Run(func(ctx context.Context) {
+			errch <- st.HandlePacket(drpcwire.Packet{
+				Data: []byte("read"),
+				ID:   drpcwire.ID{Message: 1},
+				Kind: drpcwire.KindMessage,
+			})
+		})
+
+		assert.NoError(t, <-errch)
+		assert.NoError(t, <-errch)
+		assert.NoError(t, <-errch)
+
+		assert.Equal(t, buf.String(), "\x05\x00\x01\x05write")
+	}
+
+	for i := 0; i < 10000; i++ {
+		run()
+	}
+}
+
+type byteEncoding struct{}
+
+func (byteEncoding) Marshal(msg drpc.Message) ([]byte, error) { return msg.([]byte), nil }
+func (byteEncoding) Unmarshal(buf []byte, msg drpc.Message) error {
+	*msg.(*[]byte) = append(*msg.(*[]byte), buf...)
+	return nil
 }

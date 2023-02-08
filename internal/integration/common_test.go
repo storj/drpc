@@ -34,18 +34,21 @@ func data(n int64) []byte {
 	return out
 }
 
-func in(n int64) *In { return &In{In: n} }
+func in(n int64) *In   { return &In{In: n} }
+func out(n int64) *Out { return &Out{Out: n} }
 
-func createConnection(t testing.TB, server DRPCServiceServer) (DRPCServiceClient, func()) {
-	ctx := drpctest.NewTracker(t)
+func createRawConnection(t testing.TB, server DRPCServiceServer, ctx *drpctest.Tracker) *drpcconn.Conn {
 	c1, c2 := net.Pipe()
-
 	mux := drpcmux.New()
 	_ = DRPCRegisterService(mux, server)
 	srv := drpcserver.New(mux)
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
-	conn := drpcconn.New(c2)
+	return drpcconn.New(c2)
+}
 
+func createConnection(t testing.TB, server DRPCServiceServer) (DRPCServiceClient, func()) {
+	ctx := drpctest.NewTracker(t)
+	conn := createRawConnection(t, server, ctx)
 	return NewDRPCServiceClient(conn), func() {
 		_ = conn.Close()
 		ctx.Close()

@@ -15,6 +15,7 @@ import (
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcconn"
+	"storj.io/drpc/drpcpool"
 	"storj.io/drpc/drpctest"
 )
 
@@ -216,4 +217,49 @@ func TestCancelWhileWriteBlocked(t *testing.T) {
 		t.Logf("%s", buf[:runtime.Stack(buf[:], true)])
 		t.Fatal("timeout")
 	}
+}
+
+func TestCancelRepeatedPooled(t *testing.T) {
+	tctx := drpctest.NewTracker(t)
+	defer tctx.Close()
+	server := impl{
+		Method2Fn: func(stream DRPCService_Method2Stream) error {
+			var total int64
+			for {
+				in, err := stream.Recv()
+				if errors.Is(err, io.EOF) {
+					break
+				} else if err != nil {
+					return err
+				}
+				total += in.In
+			}
+			return stream.SendAndClose(out(total))
+		},
+	}
+	conns := 0
+	foo := func(ctx context.Context, p *drpcpool.Pool) {
+		conn := p.Get(ctx, "foo", func(ctx context.Context, key interface{}) (drpc.Conn, error) {
+			conns++
+			return createRawConnection(t, server, tctx), nil
+		})
+		defer func() { _ = conn.Close() }()
+		stream, err := NewDRPCServiceClient(conn).Method2(ctx)
+		assert.NoError(t, err)
+		assert.NoError(t, stream.Send(in(1)))
+		assert.NoError(t, stream.Send(in(2)))
+		assert.NoError(t, stream.Send(in(3)))
+		out, err := stream.CloseAndRecv()
+		assert.NoError(t, err)
+		assert.Equal(t, out.Out, 6)
+	}
+	p := drpcpool.New(drpcpool.Options{
+		Capacity: 1,
+	})
+	for i := 0; i < 10000; i++ {
+		ctx, cancel := context.WithCancel(tctx)
+		foo(ctx, p)
+		cancel()
+	}
+	t.Log(conns)
 }

@@ -73,7 +73,8 @@ Transport returns the transport the conn is using.
 func (c *Conn) Unblocked() <-chan struct{}
 ```
 Unblocked returns a channel that is closed once the connection is no longer
-blocked by a previously canceled Invoke or NewStream call.
+blocked by a previously canceled Invoke or NewStream call. It should not be
+called concurrently with Invoke or NewStream.
 
 #### type Options
 

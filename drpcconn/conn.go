@@ -58,7 +58,8 @@ func (c *Conn) Closed() <-chan struct{} {
 }
 
 // Unblocked returns a channel that is closed once the connection is no longer
-// blocked by a previously canceled Invoke or NewStream call.
+// blocked by a previously canceled Invoke or NewStream call. It should not
+// be called concurrently with Invoke or NewStream.
 func (c *Conn) Unblocked() <-chan struct{} {
 	return c.man.Unblocked()
 }

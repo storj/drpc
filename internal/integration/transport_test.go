@@ -107,7 +107,21 @@ func TestTransport_ErrorCausesCancel(t *testing.T) {
 	// kill the transport from underneath of it
 	assert.NoError(t, cli.DRPCConn().(*drpcconn.Conn).Transport().Close())
 
-	// ensure both of the errors we sent are canceled
-	assert.That(t, errors.Is(<-serr, context.Canceled))
-	assert.That(t, errors.Is(<-cerr, io.ErrClosedPipe))
+	// the server should always be context.Canceled because it for sure sees
+	// that the remote side closed the connection.
+	{
+		err := <-serr
+		t.Log("server error:", err)
+		assert.That(t, errors.Is(err, context.Canceled))
+	}
+
+	// net.Pipe has a nondeterministic select inside of the read call on the local
+	// side and remote side being closed, and in some rare cases it will see the
+	// remote side closed first, returning io.EOF instead of io.ErrClosedPipe, so
+	// we have to check that as well.
+	{
+		err := <-cerr
+		t.Log("client error:", err)
+		assert.That(t, errors.Is(err, io.ErrClosedPipe) || errors.Is(err, context.Canceled))
+	}
 }

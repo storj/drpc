@@ -180,7 +180,6 @@ func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
 			return m.sigs.term.Err()
 
 		case <-prev.Finished():
-			return nil
 		}
 	}
 

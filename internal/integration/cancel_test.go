@@ -66,6 +66,7 @@ func TestCancel(t *testing.T) {
 		go cancel()
 
 		for !errors.Is(stream.Send(in(1)), io.EOF) {
+			runtime.Gosched()
 		}
 	}
 }
@@ -244,6 +245,7 @@ func TestCancelRepeatedPooled(t *testing.T) {
 			return createRawConnection(t, server, tctx), nil
 		})
 		defer func() { _ = conn.Close() }()
+
 		stream, err := NewDRPCServiceClient(conn).Method2(ctx)
 		assert.NoError(t, err)
 		assert.NoError(t, stream.Send(in(1)))
@@ -252,6 +254,8 @@ func TestCancelRepeatedPooled(t *testing.T) {
 		out, err := stream.CloseAndRecv()
 		assert.NoError(t, err)
 		assert.Equal(t, out.Out, 6)
+
+		<-stream.Context().Done()
 	}
 	p := drpcpool.New(drpcpool.Options{
 		Capacity: 1,
@@ -261,5 +265,5 @@ func TestCancelRepeatedPooled(t *testing.T) {
 		foo(ctx, p)
 		cancel()
 	}
-	t.Log(conns)
+	assert.Equal(t, conns, 1)
 }

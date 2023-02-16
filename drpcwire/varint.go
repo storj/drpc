@@ -3,7 +3,11 @@
 
 package drpcwire
 
-import "storj.io/drpc"
+import (
+	"math/bits"
+
+	"storj.io/drpc"
+)
 
 // ReadVarint reads a varint encoded integer from the front of buf, returning the
 // remaining bytes, the value, and if there was a success. if ok is false, the
@@ -31,3 +35,5 @@ func AppendVarint(buf []byte, x uint64) []byte {
 	}
 	return append(buf, byte(x))
 }
+
+func varintSize(x uint64) uint { return (9*uint(bits.Len64(x)) + 64) / 64 }

@@ -247,7 +247,6 @@ func TestStream_CorkUntilFirstRead(t *testing.T) {
 
 		assert.Equal(t, buf.String(), "\x05\x00\x01\x05write")
 	}
-
 	for i := 0; i < 10000; i++ {
 		run()
 	}

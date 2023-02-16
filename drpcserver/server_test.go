@@ -12,6 +12,8 @@ import (
 	"storj.io/drpc/drpctest"
 )
 
+func init() { temporarySleep = 0 }
+
 func TestServerTemporarySleep(t *testing.T) {
 	ctx := drpctest.NewTracker(t)
 	defer ctx.Close()

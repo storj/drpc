@@ -69,6 +69,8 @@ func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error) {
 	}
 }
 
+var temporarySleep = 500 * time.Millisecond
+
 // Serve listens for connections on the listener and serves the drpc request
 // on new connections.
 func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
@@ -93,7 +95,7 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
 					s.opts.Log(err)
 				}
 
-				t := time.NewTimer(500 * time.Millisecond)
+				t := time.NewTimer(temporarySleep)
 				select {
 				case <-t.C:
 				case <-ctx.Done():

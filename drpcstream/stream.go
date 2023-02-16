@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 
 	"github.com/zeebo/errs"
 
@@ -49,6 +48,7 @@ type Stream struct {
 
 	write inspectMutex
 	read  inspectMutex
+	flush sync.Once
 
 	id   drpcwire.ID
 	wr   *drpcwire.Writer
@@ -57,7 +57,6 @@ type Stream struct {
 
 	mu   sync.Mutex // protects state transitions
 	sigs struct {
-		read   uint32            // if a read call has ever started
 		send   drpcsignal.Signal // set when done sending messages
 		recv   drpcsignal.Signal // set when done receiving messages
 		term   drpcsignal.Signal // set when the stream is terminating and no new ops should begin
@@ -362,6 +361,8 @@ func (s *Stream) rawFlushLocked() (err error) {
 	}
 
 	switch {
+	case s.sigs.cancel.IsSet():
+		return s.sigs.cancel.Err()
 	case s.sigs.send.IsSet():
 		return s.sigs.send.Err()
 	case s.sigs.term.IsSet():
@@ -388,14 +389,14 @@ func (s *Stream) RawRecv() (data []byte, err error) {
 // copy of the bytes and so care must be taken to signal when HandlePacket
 // is allowed to return.
 func (s *Stream) rawRecv() (data []byte, err error) {
-	// rawRecv will only trigger a flush if the write buffer is nonempty.
-	// Additionally, it will only trigger if either ManualFlush is true, or
-	// if this is the first call to rawRecv.
-	if s.opts.ManualFlush || atomic.LoadUint32(&s.sigs.read) == 0 {
-		if (s.opts.ManualFlush || atomic.CompareAndSwapUint32(&s.sigs.read, 0, 1)) && !s.wr.Empty() {
-			if err := s.RawFlush(); err != nil {
-				return nil, err
-			}
+	s.flush.Do(func() { err = s.RawFlush() })
+	if err != nil {
+		return nil, err
+	}
+
+	if s.opts.ManualFlush && !s.wr.Empty() {
+		if err := s.RawFlush(); err != nil {
+			return nil, err
 		}
 	}
 
@@ -412,6 +413,8 @@ func (s *Stream) rawRecv() (data []byte, err error) {
 
 // MsgSend marshals the message with the encoding, writes it, and flushes.
 func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
+	s.flush.Do(func() {})
+
 	defer s.checkFinished()
 	s.write.Lock()
 	defer s.write.Unlock()
@@ -426,14 +429,9 @@ func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
 	if err := s.rawWriteLocked(drpcwire.KindMessage, wbuf); err != nil {
 		return err
 	}
-	// we never flush is ManualFlush is true, and if it is false then we
-	// must have already started a rawRecv call.
-	if !s.opts.ManualFlush && atomic.LoadUint32(&s.sigs.read) != 0 {
-		if err := s.rawFlushLocked(); err != nil {
-			return err
-		}
+	if !s.opts.ManualFlush {
+		return s.rawFlushLocked()
 	}
-
 	return nil
 }
 

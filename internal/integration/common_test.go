@@ -15,6 +15,7 @@ import (
 
 	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcerr"
+	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcmetadata"
 	"storj.io/drpc/drpcmux"
 	"storj.io/drpc/drpcserver"
@@ -43,7 +44,11 @@ func createRawConnection(t testing.TB, server DRPCServiceServer, ctx *drpctest.T
 	_ = DRPCRegisterService(mux, server)
 	srv := drpcserver.New(mux)
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
-	return drpcconn.New(c2)
+	return drpcconn.NewWithOptions(c2, drpcconn.Options{
+		Manager: drpcmanager.Options{
+			SoftCancel: true,
+		},
+	})
 }
 
 func createConnection(t testing.TB, server DRPCServiceServer) (DRPCServiceClient, func()) {

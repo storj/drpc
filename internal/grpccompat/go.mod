@@ -1,6 +1,6 @@
 module storj.io/drpc/internal/grpccompat
 
-go 1.17
+go 1.18
 
 require (
 	github.com/improbable-eng/grpc-web v0.15.0

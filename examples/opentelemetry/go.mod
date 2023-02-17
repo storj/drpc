@@ -1,6 +1,6 @@
 module storj.io/drpc/examples/opentelemetry
 
-go 1.17
+go 1.18
 
 require (
 	go.opentelemetry.io/otel v1.10.0

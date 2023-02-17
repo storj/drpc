@@ -31,12 +31,12 @@
               src = fetchFromGitHub {
                 owner = "dominikh";
                 repo = "go-tools";
-                rev = "2022.1.3";
-                sha256 = "sha256-Yli+8gMoRRyNqOgFRv/uyFBVXdIlDH0tfZzvfTYBPyU=";
+                rev = "2023.1.2";
+                sha256 = "sha256-Xnylkv0n3FExQ4e4pmD6DAUqGtud80wHHoVY56UXfOU";
               };
               doCheck = false;
               subPackages = [ "cmd/staticcheck" ];
-              vendorSha256 = "sha256-19uLCtKuuZoVwC4SUKvYGWi2ryqAQbcKXY1iNjIqyn8=";
+              vendorSha256 = "sha256-o9UtS6AMgRYuAkOWdktG2Kr3QDBDQTOGSlya69K2br8";
             };
 
             ci = buildGoModule {

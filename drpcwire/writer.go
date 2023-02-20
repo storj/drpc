@@ -4,9 +4,12 @@
 package drpcwire
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
+
+	"storj.io/drpc/drpcdebug"
 )
 
 //
@@ -33,6 +36,12 @@ func NewWriter(w io.Writer, size int) *Writer {
 		w:    w,
 		size: size,
 		buf:  make([]byte, 0, size),
+	}
+}
+
+func (b *Writer) log(what string, cb func() string) {
+	if drpcdebug.Enabled {
+		drpcdebug.Log(func() (_, _, _ string) { return fmt.Sprintf("<wri %p>", b), what, cb() })
 	}
 }
 
@@ -73,6 +82,7 @@ func (b *Writer) WriteFrame(fr Frame) (err error) {
 	}
 	b.buf = AppendFrame(b.buf, fr)
 	if len(b.buf) >= b.size {
+		b.log("FLUSH", func() string { return fmt.Sprintf("buffer: %d > %d", len(b.buf), b.size) })
 		_, err = b.w.Write(b.buf)
 		b.buf = b.buf[:0]
 		atomic.StoreUint32(&b.empty, 0)
@@ -88,6 +98,7 @@ func (b *Writer) Flush() (err error) {
 
 	if len(b.buf) > 0 {
 		_, err = b.w.Write(b.buf)
+		b.log("FLUSH", func() string { return fmt.Sprintf("explicit: %d", len(b.buf)) })
 		b.buf = b.buf[:0]
 		atomic.StoreUint32(&b.empty, 0)
 	}

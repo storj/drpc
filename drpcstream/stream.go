@@ -167,6 +167,31 @@ func (s *Stream) Finished() <-chan struct{} { return s.sigs.fin.Signal() }
 // issue any writes or reads.
 func (s *Stream) IsFinished() bool { return s.sigs.fin.IsSet() }
 
+// SetManualFlush sets the ManualFlush option. It cannot be called concurrently with
+// any sends or receives on the stream.
+// Example use case:
+//
+//	flusher := stream.(interface{
+//	    GetStream() drpc.Stream
+//	}).GetStream().(interface{
+//	    SetManualFlush(bool)
+//	})
+//
+//	flusher.SetManualFlush(true)
+//	err = stream.Send(&pb.Message{Request: "hello, "})
+//	flusher.SetManualFlush(false)
+//	if err != nil {
+//	    return err
+//	}
+//
+//	// the next send will send both messages in the same write
+//	// to the underlying connection.
+//	err = stream.Send(&pb.Message{Request: "world!"})
+//	if err != nil {
+//	    return err
+//	}
+func (s *Stream) SetManualFlush(mf bool) { s.opts.ManualFlush = mf }
+
 //
 // packet handler
 //

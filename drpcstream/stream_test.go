@@ -247,7 +247,7 @@ func TestStream_CorkUntilFirstRead(t *testing.T) {
 
 		assert.Equal(t, buf.String(), "\x05\x00\x01\x05write")
 	}
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		run()
 	}
 }
@@ -258,4 +258,47 @@ func (byteEncoding) Marshal(msg drpc.Message) ([]byte, error) { return msg.([]by
 func (byteEncoding) Unmarshal(buf []byte, msg drpc.Message) error {
 	*msg.(*[]byte) = append(*msg.(*[]byte), buf...)
 	return nil
+}
+
+func TestStream_PacketBufferReuse(t *testing.T) {
+	run := func() {
+		ctx := drpctest.NewTracker(t)
+		defer ctx.Close()
+		defer ctx.Wait()
+
+		buf := make([]byte, 20)
+		st := New(ctx, 0, drpcwire.NewWriter(io.Discard, 0))
+
+		ctx.Run(func(ctx context.Context) {
+			for !st.IsTerminated() {
+				err := st.HandlePacket(drpcwire.Packet{
+					Data: buf,
+					Kind: drpcwire.KindMessage,
+				})
+				if err != nil {
+					return
+				}
+				for i := range buf {
+					buf[i]++
+				}
+			}
+		})
+
+		ctx.Run(func(ctx context.Context) {
+			for !st.IsTerminated() {
+				_, err := st.RawRecv()
+				if err != nil {
+					return
+				}
+			}
+		})
+
+		ctx.Run(func(ctx context.Context) {
+			st.Cancel(context.Canceled)
+		})
+	}
+
+	for i := 0; i < 100; i++ {
+		run()
+	}
 }

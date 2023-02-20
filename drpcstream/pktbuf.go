@@ -13,6 +13,7 @@ type packetBuffer struct {
 	err  error
 	data []byte
 	set  bool
+	held bool
 }
 
 func (pb *packetBuffer) init() {
@@ -23,10 +24,14 @@ func (pb *packetBuffer) Close(err error) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
+	for pb.held {
+		pb.cond.Wait()
+	}
+
 	if pb.err == nil {
-		pb.err = err
 		pb.data = nil
 		pb.set = false
+		pb.err = err
 		pb.cond.Broadcast()
 	}
 }
@@ -35,15 +40,19 @@ func (pb *packetBuffer) Put(data []byte) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
+	for pb.set && pb.err == nil {
+		pb.cond.Wait()
+	}
 	if pb.err != nil {
 		return
 	}
 
 	pb.data = data
 	pb.set = true
+	pb.held = false
 	pb.cond.Broadcast()
 
-	for pb.set && pb.err == nil {
+	for pb.set || pb.held {
 		pb.cond.Wait()
 	}
 }
@@ -55,8 +64,14 @@ func (pb *packetBuffer) Get() ([]byte, error) {
 	for !pb.set && pb.err == nil {
 		pb.cond.Wait()
 	}
+	if pb.err != nil {
+		return nil, pb.err
+	}
 
-	return pb.data, pb.err
+	pb.held = true
+	pb.cond.Broadcast()
+
+	return pb.data, nil
 }
 
 func (pb *packetBuffer) Done() {
@@ -65,5 +80,6 @@ func (pb *packetBuffer) Done() {
 
 	pb.data = nil
 	pb.set = false
+	pb.held = false
 	pb.cond.Broadcast()
 }

@@ -374,37 +374,39 @@ func (s *Stream) rawFlushLocked() (err error) {
 	return s.checkCancelError(errs.Wrap(s.wr.Flush()))
 }
 
-// RawRecv returns the raw bytes received for a message.
-func (s *Stream) RawRecv() (data []byte, err error) {
-	data, err = s.rawRecv()
-	if err != nil {
-		return nil, err
-	}
-	data = append([]byte(nil), data...)
-	s.pbuf.Done()
-	return data, nil
-}
-
-// rawRecv returns the raw bytes received for a message. It does not make a
-// copy of the bytes and so care must be taken to signal when HandlePacket
-// is allowed to return.
-func (s *Stream) rawRecv() (data []byte, err error) {
+func (s *Stream) checkRecvFlush() (err error) {
 	s.flush.Do(func() { err = s.RawFlush() })
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if s.opts.ManualFlush && !s.wr.Empty() {
 		if err := s.RawFlush(); err != nil {
-			return nil, err
+			return err
 		}
+	}
+
+	return nil
+}
+
+// RawRecv returns the raw bytes received for a message.
+func (s *Stream) RawRecv() (data []byte, err error) {
+	if err := s.checkRecvFlush(); err != nil {
+		return nil, err
 	}
 
 	defer s.checkFinished()
 	s.read.Lock()
 	defer s.read.Unlock()
 
-	return s.pbuf.Get()
+	data, err = s.pbuf.Get()
+	if err != nil {
+		return nil, err
+	}
+	data = append([]byte(nil), data...)
+	s.pbuf.Done()
+
+	return data, nil
 }
 
 //
@@ -437,12 +439,21 @@ func (s *Stream) MsgSend(msg drpc.Message, enc drpc.Encoding) (err error) {
 
 // MsgRecv recives some message data and unmarshals it with enc into msg.
 func (s *Stream) MsgRecv(msg drpc.Message, enc drpc.Encoding) (err error) {
-	data, err := s.rawRecv()
+	if err := s.checkRecvFlush(); err != nil {
+		return err
+	}
+
+	defer s.checkFinished()
+	s.read.Lock()
+	defer s.read.Unlock()
+
+	data, err := s.pbuf.Get()
 	if err != nil {
 		return err
 	}
 	err = enc.Unmarshal(data, msg)
 	s.pbuf.Done()
+
 	return err
 }
 

@@ -8,7 +8,7 @@ import "storj.io/drpc"
 // Stream contains internal options for the drpcstream package.
 type Stream struct {
 	transport drpc.Transport
-	term      chan<- struct{}
+	fin       chan<- struct{}
 	kind      string
 }
 
@@ -18,11 +18,11 @@ func GetStreamTransport(opts *Stream) drpc.Transport { return opts.transport }
 // SetStreamTransport sets the drpc.Transport stored in the options.
 func SetStreamTransport(opts *Stream, tr drpc.Transport) { opts.transport = tr }
 
-// GetStreamTerm returns the chan<- struct{} stored in the options.
-func GetStreamTerm(opts *Stream) chan<- struct{} { return opts.term }
+// GetStreamFin returns the chan<- struct{} stored in the options.
+func GetStreamFin(opts *Stream) chan<- struct{} { return opts.fin }
 
-// SetStreamTerm sets the chan<- struct{} stored in the options.
-func SetStreamTerm(opts *Stream, term chan<- struct{}) { opts.term = term }
+// SetStreamFin sets the chan<- struct{} stored in the options.
+func SetStreamFin(opts *Stream, fin chan<- struct{}) { opts.fin = fin }
 
 // GetStreamKind returns the kind debug string stored in the options.
 func GetStreamKind(opts *Stream) string { return opts.kind }

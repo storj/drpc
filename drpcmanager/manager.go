@@ -63,7 +63,7 @@ type Manager struct {
 	sbuf    streamBuffer         // largest stream id created
 	pkts    chan drpcwire.Packet // channel for invoke packets
 	pdone   drpcsignal.Chan      // signals when a packets buffers can be reused
-	sterm   chan struct{}        // shared signal for stream terminated
+	sfin    chan struct{}        // shared signal for stream finished
 	streams chan streamInfo      // channel to signal that a stream should start
 
 	sigs struct {
@@ -94,7 +94,7 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 		opts: opts,
 
 		pkts:    make(chan drpcwire.Packet),
-		sterm:   make(chan struct{}, 1),
+		sfin:    make(chan struct{}, 1),
 		streams: make(chan streamInfo),
 	}
 
@@ -110,7 +110,7 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 
 	// set the internal stream options
 	drpcopts.SetStreamTransport(&m.opts.Stream.Internal, m.tr)
-	drpcopts.SetStreamTerm(&m.opts.Stream.Internal, m.sterm)
+	drpcopts.SetStreamFin(&m.opts.Stream.Internal, m.sfin)
 
 	go m.manageReader()
 	go m.manageStreams()
@@ -167,28 +167,23 @@ func (m *Manager) waitForPreviousStream(ctx context.Context) (err error) {
 	}
 
 	// if the stream is not finished yet, we need to wait for it to be
-	// finished before letting the next stream to start. this has to be
-	// done before closing to allow soft cancels to proceed.
-	if !prev.IsFinished() {
-		m.log("UNFIN", prev.String)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-
-		case <-m.sigs.term.Signal():
-			return m.sigs.term.Err()
-
-		case <-prev.Finished():
-		}
+	// finished before letting the next stream to start.
+	if prev.IsFinished() {
+		return nil
 	}
 
-	// ensure the previous stream is closed no matter what.
-	if err := prev.Close(); err != nil {
-		return err
-	}
+	m.log("WAIT", prev.String)
 
-	return nil
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+
+	case <-m.sigs.term.Signal():
+		return m.sigs.term.Err()
+
+	case <-prev.Finished():
+		return nil
+	}
 }
 
 // terminate puts the Manager into a terminal state and closes any resources
@@ -329,10 +324,10 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 			err = context.Canceled
 		}
 		stream.Cancel(err)
-		<-m.sterm
+		<-m.sfin
 		m.sem.Recv()
 
-	case <-m.sterm:
+	case <-m.sfin:
 		m.sem.Recv()
 
 	case <-ctx.Done():
@@ -351,20 +346,20 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 			}
 			stream.Cancel(ctx.Err())
 
-			// wait for the stream to signal that it is terminated.
-			<-m.sterm
+			// wait for the stream to signal that it is finished.
+			<-m.sfin
 		} else {
 			// If the stream isn't already finished, we have to terminate the transport
 			// to do an active cancel. If it is already finished, there is no need.
-			isFinished := stream.IsFinished()
-			stream.Cancel(ctx.Err())
-			if !isFinished {
+			if !stream.Cancel(ctx.Err()) {
 				m.log("UNFIN", stream.String)
 				m.terminate(ctx.Err())
+			} else {
+				m.log("CLEAN", stream.String)
 			}
 
-			// wait for the stream to signal that it is terminated.
-			<-m.sterm
+			// wait for the stream to signal that it is finished.
+			<-m.sfin
 
 			// allow a new stream to begin.
 			m.sem.Recv()

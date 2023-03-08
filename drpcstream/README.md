@@ -64,12 +64,11 @@ used to control details of how the Stream operates.
 #### func (*Stream) Cancel
 
 ```go
-func (s *Stream) Cancel(err error) bool
+func (s *Stream) Cancel(err error)
 ```
 Cancel transitions the stream into a state where all writes to the transport
 will return the provided error, and terminates the stream. It is a no-op if the
-stream is already finished, and returns a boolean indicating if that was the
-case.
+stream is already terminated.
 
 #### func (*Stream) Close
 

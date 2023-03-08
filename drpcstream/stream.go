@@ -44,7 +44,7 @@ type Options struct {
 type Stream struct {
 	ctx  streamCtx
 	opts Options
-	fin  chan<- struct{}
+	term chan<- struct{}
 
 	write inspectMutex
 	read  inspectMutex
@@ -85,7 +85,7 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 			tr:      drpcopts.GetStreamTransport(&opts.Internal),
 		},
 		opts: opts,
-		fin:  drpcopts.GetStreamFin(&opts.Internal),
+		term: drpcopts.GetStreamTerm(&opts.Internal),
 
 		id: drpcwire.ID{Stream: sid},
 		wr: wr.Reset(),
@@ -267,11 +267,7 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
 func (s *Stream) checkFinished() {
 	if s.sigs.term.IsSet() && s.write.Unlocked() && s.read.Unlocked() {
 		if s.sigs.fin.Set(nil) {
-			s.log("FIN", func() string { return "" })
 			s.ctx.sig.Set(context.Canceled)
-			if s.fin != nil {
-				s.fin <- struct{}{}
-			}
 		}
 	}
 }
@@ -326,7 +322,9 @@ func (s *Stream) terminateIfBothClosed() {
 func (s *Stream) terminate(err error) {
 	s.sigs.send.Set(err)
 	s.sigs.recv.Set(err)
-	s.sigs.term.Set(err)
+	if s.sigs.term.Set(err) && s.term != nil {
+		s.term <- struct{}{}
+	}
 	s.pbuf.Close(err)
 	s.checkFinished()
 }
@@ -593,19 +591,18 @@ func (s *Stream) CloseSend() (err error) {
 
 // Cancel transitions the stream into a state where all writes to the transport will return
 // the provided error, and terminates the stream. It is a no-op if the stream is already
-// finished, and returns a boolean indicating if that was the case.
-func (s *Stream) Cancel(err error) bool {
+// terminated.
+func (s *Stream) Cancel(err error) {
 	s.log("CALL", func() string { return fmt.Sprintf("Cancel(%v)", err) })
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.IsFinished() {
-		return true
+	if s.sigs.term.IsSet() && s.write.Unlocked() && s.read.Unlocked() {
+		return
 	}
 
 	s.sigs.cancel.Set(err)
 	s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 	s.terminate(err)
-	return false
 }

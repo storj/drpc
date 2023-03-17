@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/zeebo/errs"
@@ -222,6 +224,10 @@ func (m *Manager) manageReader() {
 
 		pkt, err = m.rd.ReadPacketUsing(pkt.Data[:0])
 		if err != nil {
+			var operr *net.OpError
+			if errors.As(err, &operr) && strings.Contains(strings.ToLower(operr.Err.Error()), "connection reset by peer") {
+				err = drpc.ClosedError.Wrap(err)
+			}
 			m.terminate(managerClosed.Wrap(err))
 			return
 		}

@@ -225,8 +225,12 @@ func (m *Manager) manageReader() {
 		pkt, err = m.rd.ReadPacketUsing(pkt.Data[:0])
 		if err != nil {
 			var operr *net.OpError
-			if errors.As(err, &operr) && strings.Contains(strings.ToLower(operr.Err.Error()), "connection reset by peer") {
-				err = drpc.ClosedError.Wrap(err)
+			if errors.As(err, &operr) {
+				msg := strings.ToLower(operr.Err.Error())
+				if strings.Contains(msg, "connection reset by peer") ||
+					strings.Contains(msg, "connection was forcibly closed by the remote host") {
+					err = drpc.ClosedError.Wrap(err)
+				}
 			}
 			m.terminate(managerClosed.Wrap(err))
 			return

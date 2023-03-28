@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/zeebo/errs"
@@ -224,13 +225,8 @@ func (m *Manager) manageReader() {
 
 		pkt, err = m.rd.ReadPacketUsing(pkt.Data[:0])
 		if err != nil {
-			var operr *net.OpError
-			if errors.As(err, &operr) {
-				msg := strings.ToLower(operr.Err.Error())
-				if strings.Contains(msg, "connection reset by peer") ||
-					strings.Contains(msg, "connection was forcibly closed by the remote host") {
-					err = drpc.ClosedError.Wrap(err)
-				}
+			if isConnectionReset(err) {
+				err = drpc.ClosedError.Wrap(err)
 			}
 			m.terminate(managerClosed.Wrap(err))
 			return
@@ -481,4 +477,25 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 			}
 		}
 	}
+}
+
+func isConnectionReset(err error) bool {
+	var operr *net.OpError
+	if !errors.As(err, &operr) {
+		return false
+	}
+	if errors.Is(operr.Err, syscall.ECONNRESET) {
+		return true
+	}
+	msg := strings.ToLower(operr.Err.Error())
+	if strings.Contains(msg, "connection reset by peer") {
+		return true
+	}
+	if strings.Contains(msg, "connection was forcibly closed by the remote host") {
+		return true
+	}
+	if strings.Contains(msg, strings.ToLower(syscall.ECONNRESET.Error())) {
+		return true
+	}
+	return false
 }

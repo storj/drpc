@@ -167,3 +167,12 @@ issues:
     - linters:
         - revive
       text: "if-return"
+    - linters:
+        - revive
+      text: "unused-parameter" # too many false positives
+    - linters:
+        - revive
+      text: "redefines-builtin-id" # too many false positives
+    - linters:
+        - gocritic
+      text: "newDeref" # *new(T) is a good idiom

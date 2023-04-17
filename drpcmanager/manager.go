@@ -345,7 +345,7 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 
 			// attempt to send the soft cancel. if it fails or if the stream is busy
 			// sending something else, then we have to hard cancel.
-			if busy, err := stream.SendCancel(); err != nil {
+			if busy, err := stream.SendCancel(ctx.Err()); err != nil {
 				m.terminate(err)
 			} else if busy {
 				m.terminate(ctx.Err())

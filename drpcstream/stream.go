@@ -521,7 +521,7 @@ func (s *Stream) SendError(serr error) (err error) {
 // sends a cancel error to the remote side for a soft cancel. It is a no-op if the
 // stream is already terminated. It returns true for busy if writes are already blocked
 // and a hard cancel is required.
-func (s *Stream) SendCancel() (busy bool, err error) {
+func (s *Stream) SendCancel(err error) (bool, error) {
 	s.log("CALL", func() string { return "SendCancel()" })
 
 	s.mu.Lock()
@@ -541,7 +541,7 @@ func (s *Stream) SendCancel() (busy bool, err error) {
 	defer s.write.Unlock()
 
 	s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
-	s.terminate(context.Canceled)
+	s.terminate(err)
 	s.mu.Unlock()
 
 	return false, s.checkCancelError(s.sendPacket(drpcwire.KindCancel, true, nil))

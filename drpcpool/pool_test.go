@@ -18,14 +18,14 @@ func TestPoolReuse(t *testing.T) {
 	ctx := drpctest.NewTracker(t)
 	defer ctx.Close()
 
-	pool := New(Options{
+	pool := New[string, Conn](Options{
 		Capacity:    2,
 		KeyCapacity: 1,
 	})
 	defer func() { _ = pool.Close() }()
 
 	count := 0
-	dial := func(ctx context.Context, key interface{}) (Conn, error) {
+	dial := func(ctx context.Context, key string) (Conn, error) {
 		count++
 		return new(callbackConn), nil
 	}
@@ -54,7 +54,7 @@ func TestPoolConcurrency(t *testing.T) {
 	ctx := drpctest.NewTracker(t)
 	defer ctx.Close()
 
-	pool := New(Options{
+	pool := New[string, Conn](Options{
 		Capacity:    2,
 		KeyCapacity: 1,
 	})
@@ -63,9 +63,9 @@ func TestPoolConcurrency(t *testing.T) {
 	count := 0
 	uc1 := new(callbackConn)
 	uc2 := new(callbackConn)
-	dial := func(ctx context.Context, key interface{}) (Conn, error) {
+	dial := func(ctx context.Context, key string) (Conn, error) {
 		count++
-		return map[string]Conn{"key1": uc1, "key2": uc2}[key.(string)], nil
+		return map[string]Conn{"key1": uc1, "key2": uc2}[key], nil
 	}
 
 	conn1 := pool.Get(ctx, "key1", dial)
@@ -124,7 +124,7 @@ func TestPool_Expiration(t *testing.T) {
 	defer ctx.Close()
 
 	closed := make(chan string, 1)
-	pool := New(Options{Expiration: time.Nanosecond})
+	pool := New[string, Conn](Options{Expiration: time.Nanosecond})
 	defer func() { _ = pool.Close() }()
 
 	useConn(ctx, pool, closed, "key")
@@ -137,10 +137,10 @@ func TestPool_Stale(t *testing.T) {
 	defer ctx.Close()
 
 	calls := 0
-	pool := New(Options{})
+	pool := New[string, Conn](Options{})
 	defer func() { _ = pool.Close() }()
 
-	conn := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+	conn := pool.Get(ctx, "key", func(ctx context.Context, key string) (Conn, error) {
 		calls++
 		return &callbackConn{ClosedFn: func() <-chan struct{} { return closedCh }}, nil
 	})
@@ -160,7 +160,7 @@ func TestPool_Capacity(t *testing.T) {
 	defer ctx.Close()
 
 	closed := make(chan string, 1)
-	pool := New(Options{Capacity: 1})
+	pool := New[string, Conn](Options{Capacity: 1})
 	defer func() { _ = pool.Close() }()
 
 	// using key0 should remain in the pool
@@ -185,7 +185,7 @@ func TestPool_Capacity_Expiration(t *testing.T) {
 	defer ctx.Close()
 
 	closed := make(chan string, 1)
-	pool := New(Options{
+	pool := New[string, Conn](Options{
 		Capacity:   1,
 		Expiration: time.Hour,
 	})
@@ -212,7 +212,7 @@ func TestPool_Capacity_Negative(t *testing.T) {
 	defer ctx.Close()
 
 	closed := make(chan string, 1)
-	pool := New(Options{Capacity: -1})
+	pool := New[string, Conn](Options{Capacity: -1})
 	defer func() { _ = pool.Close() }()
 
 	useConn(ctx, pool, closed, "key0")
@@ -226,7 +226,7 @@ func TestPool_KeyCapacity(t *testing.T) {
 	defer ctx.Close()
 
 	closed := make(chan string, 2)
-	pool := New(Options{KeyCapacity: 1})
+	pool := New[string, Conn](Options{KeyCapacity: 1})
 	defer func() { _ = pool.Close() }()
 
 	useConn(ctx, pool, closed, "key0")
@@ -256,7 +256,7 @@ func TestPool_KeyCapacity_Negative(t *testing.T) {
 	defer ctx.Close()
 
 	closed := make(chan string, 1)
-	pool := New(Options{KeyCapacity: -1})
+	pool := New[string, Conn](Options{KeyCapacity: -1})
 	defer func() { _ = pool.Close() }()
 
 	useConn(ctx, pool, closed, "key0")
@@ -270,12 +270,12 @@ func TestPool_Blocked(t *testing.T) {
 
 	closed := make(chan string, 2)
 	unblocked := make(chan struct{})
-	pool := New(Options{Capacity: 2})
+	pool := New[string, Conn](Options{Capacity: 2})
 	defer func() { _ = pool.Close() }()
 
 	conn1Calls := 0
 	conn1Dials := 0
-	conn1 := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+	conn1 := pool.Get(ctx, "key", func(ctx context.Context, key string) (Conn, error) {
 		conn1Dials++
 		return &callbackConn{
 			CloseFn:     func() error { closed <- "conn1"; return nil },
@@ -289,7 +289,7 @@ func TestPool_Blocked(t *testing.T) {
 
 	conn2Calls := 0
 	conn2Dials := 0
-	conn2 := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+	conn2 := pool.Get(ctx, "key", func(ctx context.Context, key string) (Conn, error) {
 		conn2Dials++
 		return &callbackConn{
 			CloseFn: func() error { closed <- "conn2"; return nil },
@@ -341,13 +341,13 @@ func TestPool_MultipleCachedReuse(t *testing.T) {
 	ctx := drpctest.NewTracker(t)
 	defer ctx.Close()
 
-	pool := New(Options{KeyCapacity: 2})
+	pool := New[string, Conn](Options{KeyCapacity: 2})
 	defer func() { _ = pool.Close() }()
 
 	closeStream := func(st drpc.Stream) { _ = st.Close(); <-st.Context().Done() }
 	closedConns := make(map[int]bool)
 	dials := 0
-	conn := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) {
+	conn := pool.Get(ctx, "key", func(ctx context.Context, key string) (Conn, error) {
 		d := dials
 		dials++
 		return &callbackConn{
@@ -402,9 +402,9 @@ func BenchmarkPool(b *testing.B) {
 
 	const capacity = 1000
 
-	pool := New(Options{Capacity: capacity})
+	pool := New[string, Conn](Options{Capacity: capacity})
 	uc := new(callbackConn)
-	conn := pool.Get(ctx, "key", func(ctx context.Context, key interface{}) (Conn, error) { return uc, nil })
+	conn := pool.Get(ctx, "key", func(ctx context.Context, key string) (Conn, error) { return uc, nil })
 
 	var streams []drpc.Stream
 	for i := 0; i < capacity; i++ {

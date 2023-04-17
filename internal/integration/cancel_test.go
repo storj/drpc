@@ -239,8 +239,8 @@ func TestCancelRepeatedPooled(t *testing.T) {
 		},
 	}
 	conns := 0
-	foo := func(ctx context.Context, p *drpcpool.Pool) {
-		conn := p.Get(ctx, "foo", func(ctx context.Context, key interface{}) (drpcpool.Conn, error) {
+	foo := func(ctx context.Context, p *drpcpool.Pool[string, drpcpool.Conn]) {
+		conn := p.Get(ctx, "foo", func(ctx context.Context, key string) (drpcpool.Conn, error) {
 			conns++
 			return createRawConnection(t, server, tctx), nil
 		})
@@ -257,7 +257,7 @@ func TestCancelRepeatedPooled(t *testing.T) {
 
 		<-stream.Context().Done()
 	}
-	p := drpcpool.New(drpcpool.Options{
+	p := drpcpool.New[string, drpcpool.Conn](drpcpool.Options{
 		Capacity: 1,
 	})
 	for i := 0; i < 10000; i++ {

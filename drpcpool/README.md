@@ -8,18 +8,6 @@ It has the ability to maintain a cache of connections with a maximum size on
 both the total and per key basis. It also can expire cached connections if they
 have been inactive in the pool for long enough.
 
-Implementation note: the cache has some methods that could potentially be
-quadratic in the worst case in the number of per cache key connections.
-Specifically, this worst case happens when there are many closed entries in the
-list of values. While we could do a single pass filtering closed entries, the
-logic is a bit harder to follow and ensure is correct. Instead we have a helper
-to remove a single entry from a list without knowing where it came from. Since
-we can possibly call that to remove every element from a list if they are all
-closed, it's quadratic in the maximum size of that list. Since this cache is
-intended to be used with small key capacities (like 5), the decision was made to
-accept that quadratic worst case for the benefit of having as simple an
-implementation as possible.
-
 ## Usage
 
 #### type Conn
@@ -53,10 +41,6 @@ type Options struct {
 	// KeyCapacity is like Capacity except it is per key. Zero means
 	// the Pool holds unlimited for any single key. Negative means
 	// no values for any single key.
-	//
-	// Implementation note: The cache is potentially quadratic in the
-	// size of this parameter, so it is intended for small values, like
-	// 5 or so.
 	KeyCapacity int
 }
 ```
@@ -66,7 +50,7 @@ Options contains the options to configure a pool.
 #### type Pool
 
 ```go
-type Pool struct {
+type Pool[K comparable, V Conn] struct {
 }
 ```
 
@@ -78,24 +62,40 @@ connections either in total or per key.
 #### func  New
 
 ```go
-func New(opts Options) *Pool
+func New[K comparable, V Conn](opts Options) *Pool[K, V]
 ```
 New constructs a new Pool with the provided Options.
 
-#### func (*Pool) Close
+#### func (*Pool[K, V]) Close
 
 ```go
-func (p *Pool) Close() (err error)
+func (p *Pool[K, V]) Close() (err error)
 ```
 Close evicts all entries from the Pool's cache, closing them and returning all
 of the combined errors from closing.
 
-#### func (*Pool) Get
+#### func (*Pool[K, V]) Get
 
 ```go
-func (p *Pool) Get(ctx context.Context, key interface{},
-	dial func(ctx context.Context, key interface{}) (Conn, error)) Conn
+func (p *Pool[K, V]) Get(ctx context.Context, key K,
+	dial func(ctx context.Context, key K) (V, error)) Conn
 ```
-Get returns a new drpc.Conn that will use the provided dial function to create
-an underlying conn to be cached by the Pool when Conn methods are invoked. It
-will share any cached connections with other conns that use the same key.
+Get returns a new Conn that will use the provided dial function to create an
+underlying conn to be cached by the Pool when Conn methods are invoked. It will
+share any cached connections with other conns that use the same key.
+
+#### func (*Pool[K, V]) Put
+
+```go
+func (p *Pool[K, V]) Put(key K, val V)
+```
+Put places the connection in to the cache with the provided key, ensuring that
+the size limits the Pool is configured with are respected.
+
+#### func (*Pool[K, V]) Take
+
+```go
+func (p *Pool[K, V]) Take(key K) (V, bool)
+```
+Take acquires a value from the cache if one exists. It returns the zero value
+for V and false if one does not.

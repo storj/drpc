@@ -27,10 +27,6 @@ type Options struct {
 	// KeyCapacity is like Capacity except it is per key. Zero means
 	// the Pool holds unlimited for any single key. Negative means
 	// no values for any single key.
-	//
-	// Implementation note: The cache is potentially quadratic in the
-	// size of this parameter, so it is intended for small values, like
-	// 5 or so.
 	KeyCapacity int
 }
 
@@ -38,22 +34,22 @@ type Options struct {
 // per key and ensures the total number of connections in the cache is bounded by
 // configurable values. It does not limit the maximum concurrency of the number
 // of connections either in total or per key.
-type Pool struct {
+type Pool[K comparable, V Conn] struct {
 	opts    Options
 	mu      sync.Mutex
-	entries map[interface{}]*list
-	order   list
+	entries map[K]*list[K, V]
+	order   list[K, V]
 }
 
 // New constructs a new Pool with the provided Options.
-func New(opts Options) *Pool {
-	return &Pool{
+func New[K comparable, V Conn](opts Options) *Pool[K, V] {
+	return &Pool[K, V]{
 		opts:    opts,
-		entries: make(map[interface{}]*list),
+		entries: make(map[K]*list[K, V]),
 	}
 }
 
-func (p *Pool) log(what string, cb func() string) {
+func (p *Pool[K, V]) log(what string, cb func() string) {
 	if drpcdebug.Enabled {
 		drpcdebug.Log(func() (_, _, _ string) { return fmt.Sprintf("<pül %p>", p), what, cb() })
 	}
@@ -61,7 +57,7 @@ func (p *Pool) log(what string, cb func() string) {
 
 // Close evicts all entries from the Pool's cache, closing them and returning all
 // of the combined errors from closing.
-func (p *Pool) Close() (err error) {
+func (p *Pool[K, V]) Close() (err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -70,18 +66,18 @@ func (p *Pool) Close() (err error) {
 		eg.Add(p.closeEntry(ent))
 	}
 
-	p.entries = make(map[interface{}]*list)
-	p.order = list{}
+	p.entries = make(map[K]*list[K, V])
+	p.order = list[K, V]{}
 
 	return eg.Err()
 }
 
-// Get returns a new drpc.Conn that will use the provided dial function to create an
+// Get returns a new Conn that will use the provided dial function to create an
 // underlying conn to be cached by the Pool when Conn methods are invoked. It will
 // share any cached connections with other conns that use the same key.
-func (p *Pool) Get(ctx context.Context, key interface{},
-	dial func(ctx context.Context, key interface{}) (Conn, error)) Conn {
-	return &poolConn{
+func (p *Pool[K, V]) Get(ctx context.Context, key K,
+	dial func(ctx context.Context, key K) (V, error)) Conn {
+	return &poolConn[K, V]{
 		key:  key,
 		pool: p,
 		dial: dial,
@@ -92,7 +88,7 @@ func (p *Pool) Get(ctx context.Context, key interface{},
 // helpers
 //
 
-func (p *Pool) removeEntry(ent *entry) {
+func (p *Pool[K, V]) removeEntry(ent *entry[K, V]) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -101,8 +97,8 @@ func (p *Pool) removeEntry(ent *entry) {
 		return
 	}
 
-	local.removeEntry(ent, (*entry).localList)
-	p.order.removeEntry(ent, (*entry).globalList)
+	local.removeEntry(ent, (*entry[K, V]).localList)
+	p.order.removeEntry(ent, (*entry[K, V]).globalList)
 
 	if local.count == 0 {
 		delete(p.entries, ent.key)
@@ -110,7 +106,7 @@ func (p *Pool) removeEntry(ent *entry) {
 }
 
 // closeEntry ensures the timer and connection are closed, returning any errors.
-func (p *Pool) closeEntry(ent *entry) error {
+func (p *Pool[K, V]) closeEntry(ent *entry[K, V]) error {
 	p.log("CLOSE", ent.String)
 
 	if ent.exp == nil || ent.exp.Stop() {
@@ -119,15 +115,15 @@ func (p *Pool) closeEntry(ent *entry) error {
 	return nil
 }
 
-// take acquires a value from the cache if one exists. It returns
-// nil if one does not.
-func (p *Pool) take(key interface{}) Conn {
+// Take acquires a value from the cache if one exists. It returns
+// the zero value for V and false if one does not.
+func (p *Pool[K, V]) Take(key K) (V, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	local := p.entries[key]
 	if local == nil {
-		return nil
+		return *new(V), false
 	}
 
 	// N.B. this loop depends on the fact that removing an entry from
@@ -138,8 +134,9 @@ func (p *Pool) take(key interface{}) Conn {
 		if !closed(ent.val.Unblocked()) {
 			continue
 		}
-		local.removeEntry(ent, (*entry).localList)
-		p.order.removeEntry(ent, (*entry).globalList)
+
+		local.removeEntry(ent, (*entry[K, V]).localList)
+		p.order.removeEntry(ent, (*entry[K, V]).globalList)
 
 		if ent.exp != nil && !ent.exp.Stop() {
 			continue
@@ -148,15 +145,15 @@ func (p *Pool) take(key interface{}) Conn {
 		}
 
 		p.log("TAKEN", ent.String)
-		return ent.val
+		return ent.val, true
 	}
 
-	return nil
+	return *new(V), false
 }
 
-// put places the connection in to the cache with the provided key, ensuring
+// Put places the connection in to the cache with the provided key, ensuring
 // that the size limits the Pool is configured with are respected.
-func (p *Pool) put(key interface{}, val Conn) {
+func (p *Pool[K, V]) Put(key K, val V) {
 	if p.opts.Capacity < 0 || p.opts.KeyCapacity < 0 {
 		_ = val.Close()
 		return
@@ -169,7 +166,7 @@ func (p *Pool) put(key interface{}, val Conn) {
 
 	local := p.entries[key]
 	if local == nil {
-		local = new(list)
+		local = new(list[K, V])
 		p.entries[key] = local
 	}
 
@@ -178,8 +175,8 @@ func (p *Pool) put(key interface{}, val Conn) {
 
 		_ = p.closeEntry(ent)
 
-		local.removeEntry(ent, (*entry).localList)
-		p.order.removeEntry(ent, (*entry).globalList)
+		local.removeEntry(ent, (*entry[K, V]).localList)
+		p.order.removeEntry(ent, (*entry[K, V]).globalList)
 	}
 
 	for p.opts.Capacity != 0 && p.order.count >= p.opts.Capacity {
@@ -188,18 +185,17 @@ func (p *Pool) put(key interface{}, val Conn) {
 
 		_ = p.closeEntry(ent)
 
-		local.removeEntry(ent, (*entry).localList)
-		p.order.removeEntry(ent, (*entry).globalList)
+		local.removeEntry(ent, (*entry[K, V]).localList)
+		p.order.removeEntry(ent, (*entry[K, V]).globalList)
 
 		if local.count == 0 {
 			delete(p.entries, ent.key)
 		}
 	}
 
-	ent := &entry{key: key, val: val}
-	local.appendEntry(ent, (*entry).localList)
-	p.order.appendEntry(ent, (*entry).globalList)
-
+	ent := &entry[K, V]{key: key, val: val}
+	local.appendEntry(ent, (*entry[K, V]).localList)
+	p.order.appendEntry(ent, (*entry[K, V]).globalList)
 	p.log("PUT", ent.String)
 
 	if p.opts.Expiration > 0 {

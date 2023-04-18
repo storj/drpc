@@ -173,6 +173,3 @@ issues:
     - linters:
         - revive
       text: "redefines-builtin-id" # too many false positives
-    - linters:
-        - gocritic
-      text: "newDeref" # *new(T) is a good idiom

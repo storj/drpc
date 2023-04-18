@@ -81,7 +81,7 @@
                 sha256 = "sha256-wkUvMsoJP38KMD5b3Fz65R1cnpeTtDcVqgE7tNlZXys=";
               };
               doCheck = false;
-              vendorSha256 = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
+              vendorSha256 = null;
               modRoot = "./cmd/protoc-gen-go";
             };
 

@@ -525,15 +525,14 @@ func (s *Stream) SendCancel(err error) (bool, error) {
 	s.log("CALL", func() string { return "SendCancel()" })
 
 	s.mu.Lock()
+	if !s.write.Unlocked() { // if writes are happening, then we have to do a hard cancel.
+		s.mu.Unlock()
+		return true, nil
+	}
+
 	if s.sigs.term.IsSet() {
 		s.mu.Unlock()
 		return false, nil
-	}
-
-	// if writes are happening, then we have to do a hard cancel.
-	if !s.write.Unlocked() {
-		s.mu.Unlock()
-		return true, nil
 	}
 
 	defer s.checkFinished()

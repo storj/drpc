@@ -1,6 +1,6 @@
 module storj.io/drpc/internal/twirpcompat
 
-go 1.18
+go 1.19
 
 require (
 	github.com/twitchtv/twirp v8.1.0+incompatible

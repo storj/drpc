@@ -32,7 +32,7 @@ A drop-in, lightweight gRPC replacement.
     - Bi-directional streaming support over upgraded HTTP(S) connections using WebSockets
     - Concurrent RPCs via connection pool
 
-* [go.arsenm.dev/drpc](https://pkg.go.dev/go.arsenm.dev/drpc)
+* [go.elara.ws/drpc](https://pkg.go.dev/go.elara.ws/drpc)
     - Concurrent RPCs based on [yamux](https://pkg.go.dev/github.com/hashicorp/yamux)
     - Simple drop-in replacements for `drpcserver` and `drpcconn`
 

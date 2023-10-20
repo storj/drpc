@@ -124,7 +124,7 @@ func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 
 		switch {
 		case fr.ID.Less(r.id):
-			return Packet{}, drpc.ProtocolError.New("id monotonicity violation")
+			return Packet{}, drpc.ProtocolError.New("id monotonicity violation (fr:%v r:%v)", fr.ID, r.id)
 
 		case r.id != fr.ID || pkt.ID == ID{}:
 			r.id = fr.ID
@@ -137,14 +137,14 @@ func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 			}
 
 		case fr.Kind != pkt.Kind:
-			return Packet{}, drpc.ProtocolError.New("packet kind change")
+			return Packet{}, drpc.ProtocolError.New("packet kind change (fr:%v pkt:%v)", fr.Kind, pkt.Kind)
 		}
 
 		pkt.Data = append(pkt.Data, fr.Data...)
 
 		switch {
 		case len(pkt.Data) > r.opts.MaximumBufferSize:
-			return Packet{}, drpc.ProtocolError.New("data overflow")
+			return Packet{}, drpc.ProtocolError.New("data overflow (len:%v)", len(pkt.Data))
 
 		case fr.Done:
 			// increment the message id so that we do not accept any frames

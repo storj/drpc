@@ -30,7 +30,6 @@ linters:
     - nilerr                  # checks for misuses of `if err != nil { return nil }`
     - noctx                   # finds locations that should use context
     - nolintlint              # checks that nolint directives are correct
-    - revive                  # check standard linting rules
     - unconvert               # remove unnecessary conversions
     - wastedassign
     #TODO#- forcetypeassert   # needs work to replace unchecked interface type assertion
@@ -42,6 +41,7 @@ linters:
     #TODO#- unparam           # check for unused parameters
     #TODO#- whitespace        # checks for leading/trailing newlines
   disable:
+    - revive           # too many false positives
     - asciicheck       # non-ascii is allowed
     - cyclop           # this complexity is not a good metric
     - depguard         # unused
@@ -164,12 +164,3 @@ issues:
     - linters:
         - goerr113
       text: "do not define dynamic errors"
-    - linters:
-        - revive
-      text: "if-return"
-    - linters:
-        - revive
-      text: "unused-parameter" # too many false positives
-    - linters:
-        - revive
-      text: "redefines-builtin-id" # too many false positives

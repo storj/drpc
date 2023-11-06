@@ -13,7 +13,7 @@ import (
 type streamBuffer struct {
 	mu     sync.Mutex
 	cond   sync.Cond
-	stream atomic.Value // *drpcstream.Stream
+	stream atomic.Pointer[drpcstream.Stream]
 	closed bool
 }
 
@@ -30,8 +30,7 @@ func (sb *streamBuffer) Close() {
 }
 
 func (sb *streamBuffer) Get() *drpcstream.Stream {
-	stream, _ := sb.stream.Load().(*drpcstream.Stream)
-	return stream
+	return sb.stream.Load()
 }
 
 func (sb *streamBuffer) Set(stream *drpcstream.Stream) {

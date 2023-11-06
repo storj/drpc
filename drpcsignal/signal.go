@@ -85,7 +85,7 @@ func (s *Signal) setSlow(err error) (ok bool) {
 
 // Get returns the error set with the signal and a boolean indicating if
 // the result is valid.
-func (s *Signal) Get() (error, bool) { //nolint
+func (s *Signal) Get() (error, bool) {
 	if atomic.LoadUint32(&s.status)&statusErrorSet != 0 {
 		return s.err, true
 	}

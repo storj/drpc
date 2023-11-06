@@ -4,10 +4,13 @@
 package drpcwire
 
 import (
+	"math/bits"
 	"testing"
 
 	"github.com/zeebo/assert"
 )
+
+func varintSize(x uint64) uint { return (9*uint(bits.Len64(x)) + 64) / 64 }
 
 func TestVarint(t *testing.T) {
 	t.Run("Round Trip", func(t *testing.T) {

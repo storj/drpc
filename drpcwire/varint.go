@@ -4,8 +4,6 @@
 package drpcwire
 
 import (
-	"math/bits"
-
 	"storj.io/drpc"
 )
 
@@ -35,5 +33,3 @@ func AppendVarint(buf []byte, x uint64) []byte {
 	}
 	return append(buf, byte(x))
 }
-
-func varintSize(x uint64) uint { return (9*uint(bits.Len64(x)) + 64) / 64 }

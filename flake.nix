@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs";
-    flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/*.tar.gz";
+    flake-utils.url = "https://flakehub.com/f/numtide/flake-utils/*.tar.gz";
   };
 
   outputs = { self, nixpkgs, flake-utils }:
@@ -37,6 +37,21 @@
               doCheck = false;
               subPackages = [ "cmd/staticcheck" ];
               vendorSha256 = "sha256-o9UtS6AMgRYuAkOWdktG2Kr3QDBDQTOGSlya69K2br8";
+            };
+
+            golangci-lint = buildGoModule rec {
+              name = "golangci-lint";
+              version = "1.55.0";
+              src = fetchFromGitHub {
+                owner = "golangci";
+                repo = "golangci-lint";
+                rev = "v${version}";
+                hash = "sha256-77bhXeABkV6WZCzoGnRS447pEVcJyj4AF+wihJe62fc=";
+              };
+              doCheck = false;
+              subPackages = [ "cmd/golangci-lint" ];
+              vendorHash = "sha256-3aHLilu+AZ6376bn9eS8kmSfo6fXikOFJKDRCYu+4a0=";
+              ldflags = ["-X main.version=${version}" "-X main.commit=v${version}" "-X main.date=19700101-00:00:00"];
             };
 
             ci = buildGoModule {
@@ -141,8 +156,7 @@
             buildInputs = [
               defaultPackage
 
-              go_1_19
-              golangci-lint
+              go_1_20
               protobuf
               graphviz
               bash
@@ -153,6 +167,7 @@
               devtools.protoc-gen-gogo
               devtools.protoc-gen-twirp
               devtools.staticcheck
+              devtools.golangci-lint
               devtools.ci
               devtools.stringer
               devtools.godocdown

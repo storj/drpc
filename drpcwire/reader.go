@@ -23,6 +23,7 @@ type Reader struct {
 	curr []byte
 	buf  []byte
 	id   ID
+	rerr error
 }
 
 // A frame adds at most this many bytes of overhead to some data by prefixing
@@ -54,6 +55,22 @@ func NewReaderWithOptions(r io.Reader, opts ReaderOptions) *Reader {
 		curr: make([]byte, 0, 4096),
 		id:   ID{Stream: 1, Message: 1},
 	}
+}
+
+// read calls Read on the underlying reader and ensures the the return
+// value is (>0, nil) or (0, err).
+func (r *Reader) read(p []byte) (n int, err error) {
+	for i := 0; i < 100; i++ {
+		if r.rerr != nil {
+			r.rerr, err = nil, r.rerr
+			return 0, err
+		}
+		n, r.rerr = r.r.Read(p)
+		if n > 0 {
+			return n, nil
+		}
+	}
+	return 0, drpc.InternalError.Wrap(io.ErrNoProgress)
 }
 
 // ReadPacket reads a packet from the io.Reader. It is equivalent to
@@ -93,7 +110,7 @@ func (r *Reader) ReadPacketUsing(buf []byte) (pkt Packet, err error) {
 				r.buf = nbuf
 			}
 
-			n, err := r.r.Read(r.buf[len(r.buf):cap(r.buf)])
+			n, err := r.read(r.buf[len(r.buf):cap(r.buf)])
 			if err != nil {
 				return Packet{}, err
 			}

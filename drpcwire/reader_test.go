@@ -230,3 +230,40 @@ func TestReaderRandomized(t *testing.T) {
 		assert.Equal(t, pkt.Data, get(len(pkt.Data)))
 	}
 }
+
+type readerFunc func([]byte) (int, error)
+
+func (fn readerFunc) Read(p []byte) (int, error) { return fn(p) }
+
+func TestReaderErrorWithData(t *testing.T) {
+	r := NewReader(readerFunc(func(b []byte) (int, error) {
+		out := AppendFrame(b[:0:8], Frame{
+			Data: []byte("test"),
+			ID:   ID{1, 1},
+			Kind: KindMessage,
+			Done: true,
+		})
+		return len(out), io.EOF
+	}))
+
+	pkt, err := r.ReadPacket()
+	assert.NoError(t, err)
+	assert.Equal(t, pkt, Packet{
+		Data:    []byte("test"),
+		ID:      ID{1, 1},
+		Kind:    KindMessage,
+		Control: false,
+	})
+
+	_, err = r.ReadPacket()
+	assert.Equal(t, err, io.EOF)
+}
+
+func TestReaderErrorNoProgress(t *testing.T) {
+	r := NewReader(readerFunc(func(b []byte) (int, error) {
+		return 0, nil
+	}))
+
+	_, err := r.ReadPacket()
+	assert.That(t, errors.Is(err, io.ErrNoProgress))
+}

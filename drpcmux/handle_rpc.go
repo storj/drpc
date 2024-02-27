@@ -18,11 +18,29 @@ func (m *Mux) HandleRPC(stream drpc.Stream, rpc string) (err error) {
 		return drpc.ProtocolError.New("unknown rpc: %q", rpc)
 	}
 
-	in := interface{}(stream)
+	var (
+		in  = interface{}(stream)
+		msg drpc.Message
+	)
 	if data.in1 != streamType {
-		msg, ok := reflect.New(data.in1.Elem()).Interface().(drpc.Message)
-		if !ok {
-			return drpc.InternalError.New("invalid rpc input type")
+		// If its an vtprotobuf supported message type
+		if data.in1.Implements(vtMessageType) {
+			p := data.in1.(drpc.VTProtoMessage).FromVTPool()
+			if p == nil {
+				return drpc.InternalError.New("unable to get message from vt pool")
+			}
+			msg, ok = p.(drpc.Message)
+			if !ok {
+				return drpc.InternalError.New("invalid rpc input type")
+			}
+
+			defer p.(drpc.VTProtoMessage).ReturnToVTPool()
+		} else {
+			m, ok := reflect.New(data.in1.Elem()).Interface().(drpc.Message)
+			if !ok {
+				return drpc.InternalError.New("invalid rpc input type")
+			}
+			msg = m
 		}
 		if err := stream.MsgRecv(msg, data.enc); err != nil {
 			return errs.Wrap(err)

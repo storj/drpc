@@ -30,6 +30,11 @@ type Transport interface {
 // This exists so that one can use whatever protobuf library/runtime they want.
 type Message interface{}
 
+type VTProtoMessage interface {
+	FromVTPool() interface{}
+	ReturnToVTPool()
+}
+
 // Conn represents a client connection to a server.
 type Conn interface {
 	// Close closes the connection.

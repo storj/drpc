@@ -25,8 +25,9 @@ func New() *Mux {
 }
 
 var (
-	streamType  = reflect.TypeOf((*drpc.Stream)(nil)).Elem()
-	messageType = reflect.TypeOf((*drpc.Message)(nil)).Elem()
+	streamType    = reflect.TypeOf((*drpc.Stream)(nil)).Elem()
+	messageType   = reflect.TypeOf((*drpc.Message)(nil)).Elem()
+	vtMessageType = reflect.TypeOf((*drpc.VTProtoMessage)(nil)).Elem()
 )
 
 type rpcData struct {

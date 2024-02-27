@@ -19,9 +19,9 @@ type CookieMonsterServer struct {
 }
 
 // EatCookie turns a cookie into crumbs.
-func (s *CookieMonsterServer) EatCookie(ctx context.Context, cookie *pb.Cookie) (*pb.Crumbs, error) {
+func (s *CookieMonsterServer) EatCookie(ctx context.Context, cookie *pb.CookiePool) (*pb.Crumbs, error) {
 	return &pb.Crumbs{
-		Cookie: cookie,
+		Cookie: cookie.Cookie,
 	}, nil
 }
 

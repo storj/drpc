@@ -38,7 +38,7 @@ func (drpcEncoding_File_sesamestreet_proto) JSONUnmarshal(buf []byte, msg drpc.M
 type DRPCCookieMonsterClient interface {
 	DRPCConn() drpc.Conn
 
-	EatCookie(ctx context.Context, in *Cookie) (*Crumbs, error)
+	EatCookie(ctx context.Context, in *CookiePool) (*Crumbs, error)
 }
 
 type drpcCookieMonsterClient struct {
@@ -51,7 +51,7 @@ func NewDRPCCookieMonsterClient(cc drpc.Conn) DRPCCookieMonsterClient {
 
 func (c *drpcCookieMonsterClient) DRPCConn() drpc.Conn { return c.cc }
 
-func (c *drpcCookieMonsterClient) EatCookie(ctx context.Context, in *Cookie) (*Crumbs, error) {
+func (c *drpcCookieMonsterClient) EatCookie(ctx context.Context, in *CookiePool) (*Crumbs, error) {
 	out := new(Crumbs)
 	err := c.cc.Invoke(ctx, "/sesamestreet.CookieMonster/EatCookie", drpcEncoding_File_sesamestreet_proto{}, in, out)
 	if err != nil {
@@ -61,12 +61,12 @@ func (c *drpcCookieMonsterClient) EatCookie(ctx context.Context, in *Cookie) (*C
 }
 
 type DRPCCookieMonsterServer interface {
-	EatCookie(context.Context, *Cookie) (*Crumbs, error)
+	EatCookie(context.Context, *CookiePool) (*Crumbs, error)
 }
 
 type DRPCCookieMonsterUnimplementedServer struct{}
 
-func (s *DRPCCookieMonsterUnimplementedServer) EatCookie(context.Context, *Cookie) (*Crumbs, error) {
+func (s *DRPCCookieMonsterUnimplementedServer) EatCookie(context.Context, *CookiePool) (*Crumbs, error) {
 	return nil, drpcerr.WithCode(errors.New("Unimplemented"), drpcerr.Unimplemented)
 }
 
@@ -82,7 +82,7 @@ func (DRPCCookieMonsterDescription) Method(n int) (string, drpc.Encoding, drpc.R
 				return srv.(DRPCCookieMonsterServer).
 					EatCookie(
 						ctx,
-						in1.(*Cookie),
+						in1.(*CookiePool),
 					)
 			}, DRPCCookieMonsterServer.EatCookie, true
 	default:

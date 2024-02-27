@@ -25,7 +25,7 @@ func (m *Mux) HandleRPC(stream drpc.Stream, rpc string) (err error) {
 	if data.in1 != streamType {
 		// If its an vtprotobuf supported message type
 		if data.in1.Implements(vtMessageType) {
-			p := data.in1.(drpc.VTProtoMessage).FromVTPool()
+			p := reflect.New(data.in1.Elem()).Interface().(drpc.VTProtoMessage).FromVTPool()
 			if p == nil {
 				return drpc.InternalError.New("unable to get message from vt pool")
 			}

@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CookieMonsterClient interface {
-	EatCookie(ctx context.Context, in *Cookie, opts ...grpc.CallOption) (*Crumbs, error)
+	EatCookie(ctx context.Context, in *CookiePool, opts ...grpc.CallOption) (*Crumbs, error)
 }
 
 type cookieMonsterClient struct {
@@ -33,7 +33,7 @@ func NewCookieMonsterClient(cc grpc.ClientConnInterface) CookieMonsterClient {
 	return &cookieMonsterClient{cc}
 }
 
-func (c *cookieMonsterClient) EatCookie(ctx context.Context, in *Cookie, opts ...grpc.CallOption) (*Crumbs, error) {
+func (c *cookieMonsterClient) EatCookie(ctx context.Context, in *CookiePool, opts ...grpc.CallOption) (*Crumbs, error) {
 	out := new(Crumbs)
 	err := c.cc.Invoke(ctx, "/sesamestreet.CookieMonster/EatCookie", in, out, opts...)
 	if err != nil {
@@ -46,7 +46,7 @@ func (c *cookieMonsterClient) EatCookie(ctx context.Context, in *Cookie, opts ..
 // All implementations must embed UnimplementedCookieMonsterServer
 // for forward compatibility
 type CookieMonsterServer interface {
-	EatCookie(context.Context, *Cookie) (*Crumbs, error)
+	EatCookie(context.Context, *CookiePool) (*Crumbs, error)
 	mustEmbedUnimplementedCookieMonsterServer()
 }
 
@@ -54,7 +54,7 @@ type CookieMonsterServer interface {
 type UnimplementedCookieMonsterServer struct {
 }
 
-func (UnimplementedCookieMonsterServer) EatCookie(context.Context, *Cookie) (*Crumbs, error) {
+func (UnimplementedCookieMonsterServer) EatCookie(context.Context, *CookiePool) (*Crumbs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EatCookie not implemented")
 }
 func (UnimplementedCookieMonsterServer) mustEmbedUnimplementedCookieMonsterServer() {}
@@ -71,7 +71,7 @@ func RegisterCookieMonsterServer(s grpc.ServiceRegistrar, srv CookieMonsterServe
 }
 
 func _CookieMonster_EatCookie_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Cookie)
+	in := new(CookiePool)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func _CookieMonster_EatCookie_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: "/sesamestreet.CookieMonster/EatCookie",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CookieMonsterServer).EatCookie(ctx, req.(*Cookie))
+		return srv.(CookieMonsterServer).EatCookie(ctx, req.(*CookiePool))
 	}
 	return interceptor(ctx, in, info, handler)
 }

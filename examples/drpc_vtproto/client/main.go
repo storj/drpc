@@ -42,8 +42,10 @@ func Main(ctx context.Context) error {
 	defer cancel()
 
 	// run the RPC
-	crumbs, err := client.EatCookie(ctx, &pb.Cookie{
-		Type: pb.Cookie_Oatmeal,
+	crumbs, err := client.EatCookie(ctx, &pb.CookiePool{
+		Cookie: &pb.Cookie{
+			Type: pb.Cookie_Oatmeal,
+		},
 	})
 	if err != nil {
 		return err

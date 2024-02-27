@@ -10,6 +10,7 @@ protoc --go_out=paths=source_relative:. --plugin protoc-gen-go="${GOPATH}/bin/pr
 	--go-drpc_out=paths=source_relative:. --plugin protoc-gen-go-drpc="${GOPATH}/bin/protoc-gen-go-drpc" \
 	--go-vtproto_out=paths=source_relative:. --plugin protoc-gen-go-vtproto="${GOPATH}/bin/protoc-gen-go-vtproto" \
 	--go-vtproto_opt=pool=storj.io/drpc/examples/drpc_vtproto/pb.Cookie \
+	--go-vtproto_opt=pool=storj.io/drpc/examples/drpc_vtproto/pb.CookiePool \
 	--go-vtproto_opt=features=marshal+unmarshal+equal+clone+size+pool \
 	sesamestreet.proto
 ```

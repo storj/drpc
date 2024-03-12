@@ -123,7 +123,7 @@ type randServer struct {
 }
 
 func (rs *randServer) newSteam(ctx context.Context, man *Manager) (*drpcstream.Stream, error) {
-	return man.NewClientStream(ctx)
+	return man.NewClientStream(ctx, "rpc")
 }
 
 func (rs *randServer) execute(t *testing.T, wr *drpcwire.Writer, op byte) {

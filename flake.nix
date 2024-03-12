@@ -21,7 +21,7 @@
             ]));
           };
           subPackages = [ "cmd/protoc-gen-go-drpc" ];
-          vendorSha256 = "sha256-NMa9c+QIq9VEUQZqZ5X9fNbZDJT99q8XNCH2rRKyMzQ=";
+          vendorHash = "sha256-NMa9c+QIq9VEUQZqZ5X9fNbZDJT99q8XNCH2rRKyMzQ=";
         };
 
         devShell =
@@ -36,7 +36,7 @@
               };
               doCheck = false;
               subPackages = [ "cmd/staticcheck" ];
-              vendorSha256 = "sha256-o9UtS6AMgRYuAkOWdktG2Kr3QDBDQTOGSlya69K2br8";
+              vendorHash = "sha256-o9UtS6AMgRYuAkOWdktG2Kr3QDBDQTOGSlya69K2br8";
             };
 
             golangci-lint = buildGoModule rec {
@@ -63,7 +63,7 @@
                 sha256 = "sha256-NcsLA5d5sF1qSPSu/Pw/Md+0nr+inXAsPx9bKWh3I7Y=";
               };
               doCheck = false;
-              vendorSha256 = "sha256-G5cAb9zFqjdCLIodGcPv9u4ABZZKEGTx0CvB4i7JdRg=";
+              vendorHash = "sha256-G5cAb9zFqjdCLIodGcPv9u4ABZZKEGTx0CvB4i7JdRg=";
               allowGoReference = true; # until check-imports stops needing this
               subPackages = [
                 "check-copyright"
@@ -83,7 +83,7 @@
                 sha256 = "sha256-sUDeWY/yMyijbKsXDBwBXLShXTAZ4445I4hpP7bTndQ=";
               };
               doCheck = false;
-              vendorSha256 = "sha256-KHd9zmNsmXmc2+NNtTnw/CSkmGwcBVYNrpEUmIoZi5Q=";
+              vendorHash = "sha256-KHd9zmNsmXmc2+NNtTnw/CSkmGwcBVYNrpEUmIoZi5Q=";
               modRoot = "./cmd/protoc-gen-go-grpc";
             };
 
@@ -96,7 +96,7 @@
                 sha256 = "sha256-wkUvMsoJP38KMD5b3Fz65R1cnpeTtDcVqgE7tNlZXys=";
               };
               doCheck = false;
-              vendorSha256 = null;
+              vendorHash = null;
               modRoot = "./cmd/protoc-gen-go";
             };
 
@@ -135,7 +135,7 @@
                 sha256 = "sha256-UMEhFxODGQ20vkZPtscBpHhUDa6/+hnD85Z1yx0pQfQ=";
               };
               doCheck = false;
-              vendorSha256 = "sha256-EQHYf4Q+XNjwG/KDoTA4m0mlBGxPkJSLUcO0VHFSpeA=";
+              vendorHash = "sha256-EQHYf4Q+XNjwG/KDoTA4m0mlBGxPkJSLUcO0VHFSpeA=";
               subPackages = [ "cmd/stringer" ];
             };
 

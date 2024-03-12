@@ -8,11 +8,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"testing"
 
 	"github.com/zeebo/assert"
 
+	"storj.io/drpc/drpcconn"
 	"storj.io/drpc/drpcerr"
+	"storj.io/drpc/drpcmux"
+	"storj.io/drpc/drpcserver"
+	"storj.io/drpc/drpcstats"
 	"storj.io/drpc/drpctest"
 )
 
@@ -106,4 +111,53 @@ func TestConcurrent(t *testing.T) {
 	for i := 0; i < N; i++ {
 		assert.NoError(t, <-errs)
 	}
+}
+
+func TestStats(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	c1, c2 := net.Pipe()
+	mux := drpcmux.New()
+	_ = DRPCRegisterService(mux, standardImpl)
+
+	srv := drpcserver.NewWithOptions(mux, drpcserver.Options{
+		CollectStats: true,
+	})
+	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
+
+	conn := drpcconn.NewWithOptions(c2, drpcconn.Options{})
+	defer func() { _ = conn.Close() }()
+	cli := NewDRPCServiceClient(conn)
+
+	assert.Equal(t, srv.Stats(), map[string]drpcstats.Stats{})
+
+	_, err := cli.Method1(ctx, in(5))
+	assert.Error(t, err)
+
+	assert.Equal(t, srv.Stats(), map[string]drpcstats.Stats{
+		"/service.Service/Method1": {Read: 2, Written: 12},
+	})
+
+	_, err = cli.Method1(ctx, in(1))
+	assert.NoError(t, err)
+
+	assert.Equal(t, srv.Stats(), map[string]drpcstats.Stats{
+		"/service.Service/Method1": {Read: 2 + 2, Written: 12 + 2},
+	})
+
+	stream, err := cli.Method3(ctx, in(3))
+	assert.NoError(t, err)
+	for i := 0; i < 3; i++ {
+		_, err := stream.Recv()
+		assert.NoError(t, err)
+	}
+	_, err = stream.Recv()
+	assert.That(t, errors.Is(err, io.EOF))
+	assert.NoError(t, stream.Close())
+
+	assert.Equal(t, srv.Stats(), map[string]drpcstats.Stats{
+		"/service.Service/Method1": {Read: 2 + 2, Written: 12 + 2},
+		"/service.Service/Method3": {Read: 2, Written: 6},
+	})
 }

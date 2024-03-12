@@ -80,7 +80,7 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, enc drpc.Encoding, in, ou
 		}
 	}
 
-	stream, err := c.man.NewClientStream(ctx)
+	stream, err := c.man.NewClientStream(ctx, rpc)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (c *Conn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ 
 		}
 	}
 
-	stream, err := c.man.NewClientStream(ctx)
+	stream, err := c.man.NewClientStream(ctx, rpc)
 	if err != nil {
 		return nil, err
 	}

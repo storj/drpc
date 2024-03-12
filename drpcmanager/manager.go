@@ -50,6 +50,9 @@ type Options struct {
 	// remote client. In other words, it only includes the time that the client
 	// could delay before invoking an RPC. If zero or negative, no timeout is used.
 	InactivityTimeout time.Duration
+
+	// Internal contains options that are for internal use only.
+	Internal drpcopts.Manager
 }
 
 // Manager handles the logic of managing a transport for a drpc client or server.
@@ -288,9 +291,12 @@ func (m *Manager) manageReader() {
 //
 
 // newStream creates a stream value with the appropriate configuration for this manager.
-func (m *Manager) newStream(ctx context.Context, sid uint64, kind string) (*drpcstream.Stream, error) {
+func (m *Manager) newStream(ctx context.Context, sid uint64, kind, rpc string) (*drpcstream.Stream, error) {
 	opts := m.opts.Stream
 	drpcopts.SetStreamKind(&opts.Internal, kind)
+	if cb := drpcopts.GetManagerStatsCB(&m.opts.Internal); cb != nil {
+		drpcopts.SetStreamStats(&opts.Internal, cb(rpc))
+	}
 
 	stream := drpcstream.NewWithOptions(ctx, sid, m.wr, opts)
 	select {
@@ -405,12 +411,12 @@ func (m *Manager) Close() error {
 }
 
 // NewClientStream starts a stream on the managed transport for use by a client.
-func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Stream, err error) {
+func (m *Manager) NewClientStream(ctx context.Context, rpc string) (stream *drpcstream.Stream, err error) {
 	if err := m.acquireSemaphore(ctx); err != nil {
 		return nil, err
 	}
 
-	return m.newStream(ctx, m.sbuf.Get().ID()+1, "cli")
+	return m.newStream(ctx, m.sbuf.Get().ID()+1, "cli", rpc)
 }
 
 // NewServerStream starts a stream on the managed transport for use by a server. It does
@@ -468,7 +474,7 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 					ctx = drpcmetadata.AddPairs(ctx, meta)
 				}
 
-				stream, err := m.newStream(ctx, pkt.ID.Stream, "srv")
+				stream, err := m.newStream(ctx, pkt.ID.Stream, "srv", rpc)
 				return stream, rpc, err
 
 			default:

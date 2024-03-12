@@ -3,13 +3,17 @@
 
 package drpcopts
 
-import "storj.io/drpc"
+import (
+	"storj.io/drpc"
+	"storj.io/drpc/drpcstats"
+)
 
 // Stream contains internal options for the drpcstream package.
 type Stream struct {
 	transport drpc.Transport
 	fin       chan<- struct{}
 	kind      string
+	stats     *drpcstats.Stats
 }
 
 // GetStreamTransport returns the drpc.Transport stored in the options.
@@ -29,3 +33,9 @@ func GetStreamKind(opts *Stream) string { return opts.kind }
 
 // SetStreamKind sets the kind debug string stored in the options.
 func SetStreamKind(opts *Stream, kind string) { opts.kind = kind }
+
+// GetStreamStats returns the Stats stored in the options.
+func GetStreamStats(opts *Stream) *drpcstats.Stats { return opts.stats }
+
+// SetStreamStats sets the Stats stored in the options.
+func SetStreamStats(opts *Stream, stats *drpcstats.Stats) { opts.stats = stats }

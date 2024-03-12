@@ -59,7 +59,7 @@ func TestUnblocked_NoCancel(t *testing.T) {
 	defer func() { _ = sman.Close() }()
 
 	ctx.Run(func(ctx context.Context) {
-		stream, err := cman.NewClientStream(ctx)
+		stream, err := cman.NewClientStream(ctx, "rpc")
 		assert.NoError(t, err)
 		defer func() { _ = stream.Close() }()
 
@@ -103,7 +103,7 @@ func TestUnblocked_SoftCancel(t *testing.T) {
 				subctx, cancel := context.WithCancel(ctx)
 				defer cancel()
 
-				stream, err := man.NewClientStream(subctx)
+				stream, err := man.NewClientStream(subctx, "rpc")
 				if softCancel {
 					assert.NoError(t, err)
 				} else if i > 0 {

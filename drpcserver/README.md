@@ -17,6 +17,10 @@ type Options struct {
 	// temporary network errors when accepting connections, or errors
 	// handling individual clients. It is not called if nil.
 	Log func(error)
+
+	// CollectStats controls whether the server should collect stats on the
+	// rpcs it serves.
+	CollectStats bool
 }
 ```
 
@@ -60,3 +64,10 @@ connections.
 func (s *Server) ServeOne(ctx context.Context, tr drpc.Transport) (err error)
 ```
 ServeOne serves a single set of rpcs on the provided transport.
+
+#### func (*Server) Stats
+
+```go
+func (s *Server) Stats() map[string]drpcstats.Stats
+```
+Stats returns the collected stats grouped by rpc.

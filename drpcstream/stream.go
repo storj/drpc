@@ -200,7 +200,13 @@ func (s *Stream) SetManualFlush(mf bool) { s.opts.ManualFlush = mf }
 // any major errors that should terminate the transport the stream is operating on as
 // well as a boolean indicating if the stream expects more packets.
 func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
-	if s.sigs.term.IsSet() || pkt.ID.Stream != s.id.Stream {
+	if pkt.ID.Stream != s.id.Stream {
+		return nil
+	}
+
+	drpcopts.GetStreamStats(&s.opts.Internal).AddRead(uint64(len(pkt.Data)))
+
+	if s.sigs.term.IsSet() {
 		return nil
 	}
 
@@ -302,6 +308,7 @@ func (s *Stream) sendPacket(kind drpcwire.Kind, control bool, data []byte) (err 
 	fr.Control = control
 	fr.Done = true
 
+	drpcopts.GetStreamStats(&s.opts.Internal).AddWritten(uint64(len(data)))
 	s.log("SEND", fr.String)
 
 	if err := s.wr.WriteFrame(fr); err != nil {
@@ -361,6 +368,7 @@ func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
 		fr.Data, data = drpcwire.SplitData(data, n)
 		fr.Done = len(data) == 0
 
+		drpcopts.GetStreamStats(&s.opts.Internal).AddWritten(uint64(len(fr.Data)))
 		s.log("SEND", fr.String)
 
 		if err := s.wr.WriteFrame(fr); err != nil {

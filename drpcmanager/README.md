@@ -50,7 +50,7 @@ Closed returns a channel that is closed once the manager is closed.
 #### func (*Manager) NewClientStream
 
 ```go
-func (m *Manager) NewClientStream(ctx context.Context) (stream *drpcstream.Stream, err error)
+func (m *Manager) NewClientStream(ctx context.Context, rpc string) (stream *drpcstream.Stream, err error)
 ```
 NewClientStream starts a stream on the managed transport for use by a client.
 
@@ -106,6 +106,9 @@ type Options struct {
 	// remote client. In other words, it only includes the time that the client
 	// could delay before invoking an RPC. If zero or negative, no timeout is used.
 	InactivityTimeout time.Duration
+
+	// Internal contains options that are for internal use only.
+	Internal drpcopts.Manager
 }
 ```
 

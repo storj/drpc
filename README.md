@@ -83,105 +83,105 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
     <tr>
         <td rowspan=4>time/op</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>24.5µs</td><td>6.1µs</td><td>-74.87%</td><td rowspan=4></td>
-        <td>32.4µs</td><td>8.8µs</td><td>-72.89%</td><td rowspan=4></td>
-        <td>1.43ms</td><td>0.58ms</td><td>-59.47%</td>
+        <td>29.7µs</td><td>8.3µs</td><td>-72.18%</td><td rowspan=4></td>
+        <td>36.4µs</td><td>11.3µs</td><td>-68.92%</td><td rowspan=4></td>
+        <td>1.70ms</td><td>0.54ms</td><td>-68.24%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>745ns</td><td>528ns</td><td>-29.13%</td>
-        <td>2.63µs</td><td>1.46µs</td><td>-44.66%</td>
-        <td>512µs</td><td>236µs</td><td>-53.89%</td>
+        <td>1.56µs</td><td>0.79µs</td><td>-49.07%</td>
+        <td>3.80µs</td><td>2.04µs</td><td>-46.28%</td>
+        <td>784µs</td><td>239µs</td><td>-69.48%</td>
     </tr>
     <tr>
         <td>Output Stream</td>
-        <td>711ns</td><td>532ns</td><td>-25.11%</td>
-        <td>2.63µs</td><td>1.51µs</td><td>-42.59%</td>
-        <td>515µs</td><td>210µs</td><td>-59.26%</td>
+        <td>1.51µs</td><td>0.78µs</td><td>-48.47%</td>
+        <td>3.81µs</td><td>2.02µs</td><td>-47.06%</td>
+        <td>691µs</td><td>224µs</td><td>-67.55%</td>
     </tr>
     <tr>
         <td>Bidir Stream</td>
-        <td>7.29µs</td><td>2.52µs</td><td>-65.46%</td>
-        <td>12.3µs</td><td>3.9µs</td><td>-68.68%</td>
-        <td>1.44ms</td><td>0.44ms</td><td>-69.05%</td>
+        <td>8.79µs</td><td>3.25µs</td><td>-63.07%</td>
+        <td>13.7µs</td><td>5.0µs</td><td>-63.73%</td>
+        <td>1.73ms</td><td>0.47ms</td><td>-72.72%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
         <td rowspan=4>speed</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>80.0kB/s</td><td>325.0kB/s</td><td>+306.25%</td><td rowspan=4></td>
-        <td>63.4MB/s</td><td>234.3MB/s</td><td>+269.56%</td><td rowspan=4></td>
-        <td>734MB/s</td><td>1812MB/s</td><td>+146.99%</td>
+        <td>70.0kB/s</td><td>240.0kB/s</td><td>+242.86%</td><td rowspan=4></td>
+        <td>56.3MB/s</td><td>181.1MB/s</td><td>+221.52%</td><td rowspan=4></td>
+        <td>618MB/s</td><td>1939MB/s</td><td>+213.84%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>2.69MB/s</td><td>3.79MB/s</td><td>+41.00%</td>
-        <td>780MB/s</td><td>1409MB/s</td><td>+80.67%</td>
-        <td>2.05GB/s</td><td>4.45GB/s</td><td>+117.12%</td>
+        <td>1.28MB/s</td><td>2.52MB/s</td><td>+96.11%</td>
+        <td>540MB/s</td><td>1006MB/s</td><td>+86.16%</td>
+        <td>1.34GB/s</td><td>4.38GB/s</td><td>+226.51%</td>
     </tr>
     <tr>
         <td>Output Stream</td>
-        <td>2.81MB/s</td><td>3.76MB/s</td><td>+33.52%</td>
-        <td>780MB/s</td><td>1360MB/s</td><td>+74.23%</td>
-        <td>2.04GB/s</td><td>5.01GB/s</td><td>+145.53%</td>
+        <td>1.33MB/s</td><td>2.57MB/s</td><td>+93.88%</td>
+        <td>538MB/s</td><td>1017MB/s</td><td>+89.14%</td>
+        <td>1.52GB/s</td><td>4.68GB/s</td><td>+208.05%</td>
     </tr>
     <tr>
         <td>Bidir Stream</td>
-        <td>274kB/s</td><td>794kB/s</td><td>+189.95%</td>
-        <td>166MB/s</td><td>533MB/s</td><td>+220.19%</td>
-        <td>730MB/s</td><td>2360MB/s</td><td>+223.10%</td>
+        <td>230kB/s</td><td>616kB/s</td><td>+167.93%</td>
+        <td>149MB/s</td><td>412MB/s</td><td>+175.73%</td>
+        <td>610MB/s</td><td>2215MB/s</td><td>+262.96%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
         <td rowspan=4>mem/op</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>8.66kB</td><td>1.42kB</td><td>-83.62%</td><td rowspan=4></td>
-        <td>22.2kB</td><td>7.8kB</td><td>-64.83%</td><td rowspan=4></td>
-        <td>6.61MB</td><td>3.16MB</td><td>-52.21%</td>
+        <td>9.42kB</td><td>1.42kB</td><td>-84.95%</td><td rowspan=4></td>
+        <td>22.7kB</td><td>7.8kB</td><td>-65.61%</td><td rowspan=4></td>
+        <td>6.42MB</td><td>3.16MB</td><td>-50.74%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>381B</td><td>80B</td><td>-79.01%</td>
-        <td>7.08kB</td><td>2.13kB</td><td>-69.95%</td>
-        <td>3.20MB</td><td>1.05MB</td><td>-67.17%</td>
+        <td>465B</td><td>80B</td><td>-82.80%</td>
+        <td>7.06kB</td><td>2.13kB</td><td>-69.87%</td>
+        <td>3.20MB</td><td>1.05MB</td><td>-67.10%</td>
     </tr>
     <tr>
         <td>Output Stream</td>
-        <td>305B</td><td>80B</td><td>-73.80%</td>
-        <td>7.00kB</td><td>2.13kB</td><td>-69.62%</td>
-        <td>3.20MB</td><td>1.05MB</td><td>-67.19%</td>
+        <td>360B</td><td>80B</td><td>-77.81%</td>
+        <td>6.98kB</td><td>2.13kB</td><td>-69.52%</td>
+        <td>3.20MB</td><td>1.05MB</td><td>-67.21%</td>
     </tr>
     <tr>
         <td>Bidir Stream</td>
-        <td>1.00kB</td><td>0.24kB</td><td>-75.90%</td>
-        <td>14.5kB</td><td>4.3kB</td><td>-70.10%</td>
-        <td>6.61MB</td><td>2.10MB</td><td>-68.20%</td>
+        <td>1.09kB</td><td>0.24kB</td><td>-77.94%</td>
+        <td>14.4kB</td><td>4.3kB</td><td>-69.90%</td>
+        <td>6.42MB</td><td>2.10MB</td><td>-67.22%</td>
     </tr>
     <tr><td colspan=14></td></tr>
     <tr>
         <td rowspan=4>allocs/op</td>
         <td>Unitary</td><td rowspan=4></td>
-        <td>168</td><td>7</td><td>-95.83%</td><td rowspan=4></td>
-        <td>170</td><td>9</td><td>-94.71%</td><td rowspan=4></td>
-        <td>400</td><td>9</td><td>-97.75%</td>
+        <td>182</td><td>7</td><td>-96.15%</td><td rowspan=4></td>
+        <td>184</td><td>9</td><td>-95.11%</td><td rowspan=4></td>
+        <td>280</td><td>9</td><td>-96.79%</td>
     </tr>
     <tr>
         <td>Input Stream</td>
-        <td>9</td><td>1</td><td>-88.89%</td>
-        <td>10</td><td>2</td><td>-80.00%</td>
-        <td>118</td><td>2</td><td>-98.31%</td>
+        <td>11</td><td>1</td><td>-90.91%</td>
+        <td>12</td><td>2</td><td>-83.33%</td>
+        <td>39.2</td><td>2</td><td>-94.90%</td>
     </tr>
     <tr>
         <td>Output Stream</td>
-        <td>9</td><td>1</td><td>-88.89%</td>
-        <td>10</td><td>2</td><td>-80.00%</td>
-        <td>120</td><td>2</td><td>-98.33%</td>
+        <td>11</td><td>1</td><td>-90.91%</td>
+        <td>12</td><td>2</td><td>-83.33%</td>
+        <td>38</td><td>2</td><td>-94.74%</td>
     </tr>
     <tr>
         <td>Bidir Stream</td>
-        <td>39</td><td>3</td><td>-92.31%</td>
-        <td>42</td><td>5</td><td>-88.10%</td>
-        <td>277</td><td>5</td><td>-98.20%</td>
+        <td>43</td><td>3</td><td>-93.02%</td>
+        <td>46</td><td>5</td><td>-89.13%</td>
+        <td>140</td><td>5</td><td>-96.43%</td>
     </tr>
 </table>
 

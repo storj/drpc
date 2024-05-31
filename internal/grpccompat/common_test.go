@@ -264,7 +264,7 @@ func createGRPCConnection(t testing.TB, server ServiceServer) (ServiceClient, fu
 
 	lis := makeListener(ctx, c1)
 	ctx.Run(func(context.Context) { _ = srv.Serve(lis) })
-	cc, _ := grpc.Dial("",
+	cc, _ := grpc.NewClient("localhost:0",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(makeDialer(c2)))
 

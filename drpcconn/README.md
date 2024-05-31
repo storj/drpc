@@ -60,6 +60,13 @@ func (c *Conn) NewStream(ctx context.Context, rpc string, enc drpc.Encoding) (_ 
 NewStream begins a streaming rpc on the connection. Only one Invoke or Stream
 may be open at a time.
 
+#### func (*Conn) Stats
+
+```go
+func (c *Conn) Stats() map[string]drpcstats.Stats
+```
+Stats returns the collected stats grouped by rpc.
+
 #### func (*Conn) Transport
 
 ```go
@@ -82,6 +89,10 @@ called concurrently with Invoke or NewStream.
 type Options struct {
 	// Manager controls the options we pass to the manager of this conn.
 	Manager drpcmanager.Options
+
+	// CollectStats controls whether the server should collect stats on the
+	// rpcs it creates.
+	CollectStats bool
 }
 ```
 

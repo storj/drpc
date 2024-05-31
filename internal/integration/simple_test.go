@@ -113,7 +113,7 @@ func TestConcurrent(t *testing.T) {
 	}
 }
 
-func TestStats(t *testing.T) {
+func TestServerStats(t *testing.T) {
 	ctx := drpctest.NewTracker(t)
 	defer ctx.Close()
 
@@ -159,5 +159,54 @@ func TestStats(t *testing.T) {
 	assert.Equal(t, srv.Stats(), map[string]drpcstats.Stats{
 		"/service.Service/Method1": {Read: 2 + 2, Written: 12 + 2},
 		"/service.Service/Method3": {Read: 2, Written: 6},
+	})
+}
+
+func TestClientStats(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	c1, c2 := net.Pipe()
+	mux := drpcmux.New()
+	_ = DRPCRegisterService(mux, standardImpl)
+
+	srv := drpcserver.New(mux)
+	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
+
+	conn := drpcconn.NewWithOptions(c2, drpcconn.Options{
+		CollectStats: true,
+	})
+	defer func() { _ = conn.Close() }()
+	cli := NewDRPCServiceClient(conn)
+
+	assert.Equal(t, srv.Stats(), map[string]drpcstats.Stats{})
+
+	_, err := cli.Method1(ctx, in(5))
+	assert.Error(t, err)
+
+	assert.Equal(t, conn.Stats(), map[string]drpcstats.Stats{
+		"/service.Service/Method1": {Read: 12, Written: 26},
+	})
+
+	_, err = cli.Method1(ctx, in(1))
+	assert.NoError(t, err)
+
+	assert.Equal(t, conn.Stats(), map[string]drpcstats.Stats{
+		"/service.Service/Method1": {Read: 12 + 2, Written: 26 + 26},
+	})
+
+	stream, err := cli.Method3(ctx, in(3))
+	assert.NoError(t, err)
+	for i := 0; i < 3; i++ {
+		_, err := stream.Recv()
+		assert.NoError(t, err)
+	}
+	_, err = stream.Recv()
+	assert.That(t, errors.Is(err, io.EOF))
+	assert.NoError(t, stream.Close())
+
+	assert.Equal(t, conn.Stats(), map[string]drpcstats.Stats{
+		"/service.Service/Method1": {Read: 12 + 2, Written: 26 + 26},
+		"/service.Service/Method3": {Read: 6, Written: 26},
 	})
 }

@@ -195,12 +195,12 @@ DRPC is proud to get as much done in as few lines of code as possible. It's the 
 | storj.io/drpc/drpcstream             | 470      |
 | storj.io/drpc/cmd/protoc-gen-go-drpc | 424      |
 | storj.io/drpc/drpcmanager            | 374      |
-| storj.io/drpc/drpcwire               | 362      |
+| storj.io/drpc/drpcwire               | 363      |
 | storj.io/drpc/drpcpool               | 276      |
 | storj.io/drpc/drpcmigrate            | 239      |
-| storj.io/drpc/drpcserver             | 161      |
+| storj.io/drpc/drpcserver             | 164      |
+| storj.io/drpc/drpcconn               | 134      |
 | storj.io/drpc/drpcsignal             | 133      |
-| storj.io/drpc/drpcconn               | 116      |
 | storj.io/drpc/drpcmetadata           | 115      |
 | storj.io/drpc/drpcmux                | 95       |
 | storj.io/drpc/drpccache              | 54       |
@@ -212,4 +212,4 @@ DRPC is proud to get as much done in as few lines of code as possible. It's the 
 | storj.io/drpc/drpcstats              | 25       |
 | storj.io/drpc/drpcdebug              | 22       |
 | storj.io/drpc/drpcenc                | 15       |
-| **Total**                            | **3561** |
+| **Total**                            | **3583** |

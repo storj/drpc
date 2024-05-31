@@ -55,12 +55,11 @@ func NewWithOptions(handler drpc.Handler, opts Options) *Server {
 	s := &Server{
 		opts:    opts,
 		handler: handler,
-
-		stats: make(map[string]*drpcstats.Stats),
 	}
 
 	if s.opts.CollectStats {
 		drpcopts.SetManagerStatsCB(&s.opts.Manager.Internal, s.getStats)
+		s.stats = make(map[string]*drpcstats.Stats)
 	}
 
 	return s

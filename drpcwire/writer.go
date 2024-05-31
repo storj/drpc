@@ -49,10 +49,11 @@ func (b *Writer) log(what string, cb func() string) {
 // constraints.
 func (b *Writer) WritePacket(pkt Packet) (err error) {
 	return b.WriteFrame(Frame{
-		Data: pkt.Data,
-		ID:   pkt.ID,
-		Kind: pkt.Kind,
-		Done: true,
+		Data:    pkt.Data,
+		ID:      pkt.ID,
+		Kind:    pkt.Kind,
+		Control: pkt.Control,
+		Done:    true,
 	})
 }
 

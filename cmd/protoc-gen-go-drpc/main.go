@@ -498,6 +498,11 @@ func (d *drpc) generateServerMethod(method *protogen.Method) {
 	d.P("}")
 	d.P()
 
+	d.P("func (x *", d.ServerStreamImpl(method), ") GetStream() drpc.Stream {")
+	d.P("return x.Stream")
+	d.P("}")
+	d.P()
+
 	if genSend {
 		d.P("func (x *", d.ServerStreamImpl(method), ") Send(m *", d.OutputType(method), ") error {")
 		d.P("return x.MsgSend(m, ", d.EncodingName(), "{})")

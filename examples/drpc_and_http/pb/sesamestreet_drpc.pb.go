@@ -103,6 +103,10 @@ type drpcCookieMonster_EatCookieStream struct {
 	drpc.Stream
 }
 
+func (x *drpcCookieMonster_EatCookieStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
 func (x *drpcCookieMonster_EatCookieStream) SendAndClose(m *Crumbs) error {
 	if err := x.MsgSend(m, drpcEncoding_File_sesamestreet_proto{}); err != nil {
 		return err

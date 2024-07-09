@@ -127,6 +127,10 @@ type drpcCompatService_MethodStream struct {
 	drpc.Stream
 }
 
+func (x *drpcCompatService_MethodStream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
 func (x *drpcCompatService_MethodStream) SendAndClose(m *Resp) error {
 	if err := x.MsgSend(m, drpcEncoding_File_clientcompat_proto{}); err != nil {
 		return err
@@ -141,6 +145,10 @@ type DRPCCompatService_NoopMethodStream interface {
 
 type drpcCompatService_NoopMethodStream struct {
 	drpc.Stream
+}
+
+func (x *drpcCompatService_NoopMethodStream) GetStream() drpc.Stream {
+	return x.Stream
 }
 
 func (x *drpcCompatService_NoopMethodStream) SendAndClose(m *Empty) error {

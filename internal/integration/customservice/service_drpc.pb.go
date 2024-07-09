@@ -265,6 +265,10 @@ type drpcService_Method1Stream struct {
 	drpc.Stream
 }
 
+func (x *drpcService_Method1Stream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
 func (x *drpcService_Method1Stream) SendAndClose(m *Out) error {
 	if err := x.MsgSend(m, drpcEncoding_File_service_proto{}); err != nil {
 		return err
@@ -280,6 +284,10 @@ type DRPCService_Method2Stream interface {
 
 type drpcService_Method2Stream struct {
 	drpc.Stream
+}
+
+func (x *drpcService_Method2Stream) GetStream() drpc.Stream {
+	return x.Stream
 }
 
 func (x *drpcService_Method2Stream) SendAndClose(m *Out) error {
@@ -310,6 +318,10 @@ type drpcService_Method3Stream struct {
 	drpc.Stream
 }
 
+func (x *drpcService_Method3Stream) GetStream() drpc.Stream {
+	return x.Stream
+}
+
 func (x *drpcService_Method3Stream) Send(m *Out) error {
 	return x.MsgSend(m, drpcEncoding_File_service_proto{})
 }
@@ -322,6 +334,10 @@ type DRPCService_Method4Stream interface {
 
 type drpcService_Method4Stream struct {
 	drpc.Stream
+}
+
+func (x *drpcService_Method4Stream) GetStream() drpc.Stream {
+	return x.Stream
 }
 
 func (x *drpcService_Method4Stream) Send(m *Out) error {

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/zeebo/assert"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc/drpcconn"
@@ -41,7 +42,7 @@ func out(n int64) *Out { return &Out{Out: n} }
 func createRawConnection(t testing.TB, server DRPCServiceServer, ctx *drpctest.Tracker) *drpcconn.Conn {
 	c1, c2 := net.Pipe()
 	mux := drpcmux.New()
-	_ = DRPCRegisterService(mux, server)
+	assert.NoError(t, DRPCRegisterService(mux, server))
 	srv := drpcserver.New(mux)
 	ctx.Run(func(ctx context.Context) { _ = srv.ServeOne(ctx, c1) })
 	return drpcconn.NewWithOptions(c2, drpcconn.Options{

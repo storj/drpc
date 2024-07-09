@@ -97,14 +97,15 @@ type Options struct {
 	// SoftCancel controls if a context cancel will cause the transport to be
 	// closed or, if true, a soft cancel message will be attempted if possible.
 	// A soft cancel can reduce the amount of closed and dialed connections at
-	// the potential cost of higher latencies if there is latent data still being
-	// flushed when the cancel happens.
+	// the potential cost of higher latencies if there is latent data still
+	// being flushed when the cancel happens.
 	SoftCancel bool
 
-	// InactivityTimeout is the amount of time the manager will wait when creating
-	// a NewServerStream. It only includes the time it is reading packets from the
-	// remote client. In other words, it only includes the time that the client
-	// could delay before invoking an RPC. If zero or negative, no timeout is used.
+	// InactivityTimeout is the amount of time the manager will wait when
+	// creating a NewServerStream. It only includes the time it is reading
+	// packets from the remote client. In other words, it only includes the time
+	// that the client could delay before invoking an RPC. If zero or negative,
+	// no timeout is used.
 	InactivityTimeout time.Duration
 
 	// Internal contains options that are for internal use only.

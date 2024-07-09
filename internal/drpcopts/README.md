@@ -30,6 +30,13 @@ func GetStreamKind(opts *Stream) string
 ```
 GetStreamKind returns the kind debug string stored in the options.
 
+#### func  GetStreamRPC
+
+```go
+func GetStreamRPC(opts *Stream) string
+```
+GetStreamRPC returns the RPC debug string stored in the options.
+
 #### func  GetStreamStats
 
 ```go
@@ -64,6 +71,13 @@ SetStreamFin sets the chan<- struct{} stored in the options.
 func SetStreamKind(opts *Stream, kind string)
 ```
 SetStreamKind sets the kind debug string stored in the options.
+
+#### func  SetStreamRPC
+
+```go
+func SetStreamRPC(opts *Stream, rpc string)
+```
+SetStreamRPC sets the RPC debug string stored in the options.
 
 #### func  SetStreamStats
 

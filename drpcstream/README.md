@@ -17,13 +17,13 @@ type Options struct {
 
 	// ManualFlush controls if the stream will automatically flush after every
 	// message send. Note that flushing is not part of the drpc.Stream
-	// interface, so if you use this you must be ready to type assert and
-	// call RawFlush dynamically.
+	// interface, so if you use this you must be ready to type assert and call
+	// RawFlush dynamically.
 	ManualFlush bool
 
-	// MaximumBufferSize causes the Stream to drop any internal buffers that
-	// are larger than this amount to control maximum memory usage at the
-	// expense of more allocations. 0 is unlimited.
+	// MaximumBufferSize causes the Stream to drop any internal buffers that are
+	// larger than this amount to control maximum memory usage at the expense of
+	// more allocations. 0 is unlimited.
 	MaximumBufferSize int
 
 	// Internal contains options that are for internal use only.
@@ -173,7 +173,7 @@ RawWrite sends the data bytes with the given kind.
 #### func (*Stream) SendCancel
 
 ```go
-func (s *Stream) SendCancel(err error) (bool, error)
+func (s *Stream) SendCancel(err error) (busy bool, _ error)
 ```
 SendCancel transitions the stream into the canceled state with context.Canceled
 and sends a cancel error to the remote side for a soft cancel. It is a no-op if

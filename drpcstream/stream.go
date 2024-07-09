@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime/trace"
 	"sync"
 
 	"github.com/zeebo/errs"
@@ -27,13 +28,13 @@ type Options struct {
 
 	// ManualFlush controls if the stream will automatically flush after every
 	// message send. Note that flushing is not part of the drpc.Stream
-	// interface, so if you use this you must be ready to type assert and
-	// call RawFlush dynamically.
+	// interface, so if you use this you must be ready to type assert and call
+	// RawFlush dynamically.
 	ManualFlush bool
 
-	// MaximumBufferSize causes the Stream to drop any internal buffers that
-	// are larger than this amount to control maximum memory usage at the
-	// expense of more allocations. 0 is unlimited.
+	// MaximumBufferSize causes the Stream to drop any internal buffers that are
+	// larger than this amount to control maximum memory usage at the expense of
+	// more allocations. 0 is unlimited.
 	MaximumBufferSize int
 
 	// Internal contains options that are for internal use only.
@@ -45,6 +46,7 @@ type Stream struct {
 	ctx  streamCtx
 	opts Options
 	fin  chan<- struct{}
+	task *trace.Task
 
 	write inspectMutex
 	read  inspectMutex
@@ -67,18 +69,26 @@ type Stream struct {
 
 var _ drpc.Stream = (*Stream)(nil)
 
-// New returns a new stream bound to the context with the given stream id and will
-// use the writer to write messages on. It is important use monotonically increasing
-// stream ids within a single transport.
+// New returns a new stream bound to the context with the given stream id and
+// will use the writer to write messages on. It is important use monotonically
+// increasing stream ids within a single transport.
 func New(ctx context.Context, sid uint64, wr *drpcwire.Writer) *Stream {
 	return NewWithOptions(ctx, sid, wr, Options{})
 }
 
-// NewWithOptions returns a new stream bound to the context with the given stream id
-// and will use the writer to write messages on. It is important use monotonically increasing
-// stream ids within a single transport. The options are used to control details of how
-// the Stream operates.
+// NewWithOptions returns a new stream bound to the context with the given
+// stream id and will use the writer to write messages on. It is important use
+// monotonically increasing stream ids within a single transport. The options
+// are used to control details of how the Stream operates.
 func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts Options) *Stream {
+	var task *trace.Task
+	if trace.IsEnabled() {
+		kind, rpc := drpcopts.GetStreamKind(&opts.Internal), drpcopts.GetStreamRPC(&opts.Internal)
+		if kind != "" && rpc != "" {
+			ctx, task = trace.NewTask(ctx, kind+rpc)
+		}
+	}
+
 	s := &Stream{
 		ctx: streamCtx{
 			Context: ctx,
@@ -86,6 +96,7 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 		},
 		opts: opts,
 		fin:  drpcopts.GetStreamFin(&opts.Internal),
+		task: task,
 
 		id: drpcwire.ID{Stream: sid},
 		wr: wr.Reset(),
@@ -99,14 +110,17 @@ func NewWithOptions(ctx context.Context, sid uint64, wr *drpcwire.Writer, opts O
 
 // String returns a string representation of the stream.
 func (s *Stream) String() string {
-	return fmt.Sprintf("<str %p s:%d k:%s>",
-		s, s.id.Stream, drpcopts.GetStreamKind(&s.opts.Internal),
+	return fmt.Sprintf("<str %p s:%d k:%s r:%s>",
+		s, s.id.Stream, drpcopts.GetStreamKind(&s.opts.Internal), drpcopts.GetStreamRPC(&s.opts.Internal),
 	)
 }
 
 func (s *Stream) log(what string, cb func() string) {
 	if drpcdebug.Enabled {
 		drpcdebug.Log(func() (_, _, _ string) { return s.String(), what, cb() })
+	}
+	if s.task != nil {
+		trace.Log(&s.ctx, what, cb())
 	}
 }
 
@@ -153,7 +167,8 @@ func (s *Stream) ID() uint64 {
 	return s.id.Stream
 }
 
-// Terminated returns a channel that is closed when the stream has been terminated.
+// Terminated returns a channel that is closed when the stream has been
+// terminated.
 func (s *Stream) Terminated() <-chan struct{} { return s.sigs.term.Signal() }
 
 // IsTerminated returns true if the stream has been terminated.
@@ -167,9 +182,8 @@ func (s *Stream) Finished() <-chan struct{} { return s.sigs.fin.Signal() }
 // issue any writes or reads.
 func (s *Stream) IsFinished() bool { return s.sigs.fin.IsSet() }
 
-// SetManualFlush sets the ManualFlush option. It cannot be called concurrently with
-// any sends or receives on the stream.
-// Example use case:
+// SetManualFlush sets the ManualFlush option. It cannot be called concurrently
+// with any sends or receives on the stream. Example use case:
 //
 //	flusher := stream.(interface{
 //	    GetStream() drpc.Stream
@@ -196,9 +210,10 @@ func (s *Stream) SetManualFlush(mf bool) { s.opts.ManualFlush = mf }
 // packet handler
 //
 
-// HandlePacket advances the stream state machine by inspecting the packet. It returns
-// any major errors that should terminate the transport the stream is operating on as
-// well as a boolean indicating if the stream expects more packets.
+// HandlePacket advances the stream state machine by inspecting the packet. It
+// returns any major errors that should terminate the transport the stream is
+// operating on as well as a boolean indicating if the stream expects more
+// packets.
 func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
 	if pkt.ID.Stream != s.id.Stream {
 		return nil
@@ -267,9 +282,9 @@ func (s *Stream) HandlePacket(pkt drpcwire.Packet) (err error) {
 // helpers
 //
 
-// checkFinished checks to see if the stream is terminated, and if so, sets the finished
-// flag. This must be called after every read or write is complete, as well as when
-// the stream becomes terminated.
+// checkFinished checks to see if the stream is terminated, and if so, sets the
+// finished flag. This must be called after every read or write is complete, as
+// well as when the stream becomes terminated.
 func (s *Stream) checkFinished() {
 	if s.sigs.term.IsSet() && s.write.Unlocked() && s.read.Unlocked() {
 		if s.sigs.fin.Set(nil) {
@@ -278,13 +293,16 @@ func (s *Stream) checkFinished() {
 			if s.fin != nil {
 				s.fin <- struct{}{}
 			}
+			if s.task != nil {
+				s.task.End()
+			}
 		}
 	}
 }
 
-// checkCancelError will replace the error with one from the cancel signal if it is
-// set. This is to prevent errors from reads/writes to a transport after it has been
-// asynchronously closed due to context cancelation.
+// checkCancelError will replace the error with one from the cancel signal if it
+// is set. This is to prevent errors from reads/writes to a transport after it
+// has been asynchronously closed due to context cancelation.
 func (s *Stream) checkCancelError(err error) error {
 	if s.sigs.cancel.IsSet() {
 		return s.sigs.cancel.Err()
@@ -292,18 +310,18 @@ func (s *Stream) checkCancelError(err error) error {
 	return err
 }
 
-// newFrame bumps the internal message id and returns a frame. It must be called
-// under a mutex.
-func (s *Stream) newFrame(kind drpcwire.Kind) drpcwire.Frame {
+// newFrameLocked bumps the internal message id and returns a frame. It must be
+// called under a mutex.
+func (s *Stream) newFrameLocked(kind drpcwire.Kind) drpcwire.Frame {
 	s.id.Message++
 	return drpcwire.Frame{ID: s.id, Kind: kind}
 }
 
-// sendPacket sends the packet in a single write and flushes. It does not check for
-// any conditions to stop it from writing and is meant for internal stream use to
-// do things like signal errors or closes to the remote side.
-func (s *Stream) sendPacket(kind drpcwire.Kind, control bool, data []byte) (err error) {
-	fr := s.newFrame(kind)
+// sendPacketLocked sends the packet in a single write and flushes. It does not
+// check for any conditions to stop it from writing and is meant for internal
+// stream use to do things like signal errors or closes to the remote side.
+func (s *Stream) sendPacketLocked(kind drpcwire.Kind, control bool, data []byte) (err error) {
+	fr := s.newFrameLocked(kind)
 	fr.Data = data
 	fr.Control = control
 	fr.Done = true
@@ -354,7 +372,7 @@ func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error) {
 // rawWriteLocked does the body of RawWrite assuming the caller is holding the
 // appropriate locks.
 func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
-	fr := s.newFrame(kind)
+	fr := s.newFrameLocked(kind)
 	n := s.opts.SplitSize
 
 	for {
@@ -388,8 +406,9 @@ func (s *Stream) RawFlush() (err error) {
 	return s.rawFlushLocked()
 }
 
-// rawFlushLocked checks for any conditions that should cause a flush to not happen
-// and then issues the flush. It assumes the caller is holding the appropriate locks.
+// rawFlushLocked checks for any conditions that should cause a flush to not
+// happen and then issues the flush. It assumes the caller is holding the
+// appropriate locks.
 func (s *Stream) rawFlushLocked() (err error) {
 	if s.wr.Empty() {
 		return nil
@@ -503,8 +522,8 @@ var (
 	termBothClosed = drpc.Error.New("stream terminated by both issuing close send")
 )
 
-// SendError terminates the stream and sends the error to the remote. It is a no-op if
-// the stream is already terminated.
+// SendError terminates the stream and sends the error to the remote. It is a
+// no-op if the stream is already terminated.
 func (s *Stream) SendError(serr error) (err error) {
 	s.log("CALL", func() string { return fmt.Sprintf("SendError(%v)", serr) })
 
@@ -522,14 +541,14 @@ func (s *Stream) SendError(serr error) (err error) {
 	s.terminate(termError)
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.KindError, false, drpcwire.MarshalError(serr)))
+	return s.checkCancelError(s.sendPacketLocked(drpcwire.KindError, false, drpcwire.MarshalError(serr)))
 }
 
-// SendCancel transitions the stream into the canceled state with context.Canceled and
-// sends a cancel error to the remote side for a soft cancel. It is a no-op if the
-// stream is already terminated. It returns true for busy if writes are already blocked
-// and a hard cancel is required.
-func (s *Stream) SendCancel(err error) (bool, error) {
+// SendCancel transitions the stream into the canceled state with
+// context.Canceled and sends a cancel error to the remote side for a soft
+// cancel. It is a no-op if the stream is already terminated. It returns true
+// for busy if writes are already blocked and a hard cancel is required.
+func (s *Stream) SendCancel(err error) (busy bool, _ error) {
 	s.log("CALL", func() string { return "SendCancel()" })
 
 	s.mu.Lock()
@@ -551,11 +570,11 @@ func (s *Stream) SendCancel(err error) (bool, error) {
 	s.terminate(err)
 	s.mu.Unlock()
 
-	return false, s.checkCancelError(s.sendPacket(drpcwire.KindCancel, true, nil))
+	return false, s.checkCancelError(s.sendPacketLocked(drpcwire.KindCancel, true, nil))
 }
 
-// Close terminates the stream and sends that the stream has been closed to the remote.
-// It is a no-op if the stream is already terminated.
+// Close terminates the stream and sends that the stream has been closed to the
+// remote. It is a no-op if the stream is already terminated.
 func (s *Stream) Close() (err error) {
 	s.log("CALL", func() string { return "Close()" })
 
@@ -572,7 +591,7 @@ func (s *Stream) Close() (err error) {
 	s.terminate(termClosed)
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.KindClose, false, nil))
+	return s.checkCancelError(s.sendPacketLocked(drpcwire.KindClose, false, nil))
 }
 
 // CloseSend informs the remote that no more messages will be sent. If the remote has
@@ -595,7 +614,7 @@ func (s *Stream) CloseSend() (err error) {
 	s.terminateIfBothClosed()
 	s.mu.Unlock()
 
-	return s.checkCancelError(s.sendPacket(drpcwire.KindCloseSend, false, nil))
+	return s.checkCancelError(s.sendPacketLocked(drpcwire.KindCloseSend, false, nil))
 }
 
 // Cancel transitions the stream into a state where all writes to the transport will return

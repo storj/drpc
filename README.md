@@ -191,12 +191,12 @@ DRPC is proud to get as much done in as few lines of code as possible. It's the 
 
 | Package                              | Lines    |
 | ---                                  | ---      |
+| storj.io/drpc/drpcstream             | 486      |
 | storj.io/drpc/drpchttp               | 478      |
-| storj.io/drpc/drpcstream             | 470      |
-| storj.io/drpc/cmd/protoc-gen-go-drpc | 424      |
-| storj.io/drpc/drpcmanager            | 374      |
+| storj.io/drpc/cmd/protoc-gen-go-drpc | 428      |
+| storj.io/drpc/drpcmanager            | 376      |
 | storj.io/drpc/drpcwire               | 363      |
-| storj.io/drpc/drpcpool               | 276      |
+| storj.io/drpc/drpcpool               | 279      |
 | storj.io/drpc/drpcmigrate            | 239      |
 | storj.io/drpc/drpcserver             | 164      |
 | storj.io/drpc/drpcconn               | 134      |
@@ -208,8 +208,8 @@ DRPC is proud to get as much done in as few lines of code as possible. It's the 
 | storj.io/drpc/drpctest               | 45       |
 | storj.io/drpc/drpcerr                | 42       |
 | storj.io/drpc/drpcctx                | 41       |
-| storj.io/drpc/internal/drpcopts      | 27       |
+| storj.io/drpc/internal/drpcopts      | 30       |
 | storj.io/drpc/drpcstats              | 25       |
 | storj.io/drpc/drpcdebug              | 22       |
 | storj.io/drpc/drpcenc                | 15       |
-| **Total**                            | **3583** |
+| **Total**                            | **3611** |

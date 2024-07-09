@@ -396,6 +396,29 @@ func TestPool_MultipleCachedReuse(t *testing.T) {
 	assert.Equal(t, dials, 3)
 }
 
+func TestPool_StreamContext(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	pool := New[string, Conn](Options{Capacity: 1})
+	uc := new(callbackConn)
+	conn := pool.Get(ctx, "key", func(ctx context.Context, key string) (Conn, error) { return uc, nil })
+
+	type key struct{}
+	stream, err := conn.NewStream(context.WithValue(ctx, key{}, "bar"), "", nil)
+	assert.NoError(t, err)
+	sctx := stream.Context()
+
+	assert.Equal(t, sctx.Value(key{}), "bar")
+
+	{ // check that all the methods in the interface are at least callable
+		_ = sctx.Err()
+		_, _ = sctx.Deadline()
+		_ = sctx.Done()
+		_ = sctx.Value(key{})
+	}
+}
+
 func BenchmarkPool(b *testing.B) {
 	ctx := drpctest.NewTracker(b)
 	defer ctx.Close()

@@ -16,8 +16,8 @@ have been inactive in the pool for long enough.
 type Conn interface {
 	drpc.Conn
 
-	// Unblocked returns a channel that is closed when the conn is available
-	// for an Invoke or NewStream call.
+	// Unblocked returns a channel that is closed when the conn is available for an Invoke or
+	// NewStream call.
 	Unblocked() <-chan struct{}
 }
 ```

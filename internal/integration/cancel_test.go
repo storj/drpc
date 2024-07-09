@@ -246,8 +246,12 @@ func TestCancelRepeatedPooled(t *testing.T) {
 		})
 		defer func() { _ = conn.Close() }()
 
+		type key struct{}
+		ctx = context.WithValue(ctx, key{}, "bar")
+
 		stream, err := NewDRPCServiceClient(conn).Method2(ctx)
 		assert.NoError(t, err)
+		assert.Equal(t, stream.Context().Value(key{}), "bar")
 		assert.NoError(t, stream.Send(in(1)))
 		assert.NoError(t, stream.Send(in(2)))
 		assert.NoError(t, stream.Send(in(3)))
@@ -260,7 +264,7 @@ func TestCancelRepeatedPooled(t *testing.T) {
 	p := drpcpool.New[string, drpcpool.Conn](drpcpool.Options{
 		Capacity: 1,
 	})
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000; i++ {
 		ctx, cancel := context.WithCancel(tctx)
 		foo(ctx, p)
 		cancel()

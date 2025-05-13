@@ -31,27 +31,26 @@
               src = fetchFromGitHub {
                 owner = "dominikh";
                 repo = "go-tools";
-                rev = "2023.1.2";
-                sha256 = "sha256-Xnylkv0n3FExQ4e4pmD6DAUqGtud80wHHoVY56UXfOU";
+                rev = "2025.1.1";
+                sha256 = "sha256-ekSOXaVSFdzM76tcj1hbtzhYw4fnFX3VkTnsGtJanXg=";
               };
               doCheck = false;
               subPackages = [ "cmd/staticcheck" ];
-              vendorHash = "sha256-o9UtS6AMgRYuAkOWdktG2Kr3QDBDQTOGSlya69K2br8";
+              vendorHash = "sha256-HssfBnSKdVZVgf4f0mwsGTwhiszBlE2HmDy7cvyvJ60=";
             };
 
             golangci-lint = buildGoModule rec {
               name = "golangci-lint";
-              version = "1.55.0";
+              version = "2.1.1";
               src = fetchFromGitHub {
                 owner = "golangci";
                 repo = "golangci-lint";
                 rev = "v${version}";
-                hash = "sha256-77bhXeABkV6WZCzoGnRS447pEVcJyj4AF+wihJe62fc=";
+                hash = "sha256-yOsXQmOmhCHDR5Q6ngyk6Lax5SKm81sdHglgTxxMS9w=";
               };
               doCheck = false;
               subPackages = [ "cmd/golangci-lint" ];
-              vendorHash = "sha256-3aHLilu+AZ6376bn9eS8kmSfo6fXikOFJKDRCYu+4a0=";
-              ldflags = ["-X main.version=${version}" "-X main.commit=v${version}" "-X main.date=19700101-00:00:00"];
+              vendorHash = "sha256-g7VievbIxKCbdy00kv7JcOggvVnfMEzuw5cnLOc/oVc=";
             };
 
             ci = buildGoModule {
@@ -59,11 +58,11 @@
               src = fetchFromGitHub {
                 owner = "storj";
                 repo = "ci";
-                rev = "37130d944fc8b60928fd460fe53ebaa7204c8102";
-                sha256 = "sha256-NcsLA5d5sF1qSPSu/Pw/Md+0nr+inXAsPx9bKWh3I7Y=";
+                rev = "79f1c57325dc26b2b2862a518f69d1bb3ac8333f";
+                sha256 = "sha256-JDSZ/YTyzNNw16E3z9mk/DjswVSa19BbPnRVwQRye2M=";
               };
               doCheck = false;
-              vendorHash = "sha256-G5cAb9zFqjdCLIodGcPv9u4ABZZKEGTx0CvB4i7JdRg=";
+              vendorHash = "sha256-W/ZVtwo1BUIvJ9bCR4p5lBa2edyQQaSmnWqwMe0bOhI=";
               allowGoReference = true; # until check-imports stops needing this
               subPackages = [
                 "check-copyright"
@@ -156,7 +155,7 @@
             buildInputs = [
               defaultPackage
 
-              go_1_21
+              go_1_24
               protobuf
               graphviz
               bash

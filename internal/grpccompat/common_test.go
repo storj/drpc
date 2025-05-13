@@ -443,7 +443,7 @@ func (w webClient) Method1(ctx context.Context, in *In) (*Out, error) {
 		ct = "application/grpc-web-text+proto"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errs.Wrap(err)
 	}
@@ -525,7 +525,7 @@ func (w webClient) Method3(ctx context.Context, in *In) (ClientMethod3Stream, er
 		ct = "application/grpc-web-text+proto"
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, errs.Wrap(err)
 	}

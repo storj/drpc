@@ -327,3 +327,33 @@ func TestStream_SendCancelBusyDuringBlockedClose(t *testing.T) {
 	assert.NoError(t, err)
 	assert.That(t, busy)
 }
+
+func TestStream_SendCancelWhileConcurrentWriteAndCloseBlocked(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	pr, pw := io.Pipe()
+	defer func() { _ = pr.Close() }()
+	defer func() { _ = pw.Close() }()
+
+	st := New(ctx, 0, drpcwire.NewWriter(pw, 0))
+
+	// launch a goroutine to send a message
+	ctx.Run(func(ctx context.Context) { _ = st.MsgSend([]byte("write"), byteEncoding{}) })
+
+	// read just 1 byte from the pipe to ensure that the send has started
+	_, err := pr.Read(make([]byte, 1))
+	assert.NoError(t, err)
+
+	// launch a goroutine to Close the stream
+	ctx.Run(func(ctx context.Context) { _ = st.Close() })
+
+	// we need to wait a little bit for Close to have the mutex acquired
+	for st.mu.Unlocked() {
+	}
+
+	// SendCancel should report busy and not block forever
+	busy, err := st.SendCancel(context.Canceled)
+	assert.NoError(t, err)
+	assert.That(t, busy)
+}

@@ -57,7 +57,7 @@ type Stream struct {
 	pbuf packetBuffer
 	wbuf []byte
 
-	mu   sync.Mutex // protects state transitions
+	mu   inspectMutex // protects state transitions
 	sigs struct {
 		send   drpcsignal.Signal // set when done sending messages
 		recv   drpcsignal.Signal // set when done receiving messages
@@ -551,20 +551,21 @@ func (s *Stream) SendError(serr error) (err error) {
 func (s *Stream) SendCancel(err error) (busy bool, _ error) {
 	s.log("CALL", func() string { return "SendCancel()" })
 
-	s.mu.Lock()
-	if !s.write.Unlocked() { // if writes are happening, then we have to do a hard cancel.
+	if !s.mu.TryLock() { // if we can't inspect if writes are happening, hard cancel.
+		return true, nil
+	}
+
+	if !s.write.TryLock() { // if writes are happening, then we have to do a hard cancel.
 		s.mu.Unlock()
 		return true, nil
 	}
+	defer s.checkFinished()
+	defer s.write.Unlock()
 
 	if s.sigs.term.IsSet() {
 		s.mu.Unlock()
 		return false, nil
 	}
-
-	defer s.checkFinished()
-	s.write.Lock()
-	defer s.write.Unlock()
 
 	s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 	s.terminate(err)

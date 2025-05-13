@@ -9,18 +9,26 @@ import (
 )
 
 type inspectMutex struct {
+	sync.Mutex
 	held uint32
-	mu   sync.Mutex
 }
 
 func (m *inspectMutex) Lock() {
-	m.mu.Lock()
+	m.Mutex.Lock()
 	atomic.StoreUint32(&m.held, 1)
+}
+
+func (m *inspectMutex) TryLock() bool {
+	if m.Mutex.TryLock() {
+		atomic.StoreUint32(&m.held, 1)
+		return true
+	}
+	return false
 }
 
 func (m *inspectMutex) Unlock() {
 	atomic.StoreUint32(&m.held, 0)
-	m.mu.Unlock()
+	m.Mutex.Unlock()
 }
 
 // Unlocked returns true if the mutex is either currently unlocked or in the

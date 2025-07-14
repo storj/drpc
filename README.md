@@ -187,7 +187,7 @@ These microbenchmarks attempt to provide a comparison and come with some caveats
 
 ## Lines of code
 
-DRPC is proud to get as much done in as few lines of code as possible. It's the author's belief that this is only possible by having a clean, strong architecture and that it reduces the chances for bugs to exist (most studies show a linear corellation with number of bugs and lines of code). This table helps keep the library honest, and it would be nice if more libraries considered this.
+DRPC is proud to get as much done in as few lines of code as possible. It's the author's belief that this is only possible by having a clean, strong architecture and that it reduces the chances for bugs to exist (most studies show a linear correlation with number of bugs and lines of code). This table helps keep the library honest, and it would be nice if more libraries considered this.
 
 | Package                              | Lines    |
 | ---                                  | ---      |

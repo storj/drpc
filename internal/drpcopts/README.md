@@ -9,6 +9,13 @@ users of the library that are not required to be backward compatible.
 
 ## Usage
 
+#### func  GetManagerCancelCB
+
+```go
+func GetManagerCancelCB(opts *Manager) func(string)
+```
+GetManagerCancelCB returns the cancel outcome callback stored in the options.
+
 #### func  GetManagerStatsCB
 
 ```go
@@ -50,6 +57,13 @@ GetStreamStats returns the Stats stored in the options.
 func GetStreamTransport(opts *Stream) drpc.Transport
 ```
 GetStreamTransport returns the drpc.Transport stored in the options.
+
+#### func  SetManagerCancelCB
+
+```go
+func SetManagerCancelCB(opts *Manager, cancelCB func(string))
+```
+SetManagerCancelCB sets the cancel outcome callback stored in the options.
 
 #### func  SetManagerStatsCB
 

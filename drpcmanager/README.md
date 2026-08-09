@@ -101,6 +101,28 @@ type Options struct {
 	// being flushed when the cancel happens.
 	SoftCancel bool
 
+	// SoftCancelGrace bounds how long a soft cancel will wait for a concurrent
+	// send on the stream to finish before giving up and hard canceling. It only
+	// applies when SoftCancel is set.
+	//
+	// A stream that is sending when the cancel arrives cannot be softly canceled
+	// immediately, and without a grace period the transport is destroyed. For
+	// clients whose streams send and receive concurrently, that race is both
+	// benign and common, so paying a dial and a handshake for it is a poor
+	// trade. A grace period on the order of milliseconds lets the send finish so
+	// the cancel can be delivered and the transport reused.
+	//
+	// While waiting, new sends on the stream fail with the context error, and an
+	// in-flight send stops at the next frame boundary. The stream itself is not
+	// canceled until the wait ends, so a caller blocked on the stream, such as in
+	// a receive, can observe the cancel up to SoftCancelGrace later than it
+	// otherwise would.
+	//
+	// A wedged transport still gets torn down: the wait is bounded, and it never
+	// blocks on the write itself. If zero or negative, no grace is given and a
+	// concurrent send hard cancels immediately.
+	SoftCancelGrace time.Duration
+
 	// InactivityTimeout is the amount of time the manager will wait when
 	// creating a NewServerStream. It only includes the time it is reading
 	// packets from the remote client. In other words, it only includes the time

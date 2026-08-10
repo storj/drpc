@@ -21,7 +21,8 @@ func runServer(ctx context.Context, addr string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	lis, err := net.Listen("tcp", addr)
+	var lc net.ListenConfig
+	lis, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return errs.Wrap(err)
 	}

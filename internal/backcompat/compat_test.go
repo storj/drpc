@@ -79,7 +79,7 @@ func runTestServer(ctx context.Context, server string, addrCh chan string) (err 
 		}
 	}()
 
-	cmd := exec.Command("go", "run", ".", "server", ":0")
+	cmd := exec.CommandContext(ctx, "go", "run", ".", "server", ":0")
 	cmd.Stderr = &stderr
 	cmd.Dir = server
 
@@ -130,7 +130,7 @@ func runTestClient(ctx context.Context, client string, addrCh chan string) (err 
 		}
 	}()
 
-	cmd := exec.Command("go", "run", ".", "client", addr) //nolint:gosec
+	cmd := exec.CommandContext(ctx, "go", "run", ".", "client", addr) //nolint:gosec
 	cmd.Stderr = &stderr
 	cmd.Dir = client
 

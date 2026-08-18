@@ -183,6 +183,19 @@ func (d *drpc) generateEncoding(conf config) {
 		d.P("}")
 		d.P()
 
+		// gogo/protobuf has no MarshalAppend, but proto.Buffer appends to the
+		// buffer it is constructed with, reusing its capacity. This keeps the
+		// caller's buffer alive across messages instead of allocating a fresh
+		// one per Marshal.
+		d.P("func (", d.EncodingName(), ") MarshalAppend(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
+		d.P("pbuf := ", d.Ident("github.com/gogo/protobuf/proto", "NewBuffer"), "(buf)")
+		d.P("if err := pbuf.Marshal(msg.(", d.Ident("github.com/gogo/protobuf/proto", "Message"), ")); err != nil {")
+		d.P("return nil, err")
+		d.P("}")
+		d.P("return pbuf.Bytes(), nil")
+		d.P("}")
+		d.P()
+
 		d.P("func (", d.EncodingName(), ") Unmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
 		d.P("return ", d.Ident("github.com/gogo/protobuf/proto", "Unmarshal"), "(buf, msg.(", d.Ident("github.com/gogo/protobuf/proto", "Message"), "))")
 		d.P("}")

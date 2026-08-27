@@ -18,6 +18,10 @@ func (drpcEncoding_File_service_proto) Marshal(msg drpc.Message) ([]byte, error)
 	return customencoding.Marshal(msg)
 }
 
+func (drpcEncoding_File_service_proto) MarshalAppend(buf []byte, msg drpc.Message) ([]byte, error) {
+	return customencoding.MarshalAppend(buf, msg)
+}
+
 func (drpcEncoding_File_service_proto) Unmarshal(buf []byte, msg drpc.Message) error {
 	return customencoding.Unmarshal(buf, msg)
 }

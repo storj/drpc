@@ -16,8 +16,9 @@ import (
 )
 
 type config struct {
-	protolib string
-	json     bool
+	protolib      string
+	json          bool
+	marshalAppend bool
 }
 
 func main() {
@@ -25,6 +26,7 @@ func main() {
 	var conf config
 	flags.StringVar(&conf.protolib, "protolib", "google.golang.org/protobuf", "which protobuf library to use for encoding")
 	flags.BoolVar(&conf.json, "json", true, "generate encoders with json support")
+	flags.BoolVar(&conf.marshalAppend, "protolib_marshalappend", true, "custom protolib exports MarshalAppend(buf []byte, msg drpc.Message) ([]byte, error)")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
@@ -223,6 +225,13 @@ func (d *drpc) generateEncoding(conf config) {
 		d.P("return ", d.Ident(conf.protolib, "Marshal"), "(msg)")
 		d.P("}")
 		d.P()
+
+		if conf.marshalAppend {
+			d.P("func (", d.EncodingName(), ") MarshalAppend(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") ([]byte, error) {")
+			d.P("return ", d.Ident(conf.protolib, "MarshalAppend"), "(buf, msg)")
+			d.P("}")
+			d.P()
+		}
 
 		d.P("func (", d.EncodingName(), ") Unmarshal(buf []byte, msg ", d.Ident("storj.io/drpc", "Message"), ") error {")
 		d.P("return ", d.Ident(conf.protolib, "Unmarshal"), "(buf, msg)")

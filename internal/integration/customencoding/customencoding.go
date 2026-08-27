@@ -32,3 +32,8 @@ func JSONMarshal(msg drpc.Message) ([]byte, error) {
 func JSONUnmarshal(buf []byte, msg drpc.Message) error {
 	return protojson.Unmarshal(buf, msg.(proto.Message))
 }
+
+// MarshalAppend returns the encoded form of msg appended to buf.
+func MarshalAppend(buf []byte, msg drpc.Message) ([]byte, error) {
+	return proto.MarshalOptions{}.MarshalAppend(buf, msg.(proto.Message))
+}

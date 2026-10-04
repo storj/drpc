@@ -220,6 +220,88 @@ func TestPool_Capacity_Negative(t *testing.T) {
 	assert.Equal(t, <-closed, "key0")
 }
 
+func TestPool_Capacity_SameKey(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		opts Options
+		keys []string
+	}{
+		{name: "single", opts: Options{Capacity: 1}, keys: []string{"key"}},
+		{name: "key capacity", opts: Options{Capacity: 1, KeyCapacity: 2}, keys: []string{"key"}},
+		{name: "expiration", opts: Options{Capacity: 1, Expiration: time.Hour}, keys: []string{"key"}},
+		{name: "mixed keys", opts: Options{Capacity: 2}, keys: []string{"key", "other"}},
+		{name: "remaining entry", opts: Options{Capacity: 2}, keys: []string{"key", "key"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := New[string, Conn](tt.opts)
+			defer func() { _ = pool.Close() }()
+
+			closed := make(chan int, len(tt.keys)+1)
+			blocked := make(chan struct{})
+			for i, key := range tt.keys {
+				i := i
+				pool.Put(key, &callbackConn{
+					CloseFn:     func() error { closed <- i; return nil },
+					UnblockedFn: func() <-chan struct{} { return blocked },
+				})
+			}
+
+			replacement := new(callbackConn)
+			pool.Put("key", replacement)
+			assert.Equal(t, len(closed), 1)
+			assert.Equal(t, <-closed, 0)
+
+			conn, ok := pool.Take("key")
+			assert.That(t, ok)
+			assert.Equal(t, conn, Conn(replacement))
+			assert.NoError(t, pool.Close())
+			assert.Equal(t, len(closed), len(tt.keys)-1)
+		})
+	}
+}
+
+func TestPool_Capacity_SameKeyThenOther(t *testing.T) {
+	pool := New[string, Conn](Options{Capacity: 1})
+	defer func() { _ = pool.Close() }()
+
+	closed := make(chan string, 3)
+	for _, name := range []string{"first", "second", "other"} {
+		name := name
+		key := "key"
+		if name == "other" {
+			key = name
+		}
+		pool.Put(key, &callbackConn{CloseFn: func() error { closed <- name; return nil }})
+	}
+
+	assert.Equal(t, len(closed), 2)
+	assert.Equal(t, <-closed, "first")
+	assert.Equal(t, <-closed, "second")
+	assert.NoError(t, pool.Close())
+	assert.Equal(t, len(closed), 1)
+	assert.Equal(t, <-closed, "other")
+}
+
+func TestPool_Capacity_SameKeyReuse(t *testing.T) {
+	pool := New[string, Conn](Options{Capacity: 1})
+	defer func() { _ = pool.Close() }()
+
+	blocked := make(chan struct{})
+	dials := 0
+	conn := pool.Get(context.Background(), "key", func(ctx context.Context, key string) (Conn, error) {
+		dials++
+		if dials == 1 {
+			return &callbackConn{UnblockedFn: func() <-chan struct{} { return blocked }}, nil
+		}
+		return new(callbackConn), nil
+	})
+
+	for i := 0; i < 3; i++ {
+		assert.NoError(t, conn.Invoke(context.Background(), "", nil, nil, nil))
+	}
+	assert.Equal(t, dials, 2)
+}
+
 // TestPool_KeyCapacity checks that per-key capacity limits are enforced.
 func TestPool_KeyCapacity(t *testing.T) {
 	ctx := drpctest.NewTracker(t)

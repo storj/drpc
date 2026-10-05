@@ -64,6 +64,7 @@ type Stream struct {
 		term   drpcsignal.Signal // set when the stream is terminating and no new ops should begin
 		fin    drpcsignal.Signal // set when the stream is finished and all ops are complete
 		cancel drpcsignal.Signal // set when externally canceled
+		stop   drpcsignal.Signal // set when no new writes should begin
 	}
 }
 
@@ -381,6 +382,8 @@ func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
 			return s.sigs.send.Err()
 		case s.sigs.term.IsSet():
 			return s.sigs.term.Err()
+		case s.sigs.stop.IsSet():
+			return s.sigs.stop.Err()
 		}
 
 		fr.Data, data = drpcwire.SplitData(data, n)
@@ -421,6 +424,8 @@ func (s *Stream) rawFlushLocked() (err error) {
 		return s.sigs.send.Err()
 	case s.sigs.term.IsSet():
 		return s.sigs.term.Err()
+	case s.sigs.stop.IsSet():
+		return s.sigs.stop.Err()
 	}
 
 	s.log("FLUSH", func() string { return "" })
@@ -537,11 +542,34 @@ func (s *Stream) SendError(serr error) (err error) {
 	s.write.Lock()
 	defer s.write.Unlock()
 
+	if err, ok := s.sigs.stop.Get(); ok {
+		s.mu.Unlock()
+		return err
+	}
+
 	s.sigs.send.Set(io.EOF) // in this state, gRPC returns io.EOF on send.
 	s.terminate(termError)
 	s.mu.Unlock()
 
 	return s.checkCancelError(s.sendPacketLocked(drpcwire.KindError, false, drpcwire.MarshalError(serr)))
+}
+
+// StopWrites causes any writes or flushes that have not yet started to fail
+// with err, and makes an in-progress write stop before its next frame.
+// CloseSend and SendError fail with err too, without sending anything, so that
+// the remote cannot mistake a stream that was cut short for one that finished.
+// Close sends nothing either, but returns nil as it does on a canceled stream.
+// It does not terminate the stream or send anything to the remote. It is used
+// to let a write that is already in flight finish before a soft cancel without
+// new writes taking its place. A nil err is replaced with context.Canceled, so
+// that a stopped write never reports success.
+func (s *Stream) StopWrites(err error) {
+	s.log("CALL", func() string { return fmt.Sprintf("StopWrites(%v)", err) })
+
+	if err == nil {
+		err = context.Canceled
+	}
+	s.sigs.stop.Set(err)
 }
 
 // SendCancel transitions the stream into the canceled state with
@@ -575,7 +603,8 @@ func (s *Stream) SendCancel(err error) (busy bool, _ error) {
 }
 
 // Close terminates the stream and sends that the stream has been closed to the
-// remote. It is a no-op if the stream is already terminated.
+// remote. It is a no-op if the stream is already terminated or its writes have
+// been stopped.
 func (s *Stream) Close() (err error) {
 	s.log("CALL", func() string { return "Close()" })
 
@@ -588,6 +617,13 @@ func (s *Stream) Close() (err error) {
 	defer s.checkFinished()
 	s.write.Lock()
 	defer s.write.Unlock()
+
+	// a stopped stream is about to be canceled, so this reports no error,
+	// the same as a Close that comes after the cancel.
+	if s.sigs.stop.IsSet() {
+		s.mu.Unlock()
+		return nil
+	}
 
 	s.terminate(termClosed)
 	s.mu.Unlock()
@@ -610,6 +646,11 @@ func (s *Stream) CloseSend() (err error) {
 	defer s.checkFinished()
 	s.write.Lock()
 	defer s.write.Unlock()
+
+	if err, ok := s.sigs.stop.Get(); ok {
+		s.mu.Unlock()
+		return err
+	}
 
 	s.sigs.send.Set(sendClosed)
 	s.terminateIfBothClosed()

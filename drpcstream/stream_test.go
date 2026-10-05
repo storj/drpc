@@ -357,3 +357,100 @@ func TestStream_SendCancelWhileConcurrentWriteAndCloseBlocked(t *testing.T) {
 	assert.NoError(t, err)
 	assert.That(t, busy)
 }
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+func TestStream_StopWrites(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	stop := errors.New("stop")
+
+	t.Run("Write", func(t *testing.T) {
+		var buf bytes.Buffer
+		st := New(ctx, 0, drpcwire.NewWriter(&buf, 0))
+
+		st.StopWrites(stop)
+		assert.Equal(t, st.RawWrite(drpcwire.KindMessage, []byte("data")), stop)
+		assert.Equal(t, buf.Len(), 0)
+	})
+
+	t.Run("Flush", func(t *testing.T) {
+		var buf bytes.Buffer
+		st := New(ctx, 0, drpcwire.NewWriter(&buf, 1024))
+
+		assert.NoError(t, st.RawWrite(drpcwire.KindMessage, []byte("data")))
+		st.StopWrites(stop)
+		assert.Equal(t, st.RawFlush(), stop)
+		assert.Equal(t, buf.Len(), 0)
+	})
+
+	// a write in progress stops before its next frame rather than finishing.
+	t.Run("FrameBoundary", func(t *testing.T) {
+		var st *Stream
+		var writes int
+		wr := drpcwire.NewWriter(writerFunc(func(p []byte) (int, error) {
+			writes++
+			st.StopWrites(stop)
+			return len(p), nil
+		}), 1)
+		st = NewWithOptions(ctx, 0, wr, Options{SplitSize: 1})
+
+		assert.Equal(t, st.RawWrite(drpcwire.KindMessage, []byte("data")), stop)
+		assert.Equal(t, writes, 1)
+	})
+
+	// terminal messages must not tell the remote that a stream that was cut
+	// short finished cleanly, and must leave the stream for a soft cancel.
+	t.Run("Terminal", func(t *testing.T) {
+		for name, op := range map[string]func(*Stream) error{
+			"Close":     func(st *Stream) error { return st.Close() },
+			"CloseSend": func(st *Stream) error { return st.CloseSend() },
+			"SendError": func(st *Stream) error { return st.SendError(errors.New("test")) },
+		} {
+			t.Run(name, func(t *testing.T) {
+				var buf bytes.Buffer
+				st := New(ctx, 0, drpcwire.NewWriter(&buf, 0))
+
+				// Close is cleanup, so it does not report the stop again.
+				want := stop
+				if name == "Close" {
+					want = nil
+				}
+
+				st.StopWrites(stop)
+				assert.Equal(t, op(st), want)
+				assert.Equal(t, buf.Len(), 0)
+				assert.That(t, !st.IsTerminated())
+
+				busy, err := st.SendCancel(context.Canceled)
+				assert.NoError(t, err)
+				assert.That(t, !busy)
+				assert.That(t, st.IsTerminated())
+				assert.That(t, buf.Len() > 0)
+			})
+		}
+	})
+
+	// a nil error must not make stopped writes and closes report success.
+	t.Run("Nil", func(t *testing.T) {
+		var buf bytes.Buffer
+		st := New(ctx, 0, drpcwire.NewWriter(&buf, 0))
+
+		st.StopWrites(nil)
+		assert.That(t, errors.Is(st.RawWrite(drpcwire.KindMessage, []byte("data")), context.Canceled))
+		assert.That(t, errors.Is(st.CloseSend(), context.Canceled))
+		assert.Equal(t, buf.Len(), 0)
+	})
+
+	// once the stream is canceled, sends fail like they would without a stop.
+	t.Run("AfterCancel", func(t *testing.T) {
+		st := New(ctx, 0, drpcwire.NewWriter(io.Discard, 0))
+
+		st.StopWrites(stop)
+		st.Cancel(context.Canceled)
+		assert.Equal(t, st.RawWrite(drpcwire.KindMessage, []byte("data")), io.EOF)
+	})
+}

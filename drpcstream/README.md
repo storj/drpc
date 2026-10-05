@@ -77,7 +77,8 @@ case.
 func (s *Stream) Close() (err error)
 ```
 Close terminates the stream and sends that the stream has been closed to the
-remote. It is a no-op if the stream is already terminated.
+remote. It is a no-op if the stream is already terminated or its writes have
+been stopped.
 
 #### func (*Stream) CloseSend
 
@@ -215,6 +216,21 @@ with any sends or receives on the stream. Example use case:
     if err != nil {
         return err
     }
+
+#### func (*Stream) StopWrites
+
+```go
+func (s *Stream) StopWrites(err error)
+```
+StopWrites causes any writes or flushes that have not yet started to fail with
+err, and makes an in-progress write stop before its next frame. CloseSend and
+SendError fail with err too, without sending anything, so that the remote cannot
+mistake a stream that was cut short for one that finished. Close sends nothing
+either, but returns nil as it does on a canceled stream. It does not terminate
+the stream or send anything to the remote. It is used to let a write that is
+already in flight finish before a soft cancel without new writes taking its
+place. A nil err is replaced with context.Canceled, so that a stopped write
+never reports success.
 
 #### func (*Stream) String
 

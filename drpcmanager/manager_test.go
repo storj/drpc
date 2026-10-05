@@ -16,6 +16,7 @@ import (
 
 	"storj.io/drpc/drpctest"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal/drpcopts"
 )
 
 func closed(ch <-chan struct{}) bool {
@@ -127,11 +128,81 @@ func TestUnblocked_SoftCancel(t *testing.T) {
 	t.Run("Disabled", func(t *testing.T) { run(t, false) })
 }
 
+// TestSoftCancel_Grace covers the case that a stream is sending when its context
+// is canceled. Without a grace period the transport is destroyed; with one, the
+// send is given a bounded chance to finish so the cancel can be delivered and the
+// transport kept.
+func TestSoftCancel_Grace(t *testing.T) {
+	run := func(t *testing.T, grace time.Duration) string {
+		ctx := drpctest.NewTracker(t)
+		defer ctx.Close()
+
+		outcomes := make(chan string, 1)
+
+		tr := newBlockedTransport()
+		opts := Options{SoftCancel: true, SoftCancelGrace: grace}
+		drpcopts.SetManagerCancelCB(&opts.Internal, func(o string) {
+			select {
+			case outcomes <- o:
+			default:
+			}
+		})
+
+		man := NewWithOptions(tr, opts)
+		defer func() { _ = man.Close() }()
+		defer tr.setReadOpen(true)
+		defer tr.setWriteOpen(true)
+
+		subctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		stream, err := man.NewClientStream(subctx, "rpc")
+		assert.NoError(t, err)
+		defer func() { _ = stream.Close() }()
+
+		// hold the stream's write mutex the way a concurrent send would, by
+		// parking an in-flight flush inside the transport.
+		ctx.Run(func(context.Context) {
+			_ = stream.RawWrite(drpcwire.KindMessage, []byte("message"))
+			_ = stream.RawFlush()
+		})
+
+		// wait until the flush is actually parked in the transport, so the cancel
+		// below reliably observes the stream as busy.
+		tr.waitWriting()
+
+		// release the send only after the manager has had a chance to see it as
+		// busy. Without a grace period the manager gives up before this fires and
+		// reports busy; with one, the retry picks the stream up once it lands.
+		time.AfterFunc(50*time.Millisecond, func() { tr.setWriteOpen(true) })
+
+		cancel()
+
+		select {
+		case outcome := <-outcomes:
+			return outcome
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for a cancel outcome")
+			return ""
+		}
+	}
+
+	t.Run("NoGrace", func(t *testing.T) {
+		assert.Equal(t, run(t, 0), CancelBusy)
+	})
+
+	t.Run("Grace", func(t *testing.T) {
+		assert.Equal(t, run(t, time.Second), CancelClean)
+	})
+}
+
 type blockedTransport struct {
 	mu *sync.Mutex
 	co *sync.Cond
 	ro bool
 	wo bool
+	rn int // number of reads currently blocked
+	wn int // number of writes currently blocked
 }
 
 func newBlockedTransport() *blockedTransport {
@@ -159,9 +230,13 @@ func (b *blockedTransport) setReadOpen(open bool) {
 	b.co.Broadcast()
 }
 
-func (b *blockedTransport) wait(p int, rw *bool) (int, error) {
+func (b *blockedTransport) wait(p int, rw *bool, n *int) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	*n++
+	b.co.Broadcast()
+	defer func() { *n-- }()
 
 	for !*rw {
 		b.co.Wait()
@@ -169,6 +244,16 @@ func (b *blockedTransport) wait(p int, rw *bool) (int, error) {
 	return p, nil
 }
 
-func (b *blockedTransport) Read(p []byte) (n int, err error)  { return b.wait(len(p), &b.ro) }
-func (b *blockedTransport) Write(p []byte) (n int, err error) { return b.wait(len(p), &b.wo) }
+// waitWriting blocks until at least one Write is parked in the transport.
+func (b *blockedTransport) waitWriting() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for b.wn == 0 {
+		b.co.Wait()
+	}
+}
+
+func (b *blockedTransport) Read(p []byte) (n int, err error)  { return b.wait(len(p), &b.ro, &b.rn) }
+func (b *blockedTransport) Write(p []byte) (n int, err error) { return b.wait(len(p), &b.wo, &b.wn) }
 func (b *blockedTransport) Close() error                      { return nil }

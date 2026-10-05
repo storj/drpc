@@ -7,7 +7,8 @@ import "storj.io/drpc/drpcstats"
 
 // Manager contains internal options for the drpcmanager package.
 type Manager struct {
-	statsCB func(string) *drpcstats.Stats
+	statsCB  func(string) *drpcstats.Stats
+	cancelCB func(string)
 }
 
 // GetManagerStatsCB returns the stats callback stored in the options.
@@ -15,3 +16,9 @@ func GetManagerStatsCB(opts *Manager) func(string) *drpcstats.Stats { return opt
 
 // SetManagerStatsCB sets the stats callback stored in the options.
 func SetManagerStatsCB(opts *Manager, statsCB func(string) *drpcstats.Stats) { opts.statsCB = statsCB }
+
+// GetManagerCancelCB returns the cancel outcome callback stored in the options.
+func GetManagerCancelCB(opts *Manager) func(string) { return opts.cancelCB }
+
+// SetManagerCancelCB sets the cancel outcome callback stored in the options.
+func SetManagerCancelCB(opts *Manager, cancelCB func(string)) { opts.cancelCB = cancelCB }

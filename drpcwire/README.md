@@ -289,7 +289,9 @@ Empty returns true if there are no bytes buffered in the writer.
 func (b *Writer) Flush() (err error)
 ```
 Flush forces a flush of any buffered data to the io.Writer. It is a no-op if
-there is no data in the buffer.
+there is no data in the buffer. Once a write to the io.Writer fails, every later
+WriteFrame and Flush returns that error, because the failed write may have left
+a partial frame that would corrupt anything written after it.
 
 #### func (*Writer) Reset
 

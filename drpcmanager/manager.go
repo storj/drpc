@@ -144,7 +144,6 @@ func New(tr drpc.Transport) *Manager {
 func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 	m := &Manager{
 		tr:   tr,
-		wr:   drpcwire.NewWriter(tr, opts.WriterBufferSize),
 		rd:   drpcwire.NewReaderWithOptions(tr, opts.Reader),
 		opts: opts,
 
@@ -152,6 +151,8 @@ func NewWithOptions(tr drpc.Transport, opts Options) *Manager {
 		sfin:    make(chan struct{}, 1),
 		streams: make(chan streamInfo),
 	}
+
+	m.wr = drpcwire.NewWriter(transportWriter{m}, opts.WriterBufferSize)
 
 	// initialize the stream buffer
 	m.sbuf.init()
@@ -251,6 +252,20 @@ func (m *Manager) terminate(err error) {
 	}
 }
 
+// transportWriter writes to the manager's transport, terminating the manager
+// if a write fails. The writer's errors are sticky, so every later stream would
+// fail too, and the remote may be left waiting on a partial frame that never
+// completes, so the failure would otherwise go unnoticed.
+type transportWriter struct{ m *Manager }
+
+func (w transportWriter) Write(p []byte) (int, error) {
+	n, err := w.m.tr.Write(p)
+	if err != nil {
+		w.m.terminate(managerClosed.Wrap(closedIfReset(err)))
+	}
+	return n, err
+}
+
 //
 // manage reader
 //
@@ -277,10 +292,7 @@ func (m *Manager) manageReader() {
 
 		pkt, err = m.rd.ReadPacketUsing(pkt.Data[:0])
 		if err != nil {
-			if isConnectionReset(err) {
-				err = drpc.ClosedError.Wrap(err)
-			}
-			m.terminate(managerClosed.Wrap(err))
+			m.terminate(managerClosed.Wrap(closedIfReset(err)))
 			return
 		}
 
@@ -625,6 +637,15 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 			}
 		}
 	}
+}
+
+// closedIfReset wraps err in drpc.ClosedError if it is a connection reset, so
+// that a reset is reported the same way whether a read or a write hits it.
+func closedIfReset(err error) error {
+	if isConnectionReset(err) {
+		return drpc.ClosedError.Wrap(err)
+	}
+	return err
 }
 
 func isConnectionReset(err error) bool {

@@ -9,11 +9,13 @@ import (
 	"io"
 	"net"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/zeebo/assert"
 
+	"storj.io/drpc"
 	"storj.io/drpc/drpctest"
 	"storj.io/drpc/drpcwire"
 	"storj.io/drpc/internal/drpcopts"
@@ -440,3 +442,81 @@ func (b *blockedTransport) waitWriting() {
 func (b *blockedTransport) Read(p []byte) (n int, err error)  { return b.wait(len(p), &b.ro, &b.rn) }
 func (b *blockedTransport) Write(p []byte) (n int, err error) { return b.wait(len(p), &b.wo, &b.wn) }
 func (b *blockedTransport) Close() error                      { return nil }
+
+type failWriteTransport struct {
+	closed chan struct{}
+	err    error // returned from Write, or a generic error if nil
+}
+
+func (f failWriteTransport) Read(p []byte) (int, error) { <-f.closed; return 0, io.EOF }
+func (f failWriteTransport) Close() error               { close(f.closed); return nil }
+func (f failWriteTransport) Write(p []byte) (int, error) {
+	if f.err != nil {
+		return 0, f.err
+	}
+	return 0, errors.New("write failed")
+}
+
+// TestWriteErrorCloses checks that a failed write closes the manager: the
+// writer's error is sticky, so the transport must not be reused.
+func TestWriteErrorCloses(t *testing.T) {
+	man := New(failWriteTransport{closed: make(chan struct{})})
+	defer func() { _ = man.Close() }()
+
+	stream, err := man.NewClientStream(context.Background(), "rpc")
+	assert.NoError(t, err)
+	assert.NoError(t, stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
+	assert.Error(t, stream.RawFlush())
+	assert.That(t, closed(man.Closed()))
+}
+
+// TestWriteErrorReset checks that a connection reset seen by a write closes
+// the manager with a drpc.ClosedError, the same as one seen by a read.
+func TestWriteErrorReset(t *testing.T) {
+	reset := &net.OpError{Op: "write", Err: syscall.ECONNRESET}
+	man := New(failWriteTransport{closed: make(chan struct{}), err: reset})
+	defer func() { _ = man.Close() }()
+
+	stream, err := man.NewClientStream(context.Background(), "rpc")
+	assert.NoError(t, err)
+	assert.NoError(t, stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
+	assert.Error(t, stream.RawFlush())
+
+	_, err = man.NewClientStream(context.Background(), "rpc")
+	assert.That(t, drpc.ClosedError.Has(err))
+}
+
+// TestSoftCancel_WriteError checks that a cancel that fails to write is
+// reported as an error and closes the transport.
+func TestSoftCancel_WriteError(t *testing.T) {
+	run := func(t *testing.T, grace time.Duration, want ...string) {
+		outcomes := make(chan string, 1)
+		opts := Options{SoftCancel: true, SoftCancelGrace: grace}
+		drpcopts.SetManagerCancelCB(&opts.Internal, func(o string) { outcomes <- o })
+
+		man := NewWithOptions(failWriteTransport{closed: make(chan struct{})}, opts)
+		defer func() { _ = man.Close() }()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		stream, err := man.NewClientStream(ctx, "rpc")
+		assert.NoError(t, err)
+		assert.NoError(t, stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
+		cancel()
+
+		select {
+		case o := <-outcomes:
+			assert.That(t, o == want[0] || o == want[len(want)-1])
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out waiting for a cancel outcome")
+		}
+		<-man.Closed()
+	}
+
+	t.Run("NoGrace", func(t *testing.T) { run(t, 0, cancelError) })
+
+	// the failed write closes the manager, which also ends the grace wait, so
+	// the attempt can lose the race to report its error.
+	t.Run("Grace", func(t *testing.T) { run(t, time.Second, cancelError, cancelBusy) })
+}

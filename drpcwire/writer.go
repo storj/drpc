@@ -23,6 +23,7 @@ type Writer struct {
 	size  int
 	mu    sync.Mutex
 	buf   []byte
+	err   error // sticky: a failed write may have left a partial frame on w
 }
 
 // NewWriter returns a Writer that will attempt to buffer size data before
@@ -78,30 +79,38 @@ func (b *Writer) WriteFrame(fr Frame) (err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if b.err != nil {
+		return b.err
+	}
 	if len(b.buf) == 0 {
 		atomic.StoreUint32(&b.empty, 1)
 	}
 	b.buf = AppendFrame(b.buf, fr)
 	if len(b.buf) >= b.size {
 		b.log("FLUSH", func() string { return fmt.Sprintf("buffer: %d > %d", len(b.buf), b.size) })
-		_, err = b.w.Write(b.buf)
+		_, b.err = b.w.Write(b.buf)
 		b.buf = b.buf[:0]
 		atomic.StoreUint32(&b.empty, 0)
 	}
-	return err
+	return b.err
 }
 
 // Flush forces a flush of any buffered data to the io.Writer. It is a no-op if
-// there is no data in the buffer.
+// there is no data in the buffer. Once a write to the io.Writer fails, every
+// later WriteFrame and Flush returns that error, because the failed write may
+// have left a partial frame that would corrupt anything written after it.
 func (b *Writer) Flush() (err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if b.err != nil {
+		return b.err
+	}
 	if len(b.buf) > 0 {
-		_, err = b.w.Write(b.buf)
+		_, b.err = b.w.Write(b.buf)
 		b.log("FLUSH", func() string { return fmt.Sprintf("explicit: %d", len(b.buf)) })
 		b.buf = b.buf[:0]
 		atomic.StoreUint32(&b.empty, 0)
 	}
-	return err
+	return b.err
 }

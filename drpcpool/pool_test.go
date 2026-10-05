@@ -302,6 +302,50 @@ func TestPool_Capacity_SameKeyReuse(t *testing.T) {
 	assert.Equal(t, dials, 2)
 }
 
+// TestPool_ExpirationRace checks that an expiration callback that fires
+// while another path removes the entry does not remove it a second time.
+func TestPool_ExpirationRace(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		opts Options
+		op   func(pool *Pool[string, Conn])
+	}{
+		{name: "none", opts: Options{}},
+		{name: "take", opts: Options{}, op: func(pool *Pool[string, Conn]) { pool.Take("key") }},
+		{name: "capacity", opts: Options{Capacity: 1}},
+		{name: "key capacity", opts: Options{KeyCapacity: 1}},
+		{name: "close", opts: Options{}, op: func(pool *Pool[string, Conn]) { _ = pool.Close() }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.opts.Expiration = time.Hour
+			pool := New[string, Conn](tt.opts)
+			defer func() { _ = pool.Close() }()
+
+			pool.Put("key", new(callbackConn))
+			ent := pool.entries["key"].head
+
+			// stopping the timer makes the pool believe the callback is
+			// pending, as if it fired and is waiting on the mutex.
+			ent.exp.Stop()
+			if tt.op != nil {
+				tt.op(pool)
+			}
+
+			replacement := new(callbackConn)
+			pool.Put("key", replacement)
+			pool.expireEntry(ent)
+
+			assert.Equal(t, pool.order.count, 1)
+			assert.Equal(t, pool.entries["key"].count, 1)
+
+			conn, ok := pool.Take("key")
+			assert.That(t, ok)
+			assert.Equal(t, conn, Conn(replacement))
+			assert.Equal(t, len(pool.entries), 0)
+		})
+	}
+}
+
 // TestPool_KeyCapacity checks that per-key capacity limits are enforced.
 func TestPool_KeyCapacity(t *testing.T) {
 	ctx := drpctest.NewTracker(t)

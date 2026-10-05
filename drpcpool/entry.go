@@ -12,6 +12,7 @@ type entry[K comparable, V Conn] struct {
 	key    K
 	val    V
 	exp    *time.Timer
+	gone   bool // removed from the pool; guards a late expiration callback
 	global node[K, V]
 	local  node[K, V]
 }

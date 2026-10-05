@@ -63,6 +63,7 @@ func (p *Pool[K, V]) Close() (err error) {
 
 	var eg errs.Group
 	for ent := p.order.head; ent != nil; ent = ent.global.next {
+		ent.gone = true
 		eg.Add(p.closeEntry(ent))
 	}
 
@@ -88,17 +89,24 @@ func (p *Pool[K, V]) Get(ctx context.Context, key K,
 // helpers
 //
 
-func (p *Pool[K, V]) removeEntry(ent *entry[K, V]) {
+// expireEntry removes ent unless another path already removed it while the
+// expiration callback was waiting on the mutex.
+func (p *Pool[K, V]) expireEntry(ent *entry[K, V]) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	local := p.entries[ent.key]
-	if local == nil {
-		return
+	if !ent.gone {
+		p.unlinkEntry(ent)
 	}
+}
 
+// unlinkEntry removes ent from the lists. It must be called at most once per
+// entry with the mutex held.
+func (p *Pool[K, V]) unlinkEntry(ent *entry[K, V]) {
+	local := p.entries[ent.key]
 	local.removeEntry(ent, (*entry[K, V]).localList)
 	p.order.removeEntry(ent, (*entry[K, V]).globalList)
+	ent.gone = true
 
 	if local.count == 0 {
 		delete(p.entries, ent.key)
@@ -135,8 +143,7 @@ func (p *Pool[K, V]) Take(key K) (V, bool) {
 			continue
 		}
 
-		local.removeEntry(ent, (*entry[K, V]).localList)
-		p.order.removeEntry(ent, (*entry[K, V]).globalList)
+		p.unlinkEntry(ent)
 
 		if ent.exp != nil && !ent.exp.Stop() {
 			continue
@@ -171,25 +178,14 @@ func (p *Pool[K, V]) Put(key K, val V) {
 
 	for p.opts.KeyCapacity != 0 && local.count >= p.opts.KeyCapacity {
 		ent := local.head
-
 		_ = p.closeEntry(ent)
-
-		local.removeEntry(ent, (*entry[K, V]).localList)
-		p.order.removeEntry(ent, (*entry[K, V]).globalList)
+		p.unlinkEntry(ent)
 	}
 
 	for p.opts.Capacity != 0 && p.order.count >= p.opts.Capacity {
 		ent := p.order.head
-		local := p.entries[ent.key]
-
 		_ = p.closeEntry(ent)
-
-		local.removeEntry(ent, (*entry[K, V]).localList)
-		p.order.removeEntry(ent, (*entry[K, V]).globalList)
-
-		if local.count == 0 {
-			delete(p.entries, ent.key)
-		}
+		p.unlinkEntry(ent)
 	}
 
 	p.entries[key] = local
@@ -201,7 +197,7 @@ func (p *Pool[K, V]) Put(key K, val V) {
 	if p.opts.Expiration > 0 {
 		ent.exp = time.AfterFunc(p.opts.Expiration, func() {
 			_ = val.Close()
-			p.removeEntry(ent)
+			p.expireEntry(ent)
 		})
 	}
 }

@@ -167,7 +167,6 @@ func (p *Pool[K, V]) Put(key K, val V) {
 	local := p.entries[key]
 	if local == nil {
 		local = new(list[K, V])
-		p.entries[key] = local
 	}
 
 	for p.opts.KeyCapacity != 0 && local.count >= p.opts.KeyCapacity {
@@ -193,6 +192,7 @@ func (p *Pool[K, V]) Put(key K, val V) {
 		}
 	}
 
+	p.entries[key] = local
 	ent := &entry[K, V]{key: key, val: val}
 	local.appendEntry(ent, (*entry[K, V]).localList)
 	p.order.appendEntry(ent, (*entry[K, V]).globalList)

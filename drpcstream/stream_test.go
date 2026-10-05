@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"runtime"
 	"testing"
 
 	"github.com/zeebo/assert"
@@ -452,5 +453,92 @@ func TestStream_StopWrites(t *testing.T) {
 		st.StopWrites(stop)
 		st.Cancel(context.Canceled)
 		assert.Equal(t, st.RawWrite(drpcwire.KindMessage, []byte("data")), io.EOF)
+	})
+}
+
+func TestStream_Invoked(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	// every frame is flushed on its own, so the writer sees each one.
+	var st *Stream
+	var during []bool
+	wr := drpcwire.NewWriter(writerFunc(func(p []byte) (int, error) {
+		during = append(during, st.Invoked())
+		return len(p), nil
+	}), 1)
+	st = NewWithOptions(ctx, 0, wr, Options{SplitSize: 1})
+
+	assert.NoError(t, st.RawWrite(drpcwire.KindInvokeMetadata, []byte("meta")))
+	assert.That(t, !st.Invoked())
+
+	assert.NoError(t, st.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
+	assert.That(t, st.Invoked())
+	assert.That(t, len(during) > 2)
+	for _, invoked := range during {
+		assert.That(t, !invoked)
+	}
+}
+
+func TestStream_TryCancel(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	t.Run("Free", func(t *testing.T) {
+		st := New(ctx, 0, drpcwire.NewWriter(io.Discard, 0))
+
+		finished, ok := st.TryCancel(context.Canceled)
+		assert.That(t, ok)
+		assert.That(t, !finished)
+		assert.That(t, st.IsFinished())
+	})
+
+	// a Close waiting for a write blocked in the transport holds the mutex.
+	// TryCancel must not wait for it, and the Close must report the cancel
+	// once the write fails.
+	t.Run("Held", func(t *testing.T) {
+		pr, pw := io.Pipe()
+		st := New(ctx, 0, drpcwire.NewWriter(pw, 0))
+
+		ctx.Run(func(context.Context) { _ = st.MsgSend([]byte("write"), byteEncoding{}) })
+		_, err := pr.Read(make([]byte, 1))
+		assert.NoError(t, err)
+
+		closeErr := make(chan error, 1)
+		ctx.Run(func(context.Context) { closeErr <- st.Close() })
+		for st.mu.Unlocked() {
+			runtime.Gosched() // a bare spin can starve the Close on one cpu
+		}
+
+		finished, ok := st.TryCancel(context.Canceled)
+		assert.That(t, !ok)
+		assert.That(t, !finished)
+
+		_ = pr.Close()
+		assert.That(t, errors.Is(<-closeErr, context.Canceled))
+		assert.That(t, st.Cancel(context.Canceled))
+	})
+
+	// a nil error must not let operations that fail after the cancel report
+	// success.
+	t.Run("Nil", func(t *testing.T) {
+		pr, pw := io.Pipe()
+		st := New(ctx, 0, drpcwire.NewWriter(pw, 0))
+
+		ctx.Run(func(context.Context) { _ = st.MsgSend([]byte("write"), byteEncoding{}) })
+		_, err := pr.Read(make([]byte, 1))
+		assert.NoError(t, err)
+
+		closeErr := make(chan error, 1)
+		ctx.Run(func(context.Context) { closeErr <- st.Close() })
+		for st.mu.Unlocked() {
+			runtime.Gosched() // a bare spin can starve the Close on one cpu
+		}
+
+		_, ok := st.TryCancel(nil)
+		assert.That(t, !ok)
+
+		_ = pr.Close()
+		assert.That(t, errors.Is(<-closeErr, context.Canceled))
 	})
 }

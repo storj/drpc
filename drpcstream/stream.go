@@ -65,6 +65,7 @@ type Stream struct {
 		fin    drpcsignal.Signal // set when the stream is finished and all ops are complete
 		cancel drpcsignal.Signal // set when externally canceled
 		stop   drpcsignal.Signal // set when no new writes should begin
+		invoke drpcsignal.Signal // set when an invoke packet has been fully written
 	}
 }
 
@@ -395,6 +396,9 @@ func (s *Stream) rawWriteLocked(kind drpcwire.Kind, data []byte) (err error) {
 		if err := s.wr.WriteFrame(fr); err != nil {
 			return s.checkCancelError(errs.Wrap(err))
 		} else if fr.Done {
+			if kind == drpcwire.KindInvoke {
+				s.sigs.invoke.Set(nil)
+			}
 			return nil
 		}
 	}
@@ -554,6 +558,11 @@ func (s *Stream) SendError(serr error) (err error) {
 	return s.checkCancelError(s.sendPacketLocked(drpcwire.KindError, false, drpcwire.MarshalError(serr)))
 }
 
+// Invoked returns true once an invoke packet has been fully written on the
+// stream. Anything written to the transport after that, such as a cancel, is
+// guaranteed to reach the remote after the invoke that creates its stream.
+func (s *Stream) Invoked() bool { return s.sigs.invoke.IsSet() }
+
 // StopWrites causes any writes or flushes that have not yet started to fail
 // with err, and makes an in-progress write stop before its next frame.
 // CloseSend and SendError fail with err too, without sending anything, so that
@@ -668,6 +677,33 @@ func (s *Stream) Cancel(err error) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	return s.cancelLocked(err)
+}
+
+// TryCancel is like Cancel but does not wait for the stream mutex, which a
+// Close or CloseSend holds while waiting on a write. If the mutex is held, it
+// only records err so that operations failing because the transport closes
+// report err instead, and it returns false for ok. The caller must then close
+// the transport, which unblocks the write, and call Cancel. A nil err is
+// replaced with context.Canceled, so that those operations never report
+// success.
+func (s *Stream) TryCancel(err error) (finished, ok bool) {
+	s.log("CALL", func() string { return fmt.Sprintf("TryCancel(%v)", err) })
+
+	if err == nil {
+		err = context.Canceled
+	}
+	if !s.mu.TryLock() {
+		s.sigs.cancel.Set(err)
+		return s.IsFinished(), false
+	}
+	defer s.mu.Unlock()
+
+	return s.cancelLocked(err), true
+}
+
+// cancelLocked does the body of Cancel assuming the caller holds the mutex.
+func (s *Stream) cancelLocked(err error) bool {
 	if s.IsFinished() {
 		return true
 	}

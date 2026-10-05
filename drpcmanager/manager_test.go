@@ -114,6 +114,7 @@ func TestUnblocked_SoftCancel(t *testing.T) {
 					return
 				}
 				defer func() { _ = stream.Close() }()
+				assert.NoError(t, stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
 
 				assert.That(t, !closed(man.Unblocked()))
 				cancel()
@@ -160,6 +161,7 @@ func TestSoftCancel_Grace(t *testing.T) {
 		stream, err := man.NewClientStream(subctx, "rpc")
 		assert.NoError(t, err)
 		t.Cleanup(func() { _ = stream.Close() })
+		assert.NoError(t, stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
 
 		// hold the stream's write mutex the way a concurrent send would, by
 		// parking an in-flight flush inside the transport. it is not tracked,
@@ -335,6 +337,7 @@ func TestSoftCancel_GraceBackToBackSends(t *testing.T) {
 
 	stream, err := man.NewClientStream(subctx, "rpc")
 	assert.NoError(t, err)
+	assert.NoError(t, stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
 
 	sendErr := make(chan error, 1)
 	ctx.Run(func(context.Context) {
@@ -359,6 +362,141 @@ func TestSoftCancel_GraceBackToBackSends(t *testing.T) {
 	assert.That(t, time.Since(start) < time.Second)
 	assert.That(t, !closed(man.Closed()))
 	assert.Error(t, <-sendErr)
+}
+
+// TestSoftCancel_BeforeInvoke checks that a client stream canceled before its
+// invoke is fully written is hard canceled: the remote has no stream for a
+// cancel to go to and would wait for one forever, wedging the transport.
+func TestSoftCancel_BeforeInvoke(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	cconn, sconn := net.Pipe()
+	defer func() { _ = sconn.Close() }()
+	go func() { _, _ = io.Copy(io.Discard, sconn) }()
+
+	outcomes := make(chan string, 1)
+	opts := Options{SoftCancel: true, SoftCancelGrace: time.Second}
+	drpcopts.SetManagerCancelCB(&opts.Internal, func(o string) { outcomes <- o })
+	man := NewWithOptions(cconn, opts)
+	defer func() { _ = man.Close() }()
+
+	subctx, cancel := context.WithCancel(ctx)
+	stream, err := man.NewClientStream(subctx, "rpc")
+	assert.NoError(t, err)
+	assert.NoError(t, stream.RawWrite(drpcwire.KindInvokeMetadata, []byte("meta")))
+	cancel()
+
+	select {
+	case <-man.Closed():
+	case <-time.After(5 * time.Second):
+		t.Fatal("transport kept after canceling an uninvoked stream")
+	}
+
+	assert.Equal(t, recvOutcome(t, outcomes), cancelBusy)
+}
+
+// TestSoftCancel_Server checks that server streams, whose invoke the remote
+// always sent, are still soft canceled.
+func TestSoftCancel_Server(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	cconn, sconn := net.Pipe()
+	defer func() { _ = cconn.Close() }()
+	defer func() { _ = sconn.Close() }()
+
+	cman := New(cconn)
+	defer func() { _ = cman.Close() }()
+
+	outcomes := make(chan string, 1)
+	opts := Options{SoftCancel: true}
+	drpcopts.SetManagerCancelCB(&opts.Internal, func(o string) { outcomes <- o })
+	sman := NewWithOptions(sconn, opts)
+	defer func() { _ = sman.Close() }()
+
+	ctx.Run(func(ctx context.Context) {
+		stream, err := cman.NewClientStream(ctx, "rpc")
+		assert.NoError(t, err)
+		assert.NoError(t, stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")))
+		_ = stream.RawFlush() // may see the cancel the test sends next
+	})
+
+	subctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	_, _, err := sman.NewServerStream(subctx)
+	assert.NoError(t, err)
+	cancel()
+
+	assert.Equal(t, recvOutcome(t, outcomes), cancelClean)
+	assert.That(t, !closed(sman.Closed()))
+}
+
+func recvOutcome(t *testing.T, outcomes <-chan string) string {
+	t.Helper()
+
+	select {
+	case o := <-outcomes:
+		return o
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for a cancel outcome")
+		return ""
+	}
+}
+
+// TestCancel_BlockedInvokeAndClose checks that canceling a stream whose
+// invoke write is stuck in the transport, while a Close waits for that write
+// while holding the stream mutex, still tears the transport down instead of
+// waiting on the mutex.
+func TestCancel_BlockedInvokeAndClose(t *testing.T) {
+	run := func(t *testing.T, soft bool) {
+		ctx := drpctest.NewTracker(t)
+		defer ctx.Close()
+
+		cconn, sconn := net.Pipe()
+		defer func() { _ = sconn.Close() }()
+
+		// every frame is flushed on its own, so the invoke write blocks in
+		// the transport before the stream counts as invoked.
+		man := NewWithOptions(cconn, Options{WriterBufferSize: 1, SoftCancel: soft, SoftCancelGrace: time.Millisecond})
+		defer func() { _ = man.Close() }()
+
+		subctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		stream, err := man.NewClientStream(subctx, "rpc")
+		assert.NoError(t, err)
+
+		// reading one byte shows the write has started, and the remote reads
+		// nothing more, so it stays blocked.
+		ctx.Run(func(context.Context) { _ = stream.RawWrite(drpcwire.KindInvoke, []byte("rpc")) })
+		_, err = sconn.Read(make([]byte, 1))
+		assert.NoError(t, err)
+
+		// Close takes the stream mutex and then waits for the write. There
+		// is no way to observe it holding the mutex, so give it a moment.
+		closeErr := make(chan error, 1)
+		ctx.Run(func(context.Context) { closeErr <- stream.Close() })
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+
+		select {
+		case <-man.Closed():
+		case <-time.After(5 * time.Second):
+			t.Fatal("transport not closed after canceling a blocked stream")
+		}
+
+		// the cancel is recorded before the transport closes, so the Close
+		// reports it rather than the write failing on the closed transport.
+		// if the cancel won the race for the mutex instead, the Close found
+		// the stream already canceled and reports nothing.
+		err = <-closeErr
+		assert.That(t, err == nil || errors.Is(err, context.Canceled))
+	}
+
+	t.Run("Soft", func(t *testing.T) { run(t, true) })
+	t.Run("Hard", func(t *testing.T) { run(t, false) })
 }
 
 type blockedTransport struct {

@@ -121,6 +121,15 @@ func (s *Stream) ID() uint64
 ```
 ID returns the stream id.
 
+#### func (*Stream) Invoked
+
+```go
+func (s *Stream) Invoked() bool
+```
+Invoked returns true once an invoke packet has been fully written on the stream.
+Anything written to the transport after that, such as a cancel, is guaranteed to
+reach the remote after the invoke that creates its stream.
+
 #### func (*Stream) IsFinished
 
 ```go
@@ -245,3 +254,15 @@ String returns a string representation of the stream.
 func (s *Stream) Terminated() <-chan struct{}
 ```
 Terminated returns a channel that is closed when the stream has been terminated.
+
+#### func (*Stream) TryCancel
+
+```go
+func (s *Stream) TryCancel(err error) (finished, ok bool)
+```
+TryCancel is like Cancel but does not wait for the stream mutex, which a Close
+or CloseSend holds while waiting on a write. If the mutex is held, it only
+records err so that operations failing because the transport closes report err
+instead, and it returns false for ok. The caller must then close the transport,
+which unblocks the write, and call Cancel. A nil err is replaced with
+context.Canceled, so that those operations never report success.

@@ -132,6 +132,7 @@ type Manager struct {
 type streamInfo struct {
 	ctx    context.Context
 	stream *drpcstream.Stream
+	cli    bool
 }
 
 // New returns a new Manager for the transport.
@@ -362,7 +363,7 @@ func (m *Manager) newStream(ctx context.Context, sid uint64, kind, rpc string) (
 
 	stream := drpcstream.NewWithOptions(ctx, sid, m.wr, opts)
 	select {
-	case m.streams <- streamInfo{ctx: ctx, stream: stream}:
+	case m.streams <- streamInfo{ctx: ctx, stream: stream, cli: kind == "cli"}:
 		m.sbuf.Set(stream)
 		m.log("STREAM", stream.String)
 		return stream, nil
@@ -380,7 +381,7 @@ func (m *Manager) manageStreams() {
 	for {
 		select {
 		case si := <-m.streams:
-			m.manageStream(si.ctx, si.stream)
+			m.manageStream(si.ctx, si.stream, si.cli)
 
 		case <-m.sigs.term.Signal():
 			return
@@ -478,7 +479,7 @@ func retryCancel(ctx context.Context, stream *drpcstream.Stream, stop <-chan str
 
 // manageStream watches the context and the stream and returns when the stream
 // is finished, canceling the stream if the context is canceled.
-func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
+func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream, cli bool) {
 	select {
 	case <-m.sigs.term.Signal():
 		err := m.sigs.term.Err()
@@ -495,7 +496,11 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 	case <-ctx.Done():
 		m.log("CANCEL", stream.String)
 
-		if m.opts.SoftCancel {
+		// a client stream whose invoke is not fully written cannot be soft
+		// canceled: the remote has no stream for the cancel to go to and would
+		// wait for one forever. Invoked only ever goes from false to true, so
+		// once it is true the cancel is always written after the invoke.
+		if m.opts.SoftCancel && (!cli || stream.Invoked()) {
 			// allow a new stream to begin.
 			m.sem.Recv()
 
@@ -514,12 +519,27 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 		} else {
 			// If the stream isn't already finished, we have to terminate the
 			// transport to do an active cancel. If it is already finished,
-			// there is no need.
-			if !stream.Cancel(ctx.Err()) {
+			// there is no need. A Close or CloseSend may hold the stream
+			// mutex while waiting on a write that only terminating unblocks,
+			// so in that case terminate before waiting to cancel. Any other
+			// holder of the mutex looks the same, so a stream that is just
+			// finishing can lose its transport too. That only costs a dial,
+			// while waiting on the mutex could block forever.
+			finished, ok := stream.TryCancel(ctx.Err())
+			if !finished {
 				m.log("UNFIN", stream.String)
 				m.terminate(ctx.Err())
 			} else {
 				m.log("CLEAN", stream.String)
+			}
+			if !ok {
+				stream.Cancel(ctx.Err())
+			}
+
+			// a soft cancel was wanted but the invoke was still being sent, so
+			// count it with the busy ones.
+			if m.opts.SoftCancel {
+				m.cancelOutcome(!finished, nil)
 			}
 
 			// wait for the stream to signal that it is finished.

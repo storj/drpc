@@ -69,7 +69,8 @@ func (s *Stream) Cancel(err error) bool
 Cancel transitions the stream into a state where all writes to the transport
 will return the provided error, and terminates the stream. It is a no-op if the
 stream is already finished, and returns a boolean indicating if that was the
-case.
+case. A nil err is replaced with context.Canceled, so that operations on the
+canceled stream never report success.
 
 #### func (*Stream) Close
 
@@ -185,10 +186,10 @@ RawWrite sends the data bytes with the given kind.
 ```go
 func (s *Stream) SendCancel(err error) (busy bool, _ error)
 ```
-SendCancel transitions the stream into the canceled state with context.Canceled
-and sends a cancel error to the remote side for a soft cancel. It is a no-op if
-the stream is already terminated. It returns true for busy if writes are already
-blocked and a hard cancel is required.
+SendCancel transitions the stream into the canceled state with err, or
+context.Canceled if err is nil, and sends a cancel error to the remote side for
+a soft cancel. It is a no-op if the stream is already terminated. It returns
+true for busy if writes are already blocked and a hard cancel is required.
 
 #### func (*Stream) SendError
 

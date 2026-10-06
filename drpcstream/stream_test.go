@@ -10,6 +10,7 @@ import (
 	"io"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/zeebo/assert"
 	"github.com/zeebo/errs"
@@ -541,4 +542,32 @@ func TestStream_TryCancel(t *testing.T) {
 		_ = pr.Close()
 		assert.That(t, errors.Is(<-closeErr, context.Canceled))
 	})
+}
+
+// TestStream_CancelNil checks that canceling with a nil error does not let
+// later operations report success.
+func TestStream_CancelNil(t *testing.T) {
+	ctx := drpctest.NewTracker(t)
+	defer ctx.Close()
+
+	for name, cancel := range map[string]func(*Stream){
+		"Cancel":     func(st *Stream) { st.Cancel(nil) },
+		"SendCancel": func(st *Stream) { _, _ = st.SendCancel(nil) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			st := New(ctx, 0, drpcwire.NewWriter(io.Discard, 0))
+
+			cancel(st)
+
+			recvErr := make(chan error, 1)
+			go func() { recvErr <- st.MsgRecv(new([]byte), byteEncoding{}) }()
+
+			select {
+			case err := <-recvErr:
+				assert.Error(t, err)
+			case <-time.After(5 * time.Second):
+				t.Fatal("receive on a stream canceled with nil blocked")
+			}
+		})
+	}
 }

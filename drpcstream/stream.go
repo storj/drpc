@@ -581,12 +581,17 @@ func (s *Stream) StopWrites(err error) {
 	s.sigs.stop.Set(err)
 }
 
-// SendCancel transitions the stream into the canceled state with
-// context.Canceled and sends a cancel error to the remote side for a soft
-// cancel. It is a no-op if the stream is already terminated. It returns true
-// for busy if writes are already blocked and a hard cancel is required.
+// SendCancel transitions the stream into the canceled state with err, or
+// context.Canceled if err is nil, and sends a cancel error to the remote side
+// for a soft cancel. It is a no-op if the stream is already terminated. It
+// returns true for busy if writes are already blocked and a hard cancel is
+// required.
 func (s *Stream) SendCancel(err error) (busy bool, _ error) {
 	s.log("CALL", func() string { return "SendCancel()" })
+
+	if err == nil {
+		err = context.Canceled
+	}
 
 	if !s.mu.TryLock() { // if we can't inspect if writes are happening, hard cancel.
 		return true, nil
@@ -670,9 +675,14 @@ func (s *Stream) CloseSend() (err error) {
 
 // Cancel transitions the stream into a state where all writes to the transport will return
 // the provided error, and terminates the stream. It is a no-op if the stream is already
-// finished, and returns a boolean indicating if that was the case.
+// finished, and returns a boolean indicating if that was the case. A nil err is replaced
+// with context.Canceled, so that operations on the canceled stream never report success.
 func (s *Stream) Cancel(err error) bool {
 	s.log("CALL", func() string { return fmt.Sprintf("Cancel(%v)", err) })
+
+	if err == nil {
+		err = context.Canceled
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

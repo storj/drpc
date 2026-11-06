@@ -1,9 +1,9 @@
 module storj.io/drpc/examples/drpc
 
-go 1.19
+go 1.23
 
 require (
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.36.12
 	storj.io/drpc v0.0.17
 )
 

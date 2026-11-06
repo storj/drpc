@@ -1,9 +1,9 @@
 module storj.io/drpc/internal/backcompat/newservicedefs
 
-go 1.19
+go 1.23
 
 require (
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.36.12
 	storj.io/drpc v0.0.0-00010101000000-000000000000
 )
 

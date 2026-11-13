@@ -26,6 +26,31 @@ import (
 
 var managerClosed = errs.Class("manager closed")
 
+// Outcomes reported to the cancel callback when a soft cancel is attempted. They
+// distinguish the case that keeps the transport from the two that destroy it,
+// which is the difference between reusing a connection and dialing a new one.
+const (
+	// CancelClean means the cancel was delivered and the transport was kept.
+	CancelClean = "clean"
+
+	// CancelBusy means the stream was still sending when the cancel arrived, so
+	// the transport had to be destroyed. If SoftCancelGrace is set, the grace
+	// period elapsed without the send finishing.
+	CancelBusy = "busy"
+
+	// CancelError means sending the cancel failed, so the transport had to be
+	// destroyed.
+	CancelError = "error"
+)
+
+// Bounds on how often a busy soft cancel retries within its grace period. The
+// first retry is cheap so that the common case of a send that is nearly done is
+// picked up quickly, and the backoff keeps a long grace from spinning.
+const (
+	softCancelMinBackoff = 100 * time.Microsecond
+	softCancelMaxBackoff = 5 * time.Millisecond
+)
+
 // Options controls configuration settings for a manager.
 type Options struct {
 	// WriterBufferSize controls the size of the buffer that we will fill before
@@ -44,6 +69,22 @@ type Options struct {
 	// the potential cost of higher latencies if there is latent data still
 	// being flushed when the cancel happens.
 	SoftCancel bool
+
+	// SoftCancelGrace bounds how long a soft cancel will wait for a concurrent
+	// send on the stream to finish before giving up and hard canceling. It only
+	// applies when SoftCancel is set.
+	//
+	// A stream that is sending when the cancel arrives cannot be softly canceled
+	// immediately, and without a grace period the transport is destroyed. For
+	// clients whose streams send and receive concurrently, that race is both
+	// benign and common, so paying a dial and a handshake for it is a poor
+	// trade. A grace period on the order of milliseconds lets the send finish so
+	// the cancel can be delivered and the transport reused.
+	//
+	// A wedged transport still gets torn down: the wait is bounded, and it never
+	// blocks on the write itself. If zero or negative, no grace is given and a
+	// concurrent send hard cancels immediately.
+	SoftCancelGrace time.Duration
 
 	// InactivityTimeout is the amount of time the manager will wait when
 	// creating a NewServerStream. It only includes the time it is reading
@@ -328,6 +369,73 @@ func (m *Manager) manageStreams() {
 	}
 }
 
+// cancelOutcome reports how a soft cancel attempt ended to the callback set in
+// the internal options, if any. It exists so that the ratio of kept to destroyed
+// transports is observable in production, where it is the difference between a
+// connection pool that works and one that never gets a hit.
+func (m *Manager) cancelOutcome(busy bool, err error) {
+	cb := drpcopts.GetManagerCancelCB(&m.opts.Internal)
+	if cb == nil {
+		return
+	}
+
+	switch {
+	case err != nil:
+		cb(CancelError)
+	case busy:
+		cb(CancelBusy)
+	default:
+		cb(CancelClean)
+	}
+}
+
+// sendCancel attempts to send a soft cancel for the stream, retrying within the
+// SoftCancelGrace window if the stream is busy sending something else.
+//
+// SendCancel never blocks: it reports busy rather than waiting on a mutex that a
+// wedged transport write may hold forever. That property is what lets a dead
+// transport still be torn down, so it is preserved here by polling with backoff
+// instead of waiting. All this adds is patience, bounded by the grace period,
+// for the far more common case of a send that is simply still in flight.
+func (m *Manager) sendCancel(ctx context.Context, stream *drpcstream.Stream) (busy bool, err error) {
+	defer func() { m.cancelOutcome(busy, err) }()
+
+	busy, err = stream.SendCancel(ctx.Err())
+	if err != nil || !busy || m.opts.SoftCancelGrace <= 0 {
+		return busy, err
+	}
+
+	grace := time.NewTimer(m.opts.SoftCancelGrace)
+	defer grace.Stop()
+
+	delay := softCancelMinBackoff
+	retry := time.NewTimer(delay)
+	defer retry.Stop()
+
+	for {
+		select {
+		case <-grace.C:
+			return true, nil
+
+		case <-m.sigs.term.Signal():
+			// the transport is already going away, so there is nothing left to
+			// preserve by waiting.
+			return true, nil
+
+		case <-retry.C:
+		}
+
+		if busy, err = stream.SendCancel(ctx.Err()); err != nil || !busy {
+			return busy, err
+		}
+
+		if delay *= 2; delay > softCancelMaxBackoff {
+			delay = softCancelMaxBackoff
+		}
+		retry.Reset(delay)
+	}
+}
+
 // manageStream watches the context and the stream and returns when the stream
 // is finished, canceling the stream if the context is canceled.
 func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
@@ -353,7 +461,7 @@ func (m *Manager) manageStream(ctx context.Context, stream *drpcstream.Stream) {
 
 			// attempt to send the soft cancel. if it fails or if the stream is
 			// busy sending something else, then we have to hard cancel.
-			if busy, err := stream.SendCancel(ctx.Err()); err != nil {
+			if busy, err := m.sendCancel(ctx, stream); err != nil {
 				m.terminate(err)
 			} else if busy {
 				m.log("BUSY", stream.String)
